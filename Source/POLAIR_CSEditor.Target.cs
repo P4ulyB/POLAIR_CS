@@ -10,6 +10,6 @@ public class POLAIR_CSEditorTarget : TargetRules
 		Type = TargetType.Editor;
 		DefaultBuildSettings = BuildSettingsVersion.V5;
 		IncludeOrderVersion = EngineIncludeOrderVersion.Unreal5_5;
-		ExtraModuleNames.Add("POLAIR_CS");
+		ExtraModuleNames.AddRange(new string[] { "POLAIR_CS", "POLAIR_CSEditor" });
 	}
 }

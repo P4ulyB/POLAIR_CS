@@ -8,6 +8,11 @@
 			"Name": "POLAIR_CS",
 			"Type": "Runtime",
 			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "POLAIR_CSEditor",
+			"Type": "Editor",
+			"LoadingPhase": "Default"
 		}
 	],
 	"Plugins": [
@@ -25,6 +30,22 @@
 		},
 		{
 			"Name": "PlayFabGSDK",
+			"Enabled": true
+		},
+		{
+			"Name": "AutomationDriverTests",
+			"Enabled": true
+		},
+		{
+			"Name": "EditorTests",
+			"Enabled": true
+		},
+		{
+			"Name": "RuntimeTests",
+			"Enabled": true
+		},
+		{
+			"Name": "FunctionalTestingEditor",
 			"Enabled": true
 		}
 	]
