@@ -1125,3 +1125,420 @@ After implementation, create these test assets:
 5. Confirm Enhanced Input integration
 
 **⚠️ FINAL REMINDER: Follow these instructions exactly. No scope creep. No additional features. Implementation only.**
+
+# PACS Input System – Automation & Functional Tests (UE 5.5)
+
+**Audience:** Claude Code (to generate tests) + Pauly (to run them)  
+**Goal:** Add compile‑ready **Automation Specs** and a **Functional Test** to verify the PACS Input System design using Unreal Engine **5.5 Source Build**.  
+**Scope:** Tests build for Editor/Development; **not compiled in Shipping**.
+
+---
+
+## 0) Preconditions & Assumptions
+
+- Your game module is called `<YourGame>` (replace with your real module name everywhere below).  
+- You have these classes (or equivalents) already present:
+  - `APACS_PlayerController` (owns `UPACS_InputHandlerComponent`)
+  - `UPACS_InputHandlerComponent` with public API:
+    - `bool IsHealthy() const;`
+    - `void SetBaseContext(EPACS_InputContextMode Mode);`
+    - `void ToggleMenuContext();`
+    - `int32 GetOverlayCount() const;`
+    - `bool HasBlockingOverlay() const;`
+    - `void PushOverlay(class UInputMappingContext* IMC, EPACS_OverlayType Type, int32 Priority);`
+    - `void PopOverlay();`
+    - `void RegisterReceiver(UObject* Receiver, int32 Priority);`
+    - `void UnregisterReceiver(UObject* Receiver);`
+    - `void HandleAction(const struct FInputActionInstance& Instance);`
+    - `UPROPERTY(EditAnywhere) UPACS_InputMappingConfig* InputConfig;`
+  - `UPACS_InputMappingConfig` with:
+    - `TArray<FPACS_InputActionMapping> ActionMappings;`
+    - `UInputMappingContext* GameplayContext;`
+    - `UInputMappingContext* MenuContext;`
+    - `UInputMappingContext* UIContext;`
+    - `bool IsValid() const;`
+    - `FName GetActionIdentifier(const class UInputAction* Action) const;`
+  - Types:
+    - `EPACS_InputContextMode { Gameplay, Menu }`
+    - `EPACS_OverlayType { NonBlocking, Blocking }`
+    - `namespace PACS_InputPriority { constexpr int32 Critical=1000; constexpr int32 UI=400; constexpr int32 Gameplay=200; }`
+    - `struct FPACS_InputReceiverEntry { int32 Priority; int32 RegistrationOrder; bool operator<(const FPACS_InputReceiverEntry& RHS) const; }`
+    - `struct FPACS_InputActionMapping { class UInputAction* InputAction; FName ActionIdentifier; }`
+    - `namespace PACS_InputLimits { constexpr int32 MaxActionsPerConfig = 256; }`
+    - Interface `IPACS_InputReceiver` with:
+      - `EPACS_InputHandleResult HandleInputAction(FName ActionName, const struct FInputActionValue& Value);`
+      - `int32 GetInputPriority() const;`
+    - `enum class EPACS_InputHandleResult { NotHandled, HandledPassThrough, HandledConsume };`
+- Enhanced Input is in use. Editor has **Functional Testing** plugin enabled (built‑in).
+
+> If any names differ, adjust the code below accordingly.
+
+
+---
+
+## 1) Build.cs – add test deps for non‑Shipping
+
+**File:** `Source/<YourGame>/<YourGame>.Build.cs`
+
+```csharp
+// Add in your constructor after PublicDependencyModuleNames declarations
+if (Target.Configuration != UnrealTargetConfiguration.Shipping)
+{
+    PublicDependencyModuleNames.AddRange(new string[]
+    {
+        "AutomationController",
+        "FunctionalTesting",
+        "EnhancedInput"
+    });
+}
+```
+
+> These modules are editor‑safe and excluded in Shipping.
+
+
+---
+
+## 2) Directory layout for tests
+
+Create these folders if they don’t exist:
+
+```
+Source/<YourGame>/Private/Tests/
+Source/<YourGame>/Public/Tests/   // optional; we keep tests private in this guide
+```
+
+
+---
+
+## 3) Automation Specs (no world needed)
+
+**Purpose:** Validate config semantics, identifier lookup, and receiver ordering (priority desc, FIFO within equal priority).
+
+**File:** `Source/<YourGame>/Private/Tests/PACS_Input_AutomationSpecs.cpp`
+
+```cpp
+#if WITH_DEV_AUTOMATION_TESTS
+
+#include "Misc/AutomationTest.h"
+#include "InputAction.h"
+#include "InputMappingContext.h"
+
+#include "PACS_InputMappingConfig.h"
+#include "PACS_InputTypes.h" // EPACS_* types, FPACS_InputReceiverEntry, PACS_InputLimits, etc.
+
+// ------- Spec 1: Config validity & identifier lookup -------
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPACS_InputConfigValiditySpec,
+    "PACS.Input.InputConfig.ValidityAndLookup",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FPACS_InputConfigValiditySpec::RunTest(const FString& Parameters)
+{
+    UPACS_InputMappingConfig* Config = NewObject<UPACS_InputMappingConfig>(GetTransientPackage());
+    TestNotNull(TEXT("Config allocated"), Config);
+
+    UInputMappingContext* IMC_Gameplay = NewObject<UInputMappingContext>(GetTransientPackage());
+    UInputMappingContext* IMC_Menu     = NewObject<UInputMappingContext>(GetTransientPackage());
+    UInputMappingContext* IMC_UI       = NewObject<UInputMappingContext>(GetTransientPackage());
+    TestNotNull(TEXT("Gameplay IMC"), IMC_Gameplay);
+    TestNotNull(TEXT("Menu IMC"), IMC_Menu);
+    TestNotNull(TEXT("UI IMC"), IMC_UI);
+
+    Config->GameplayContext = IMC_Gameplay;
+    Config->MenuContext     = IMC_Menu;
+    Config->UIContext       = IMC_UI;
+
+    UInputAction* IA_Move = NewObject<UInputAction>(GetTransientPackage());
+    IA_Move->Rename(TEXT("IA_Move"));
+    FPACS_InputActionMapping MapMove;
+    MapMove.InputAction      = IA_Move;
+    MapMove.ActionIdentifier = TEXT("Move");
+
+    UInputAction* IA_Fire = NewObject<UInputAction>(GetTransientPackage());
+    IA_Fire->Rename(TEXT("IA_Fire"));
+    FPACS_InputActionMapping MapFire;
+    MapFire.InputAction      = IA_Fire;
+    MapFire.ActionIdentifier = TEXT("Fire");
+
+    Config->ActionMappings = { MapMove, MapFire };
+
+    TestTrue(TEXT("Config reports valid"), Config->IsValid());
+    TestEqual(TEXT("Lookup Move by action ptr"), Config->GetActionIdentifier(IA_Move), FName(TEXT("Move")));
+    TestEqual(TEXT("Lookup Fire by action ptr"), Config->GetActionIdentifier(IA_Fire), FName(TEXT("Fire")));
+
+    // Guardrail: exceed mapping cap
+    TArray<FPACS_InputActionMapping> Big;
+    Big.SetNum(PACS_InputLimits::MaxActionsPerConfig + 1);
+    Config->ActionMappings = Big;
+    TestFalse(TEXT("Too many mappings -> invalid"), Config->IsValid());
+
+    return true;
+}
+
+// ------- Spec 2: Receiver ordering (priority desc, FIFO for equals) -------
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPACS_ReceiverOrderingSpec,
+    "PACS.Input.Receivers.Ordering",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FPACS_ReceiverOrderingSpec::RunTest(const FString& Parameters)
+{
+    FPACS_InputReceiverEntry A; A.Priority = 400;  A.RegistrationOrder = 1;
+    FPACS_InputReceiverEntry B; B.Priority = 1000; B.RegistrationOrder = 2;
+    FPACS_InputReceiverEntry C; C.Priority = 400;  C.RegistrationOrder = 3;
+
+    TArray<FPACS_InputReceiverEntry> Arr = { A, B, C };
+    Arr.Sort();
+
+    TestTrue(TEXT("First is highest priority (B)"), Arr[0].Priority == 1000);
+    TestTrue(TEXT("Second is A (FIFO within 400)"), Arr[1].Priority == 400 && Arr[1].RegistrationOrder == 1);
+    TestTrue(TEXT("Third is C (FIFO within 400)"),  Arr[2].Priority == 400 && Arr[2].RegistrationOrder == 3);
+
+    return true;
+}
+
+#endif // WITH_DEV_AUTOMATION_TESTS
+```
+
+
+---
+
+## 4) Functional Test (runtime in PIE)
+
+**Purpose:** Exercise `UPACS_InputHandlerComponent` end‑to‑end in PIE: init health, base context switch, overlay push/pop, and receiver routing/consumption.
+
+### 4.1 Test receiver (implements your interface)
+
+**File:** `Source/<YourGame>/Private/Tests/PACS_TestReceiver.h`
+
+```cpp
+#pragma once
+
+#include "CoreMinimal.h"
+#include "UObject/Object.h"
+#include "PACS_InputTypes.h"
+#include "PACS_TestReceiver.generated.h"
+
+UCLASS()
+class UPACS_TestReceiver : public UObject, public IPACS_InputReceiver
+{
+    GENERATED_BODY()
+
+public:
+    UPROPERTY() EPACS_InputHandleResult Response = EPACS_InputHandleResult::NotHandled;
+    UPROPERTY() int32 PriorityOverride = PACS_InputPriority::Gameplay;
+
+    UPROPERTY() FName  LastAction = NAME_None;
+    UPROPERTY() struct FInputActionValue LastValue;
+
+    virtual EPACS_InputHandleResult HandleInputAction(FName ActionName, const FInputActionValue& Value) override
+    {
+        LastAction = ActionName;
+        LastValue  = Value;
+        return Response;
+    }
+    virtual int32 GetInputPriority() const override { return PriorityOverride; }
+};
+```
+
+> Keep in **Private/Tests**; we’re not exposing this to production code.
+
+
+### 4.2 Functional test actor
+
+**File:** `Source/<YourGame>/Private/Tests/PACS_Input_FunctionalTest.cpp`
+
+```cpp
+#if WITH_DEV_AUTOMATION_TESTS
+
+#include "FunctionalTest.h"
+#include "Engine/World.h"
+#include "InputAction.h"
+#include "InputMappingContext.h"
+#include "InputActionValue.h"
+#include "EnhancedInputSubsystems.h"
+
+#include "PACS_TestReceiver.h"
+#include "PACS_InputHandlerComponent.h"
+#include "PACS_InputMappingConfig.h"
+#include "PACS_PlayerController.h"
+
+#include "PACS_Input_FunctionalTest.generated.h"
+
+UCLASS()
+class APACS_Input_FunctionalTest : public AFunctionalTest
+{
+    GENERATED_BODY()
+
+public:
+    APACS_Input_FunctionalTest()
+    {
+        Author = TEXT("PACS");
+        Description = TEXT("Verifies InputHandler init, base context switching, overlay semantics, and receiver routing.");
+        bIsEnabled = true;
+    }
+
+    UPROPERTY() UPACS_InputMappingConfig* Config = nullptr;
+    UPROPERTY() UInputMappingContext* IMC_Gameplay = nullptr;
+    UPROPERTY() UInputMappingContext* IMC_Menu = nullptr;
+    UPROPERTY() UInputMappingContext* IMC_UI = nullptr;
+    UPROPERTY() UInputAction* IA_Test = nullptr;
+
+    virtual void StartTest() override
+    {
+        APACS_PlayerController* PC = GetWorld() ? Cast<APACS_PlayerController>(GetWorld()->GetFirstPlayerController()) : nullptr;
+        if (!PC) { FailTest(TEXT("APACS_PlayerController not present. Set your GameMode to use it.")); return; }
+
+        UPACS_InputHandlerComponent* Handler = PC->FindComponentByClass<UPACS_InputHandlerComponent>();
+        if (!Handler) { FailTest(TEXT("UPACS_InputHandlerComponent missing from PlayerController.")); return; }
+
+        Config = NewObject<UPACS_InputMappingConfig>(this);
+        IMC_Gameplay = NewObject<UInputMappingContext>(this);
+        IMC_Menu     = NewObject<UInputMappingContext>(this);
+        IMC_UI       = NewObject<UInputMappingContext>(this);
+        IA_Test      = NewObject<UInputAction>(this); IA_Test->Rename(TEXT("IA_Test"));
+
+        FPACS_InputActionMapping M;
+        M.InputAction      = IA_Test;
+        M.ActionIdentifier = TEXT("TestAction");
+        Config->ActionMappings = { M };
+        Config->GameplayContext = IMC_Gameplay;
+        Config->MenuContext     = IMC_Menu;
+        Config->UIContext       = IMC_UI;
+
+        Handler->InputConfig = Config;
+
+        if (!Handler->IsHealthy())
+        {
+            FailTest(TEXT("Handler IsHealthy() == false. Ensure Enhanced Input + contexts available."));
+            return;
+        }
+
+        // Base context toggle
+        Handler->SetBaseContext(EPACS_InputContextMode::Gameplay);
+        Handler->ToggleMenuContext();  // -> Menu
+        Handler->ToggleMenuContext();  // -> Gameplay
+
+        // Overlay push/pop & blocking
+        const int32 PrevCount = Handler->GetOverlayCount();
+        Handler->PushOverlay(NewObject<UInputMappingContext>(this), EPACS_OverlayType::Blocking, PACS_InputPriority::UI);
+        if (!Handler->HasBlockingOverlay()) { FailTest(TEXT("HasBlockingOverlay() should be true after push.")); return; }
+        Handler->PopOverlay();
+        if (Handler->GetOverlayCount() != PrevCount) { FailTest(TEXT("Overlay count mismatch after pop.")); return; }
+
+        // Receivers
+        UPACS_TestReceiver* RConsume = NewObject<UPACS_TestReceiver>(this);
+        RConsume->Response = EPACS_InputHandleResult::HandledConsume;
+        RConsume->PriorityOverride = PACS_InputPriority::Critical;
+
+        UPACS_TestReceiver* RPass = NewObject<UPACS_TestReceiver>(this);
+        RPass->Response = EPACS_InputHandleResult::HandledPassThrough;
+
+        Handler->RegisterReceiver(RPass,    RPass->GetInputPriority());
+        Handler->RegisterReceiver(RConsume, RConsume->GetInputPriority());
+
+        FInputActionInstance Instance(IA_Test);
+        Instance.Value = FInputActionValue(1.0f);
+        Handler->HandleAction(Instance);
+
+        if (RConsume->LastAction != TEXT("TestAction"))
+        {
+            FailTest(TEXT("Top-priority receiver did not receive/consume TestAction."));
+            return;
+        }
+
+        Handler->UnregisterReceiver(RConsume);
+        Handler->UnregisterReceiver(RPass);
+
+        FinishTest(EFunctionalTestResult::Succeeded, TEXT("PACS Input functional test passed."));
+    }
+};
+
+#endif // WITH_DEV_AUTOMATION_TESTS
+```
+
+**Map Setup:** Place one `APACS_Input_FunctionalTest` actor in a small test map. Set your GameMode to use `APACS_PlayerController`. No content assets required (tests use transient assets).
+
+
+---
+
+## 5) How to run the tests
+
+### 5.1 Automation Specs (no map required)
+- Editor: **Window → Developer Tools → Session Frontend → Automation**  
+- Filter: `PACS.Input`  
+- Run:
+  - `PACS.Input.InputConfig.ValidityAndLookup`
+  - `PACS.Input.Receivers.Ordering`
+
+### 5.2 Functional Test (needs map with actor)
+- Open the map containing `APACS_Input_FunctionalTest`.
+- Editor: **Window → Functional Testing** → select the actor → **Run**.  
+- Or run from **Session Frontend → Automation → Functional Tests**.
+
+### 5.3 CLI (optional, headless)
+From an x64 Native Tools Developer Command Prompt or PowerShell in your repo root:
+
+```powershell
+# Replace <Proj> and <Map> with your names; build Editor if needed
+# Run automation in editor (use -ExecCmds=Automation RunTests to target individual tests)
+Engine\Binaries\Win64\UnrealEditor-Cmd.exe <Proj>.uproject -run=Automation -unattended -nop4 -TestExit="Automation Test Queue Empty"
+```
+
+Examples:
+```powershell
+# Run all PACS.Input specs
+Engine\Binaries\Win64\UnrealEditor-Cmd.exe <Proj>.uproject -ExecCmds="Automation RunTests PACS.Input" -unattended -nop4 -TestExit="Automation Test Queue Empty"
+
+# Run functional tests only
+Engine\Binaries\Win64\UnrealEditor-Cmd.exe <Proj>.uproject -ExecCmds="Automation RunTests Functional" -unattended -nop4 -TestExit="Automation Test Queue Empty"
+```
+
+> To export JSON results, add: `-ReportOutputPath="<absolute_path>" -ReportOutputFormat=Json`
+
+
+---
+
+## 6) Completion Definition (for Claude Code)
+
+Claude must:
+1. Update `<YourGame>.Build.cs` with test dependencies (non‑Shipping only).  
+2. Create files with exact paths:
+   - `Source/<YourGame>/Private/Tests/PACS_Input_AutomationSpecs.cpp`
+   - `Source/<YourGame>/Private/Tests/PACS_TestReceiver.h`
+   - `Source/<YourGame>/Private/Tests/PACS_Input_FunctionalTest.cpp`
+3. Ensure includes/types resolve (adjust includes for your actual header locations).  
+4. Compile Editor target; tests must appear in **Session Frontend → Automation**.  
+5. Provide a small test map containing one `APACS_Input_FunctionalTest` actor and GameMode using `APACS_PlayerController`.  
+6. Verify all tests **pass** in Editor and via CLI.  
+7. Commit changes with message: `test(pacs): add automation specs and functional test for input system`.
+
+**Acceptance Criteria:**
+- Both automation specs succeed locally.  
+- Functional test succeeds in PIE and via Session Frontend.  
+- No Shipping build impact; Editor/Development only.  
+- JSON test report can be generated via CLI.
+
+
+---
+
+## 7) Troubleshooting
+
+- **Tests not visible** → Ensure `WITH_DEV_AUTOMATION_TESTS` is true for your configuration and plugin *Functional Testing* is enabled.  
+- **IsHealthy false** → Confirm Enhanced Input subsystem active, local PC present, and contexts created.  
+- **Linker errors** → Move headers that define `IPACS_InputReceiver`/enums into a module that tests can include; avoid circular includes.  
+- **No `APACS_PlayerController` in map** → Set GameMode override in the test map’s World Settings.
+
+---
+
+## 8) Notes on Style & Safety
+
+- Tests live under `Private/Tests` to keep scope tight.  
+- Use **transient assets** to avoid content dependencies.  
+- Priority ordering spec is a canary for regression in `operator<` comparisons.
+
+---
+
+## 9) Next steps (optional)
+
+- Add a **non‑blocking overlay** case to ensure routing passes to gameplay receiver when UI overlay is non‑blocking.  
+- Add a **stress test** that registers/unregisters 1000 receivers and confirms stable ordering and no crashes.
+
