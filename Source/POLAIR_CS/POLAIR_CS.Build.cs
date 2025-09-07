@@ -23,7 +23,12 @@ public class POLAIR_CS : ModuleRules
 			"PlayFabGSDK" 
 		});
 
-		PrivateDependencyModuleNames.AddRange(new string[] { "PlayFab", "PlayFabCpp", "PlayFabCommon" });
+		PrivateDependencyModuleNames.AddRange(new string[] { 
+			"PlayFab", 
+			"PlayFabCpp", 
+			"PlayFabCommon",
+			"XRBase" // Required for UHeadMountedDisplayFunctionLibrary
+		});
 
 		if (Target.Configuration != UnrealTargetConfiguration.Shipping)
 		{

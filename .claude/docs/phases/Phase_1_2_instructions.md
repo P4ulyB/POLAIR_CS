@@ -147,7 +147,7 @@ protected:
 ```cpp
 #include "PACS_PlayerController.h"
 #include "PACS_PlayerState.h"
-#include "PACS_GameMode.h"
+#include "PACSGameMode.h"
 #include "HeadMountedDisplayFunctionLibrary.h"
 #include "IXRTrackingSystem.h"
 #include "Engine/Engine.h"
@@ -195,7 +195,7 @@ void APACS_PlayerController::ServerReportHMDState_Implementation(EHMDState Detec
         if (PreviousState == EHMDState::Unknown && GetPawn() == nullptr)
         {
             UE_LOG(LogTemp, Log, TEXT("PACS PlayerController: Triggering spawn for player with HMD state %d"), static_cast<int32>(DetectedState));
-            if (APACS_GameMode* GM = GetWorld()->GetAuthGameMode<APACS_GameMode>())
+            if (APACSGameMode* GM = GetWorld()->GetAuthGameMode<APACSGameMode>())
             {
                 GM->HandleStartingNewPlayer(this);
             }
@@ -232,7 +232,7 @@ void APACS_PlayerController::InitPlayerState()
             // Only trigger spawn if player has no pawn
             if (GetPawn() == nullptr)
             {
-                if (APACS_GameMode* GM = GetWorld()->GetAuthGameMode<APACS_GameMode>())
+                if (APACSGameMode* GM = GetWorld()->GetAuthGameMode<APACSGameMode>())
                 {
                     GM->HandleStartingNewPlayer(this);
                 }
@@ -242,9 +242,9 @@ void APACS_PlayerController::InitPlayerState()
 }
 ```
 
-### 5. PACS_GameMode.h
+### 5. PACSGameMode.h
 
-**Location**: `C:\Devops\Projects\PACS\Source\PACS\Public\PACS_GameMode.h`
+**Location**: `C:\Devops\Projects\PACS\Source\PACS\Public\PACSGameMode.h`
 
 ```cpp
 #pragma once
@@ -252,15 +252,15 @@ void APACS_PlayerController::InitPlayerState()
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
 #include "PACS_PlayerState.h"
-#include "PACS_GameMode.generated.h"
+#include "PACSGameMode.generated.h"
 
 UCLASS()
-class PACS_API APACS_GameMode : public AGameModeBase
+class PACS_API APACSGameMode : public AGameModeBase
 {
     GENERATED_BODY()
 
 public:
-    APACS_GameMode();
+    APACSGameMode();
 
     // Override for player connection handling
     virtual void PostLogin(APlayerController* NewPlayer) override;
@@ -285,16 +285,16 @@ protected:
 };
 ```
 
-### 6. PACS_GameMode.cpp
+### 6. PACSGameMode.cpp
 
-**Location**: `C:\Devops\Projects\PACS\Source\PACS\Private\PACS_GameMode.cpp`
+**Location**: `C:\Devops\Projects\PACS\Source\PACS\Private\PACSGameMode.cpp`
 
 ```cpp
-#include "PACS_GameMode.h"
+#include "PACSGameMode.h"
 #include "PACS_PlayerController.h"
 #include "PACS_PlayerState.h"
 
-APACS_GameMode::APACS_GameMode()
+APACSGameMode::APACSGameMode()
 {
     // Set default PlayerState class
     PlayerStateClass = APACS_PlayerState::StaticClass();
@@ -304,7 +304,7 @@ APACS_GameMode::APACS_GameMode()
     // AssessorPawnClass = APACS_AssessorPawn::StaticClass();
 }
 
-void APACS_GameMode::PostLogin(APlayerController* NewPlayer)
+void APACSGameMode::PostLogin(APlayerController* NewPlayer)
 {
     Super::PostLogin(NewPlayer);
     
@@ -319,7 +319,7 @@ void APACS_GameMode::PostLogin(APlayerController* NewPlayer)
     }
 }
 
-UClass* APACS_GameMode::GetDefaultPawnClassForController_Implementation(AController* InController)
+UClass* APACSGameMode::GetDefaultPawnClassForController_Implementation(AController* InController)
 {
     // GameMode only exists on server - no HasAuthority() check needed
     if (APACS_PlayerController* PACSPC = Cast<APACS_PlayerController>(InController))
@@ -352,7 +352,7 @@ UClass* APACS_GameMode::GetDefaultPawnClassForController_Implementation(AControl
     return AssessorPawnClass ? AssessorPawnClass : Super::GetDefaultPawnClassForController_Implementation(InController);
 }
 
-void APACS_GameMode::HandleStartingNewPlayer_Implementation(APlayerController* NewPlayer)
+void APACSGameMode::HandleStartingNewPlayer_Implementation(APlayerController* NewPlayer)
 {
     // Idempotence guard: prevent double spawn
     if (NewPlayer && NewPlayer->GetPawn())
@@ -392,7 +392,7 @@ void APACS_GameMode::HandleStartingNewPlayer_Implementation(APlayerController* N
         // Set per-player timeout to prevent infinite wait
         GetWorld()->GetTimerManager().SetTimer(
             PACSPC->HMDWaitHandle,  // Per-player timer handle - prevents race conditions
-            FTimerDelegate::CreateUObject(this, &APACS_GameMode::OnHMDTimeout, PACSPC),
+            FTimerDelegate::CreateUObject(this, &APACSGameMode::OnHMDTimeout, PACSPC),
             3.0f, false);
         return;
     }
@@ -401,7 +401,7 @@ void APACS_GameMode::HandleStartingNewPlayer_Implementation(APlayerController* N
     Super::HandleStartingNewPlayer_Implementation(NewPlayer);
 }
 
-void APACS_GameMode::OnHMDTimeout(APlayerController* PlayerController)
+void APACSGameMode::OnHMDTimeout(APlayerController* PlayerController)
 {
     UE_LOG(LogTemp, Warning, TEXT("PACS GameMode: HMD detection timeout reached"));
     
@@ -455,8 +455,8 @@ void APACS_GameMode::OnHMDTimeout(APlayerController* PlayerController)
 ## Required Project Settings
 
 1. **Enable XRBase Plugin**: Edit → Plugins → Search "XRBase" → Enable
-2. **Set GameMode**: Project Settings → Maps & Modes → Default GameMode = PACS_GameMode
-3. **Configure Pawn Classes**: Set CandidatePawnClass and AssessorPawnClass in PACS_GameMode Blueprint
+2. **Set GameMode**: Project Settings → Maps & Modes → Default GameMode = PACSGameMode
+3. **Configure Pawn Classes**: Set CandidatePawnClass and AssessorPawnClass in PACSGameMode Blueprint
 
 ## Critical Implementation Notes
 

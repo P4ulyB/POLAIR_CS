@@ -3,6 +3,8 @@
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
 #include "PACS_InputHandlerComponent.h"
+#include "PACS_PlayerState.h"
+#include "Engine/TimerHandle.h"
 #include "PACS_PlayerController.generated.h"
 
 UCLASS()
@@ -12,6 +14,27 @@ class POLAIR_CS_API APACS_PlayerController : public APlayerController
 
 public:
     APACS_PlayerController();
+
+    // Per-player timer handle for HMD detection timeout
+    FTimerHandle HMDWaitHandle;
+
+    // Client RPC for zero-swap handshake
+    UFUNCTION(Client, Reliable)
+    void ClientRequestHMDState();
+    void ClientRequestHMDState_Implementation();
+
+public:
+    // Allow test access to these members
+    EHMDState PendingHMDState = EHMDState::Unknown;
+    bool bHasPendingHMDState = false;
+
+    // Server RPC response for zero-swap handshake
+    UFUNCTION(Server, Reliable)
+    void ServerReportHMDState(EHMDState DetectedState);
+    void ServerReportHMDState_Implementation(EHMDState DetectedState);
+
+    // Override for server-side PlayerState initialization
+    virtual void InitPlayerState() override;
 
 protected:
     virtual void SetupInputComponent() override;
