@@ -8,6 +8,9 @@
 #include "Kismet/GameplayStatics.h"
 #include "Engine/NetConnection.h"
 #include "Misc/Parse.h"
+#include "PACS/Heli/PACS_CandidateHelicopterCharacter.h"
+#include "TimerManager.h"
+//#include "PACS/Heli/PACS_OrbitMessages.h" // only if saved offsets are passed
 
 APACSGameMode::APACSGameMode()
 {
@@ -180,6 +183,15 @@ void APACSGameMode::HandleStartingNewPlayer_Implementation(APlayerController* Ne
                 UE_LOG(LogTemp, Log, TEXT("PACS GameMode: HMD state known (%d) - proceeding with spawn"), static_cast<int32>(PACSPS->HMDState));
                 GetWorld()->GetTimerManager().ClearTimer(PACSPC->HMDWaitHandle);
                 Super::HandleStartingNewPlayer_Implementation(NewPlayer);
+
+                // Seed orbit immediately after spawn (server authority)
+                if (APACS_CandidateHelicopterCharacter* Candidate =
+                    Cast<APACS_CandidateHelicopterCharacter>(NewPlayer->GetPawn()))
+                {
+                    // If you have save offsets, pass a pointer; else pass nullptr.
+                    // const FPACS_OrbitOffsets* Offsets = SaveSubsystem ? &SaveSubsystem->GetOffsets() : nullptr;
+                    Candidate->ApplyOffsetsThenSeed(/*Offsets*/ nullptr);
+                }
                 return;
             }
             else
@@ -194,10 +206,11 @@ void APACSGameMode::HandleStartingNewPlayer_Implementation(APlayerController* Ne
         
         // Set per-player timeout to prevent infinite wait
         GetWorld()->GetTimerManager().SetTimer(
-            PACSPC->HMDWaitHandle,  // Per-player timer handle - prevents race conditions
-            FTimerDelegate::CreateLambda([this, PACSPC]() {
-                OnHMDTimeout(PACSPC);
-            }),
+            PACSPC->HMDWaitHandle,
+            FTimerDelegate::CreateLambda([this, WeakPC = TWeakObjectPtr<APACS_PlayerController>(PACSPC)]()
+                {
+                    if (WeakPC.IsValid()) { OnHMDTimeout(WeakPC.Get()); }
+                }),
             3.0f, false);
         return;
     }
@@ -241,6 +254,13 @@ void APACSGameMode::OnHMDTimeout(APlayerController* PlayerController)
         
         UE_LOG(LogTemp, Log, TEXT("PACS GameMode: Forcing spawn after timeout"));
         Super::HandleStartingNewPlayer_Implementation(PlayerController);
+
+        // Seed after forced spawn
+        if (APACS_CandidateHelicopterCharacter* Candidate =
+            Cast<APACS_CandidateHelicopterCharacter>(PlayerController ? PlayerController->GetPawn() : nullptr))
+        {
+            Candidate->ApplyOffsetsThenSeed(/*Offsets*/ nullptr);
+        }
     }
 }
 

@@ -30,22 +30,31 @@ void UPACS_HeliMovementComponent::OnMovementModeChanged(EMovementMode Prev, uint
 
 FNetworkPredictionData_Client* UPACS_HeliMovementComponent::GetPredictionData_Client() const
 {
-    check(PawnOwner);
-    if (!ClientPredictionData)
+    // Only the owning client needs prediction data.
+    if (!PawnOwner || PawnOwner->GetLocalRole() != ROLE_AutonomousProxy)
     {
-        UPACS_HeliMovementComponent* Mutable = const_cast<UPACS_HeliMovementComponent*>(this);
-        Mutable->ClientPredictionData = new FNetworkPredictionData_Client_HeliOrbit(*this);
-        
-        // Cast to base class to access MaxSmoothNetUpdateDist and NoSmoothNetUpdateDist
-        if (FNetworkPredictionData_Client_Character* CharPredictionData = 
-            static_cast<FNetworkPredictionData_Client_Character*>(Mutable->ClientPredictionData))
+        return Super::GetPredictionData_Client();
+    }
+
+    if (!ClientPredictionData) // <-- this is the BASE member from UCharacterMovementComponent
+    {
+        UPACS_HeliMovementComponent* Self = const_cast<UPACS_HeliMovementComponent*>(this);
+        Self->ClientPredictionData = new FNetworkPredictionData_Client_HeliOrbit(*this);
+
+        if (auto* CharPred = static_cast<FNetworkPredictionData_Client_Character*>(Self->ClientPredictionData))
         {
-            CharPredictionData->MaxSmoothNetUpdateDist = 92.f;
-            CharPredictionData->NoSmoothNetUpdateDist  = 140.f;
+            CharPred->MaxSmoothNetUpdateDist = 92.f;
+            CharPred->NoSmoothNetUpdateDist  = 140.f;
         }
     }
+
+    ensureAlwaysMsgf(ClientPredictionData != nullptr, TEXT("ClientPredictionData not initialised"));
+    ensureAlwaysMsgf(PawnOwner && PawnOwner->GetLocalRole() == ROLE_AutonomousProxy,
+                     TEXT("Prediction requested on non-autonomous role"));
+
     return ClientPredictionData;
 }
+
 
 void UPACS_HeliMovementComponent::PhysCustom(float Dt, int32 Iter)
 {
@@ -79,12 +88,21 @@ void UPACS_HeliMovementComponent::TickClock_Proxy()  { TickClock_Server(); }
 void UPACS_HeliMovementComponent::Eval_Server()
 {
     const APACS_CandidateHelicopterCharacter* C = Cast<APACS_CandidateHelicopterCharacter>(CharacterOwner);
+    
+    // Optional: remove after validation
+    // ensureMsgf(Data != nullptr, TEXT("PACS: UPACS_HeliMovementComponent::Data is NULL — wire Character Data -> CMC or set CMC Data in BP."));
+    
     if (!C || !Data) return;
 
-    const float aC = Eval01(C->OrbitAnchors.CenterStartS, (C->OrbitTargets.CenterDurS>0?C->OrbitTargets.CenterDurS:Data->CenterDurS), Data->CenterInterp, ServerNowS);
-    const float aA = Eval01(C->OrbitAnchors.AltStartS,    (C->OrbitTargets.AltDurS>0?C->OrbitTargets.AltDurS:Data->AltDurS),          Data->AltInterp,    ServerNowS);
-    const float aR = Eval01(C->OrbitAnchors.RadiusStartS, (C->OrbitTargets.RadiusDurS>0?C->OrbitTargets.RadiusDurS:Data->RadiusDurS), Data->RadiusInterp, ServerNowS);
-    const float aS = Eval01(C->OrbitAnchors.SpeedStartS,  (C->OrbitTargets.SpeedDurS>0?C->OrbitTargets.SpeedDurS:Data->SpeedDurS),    Data->SpeedInterp,  ServerNowS);
+    const float UseCenterDur = (C->OrbitTargets.CenterDurS > 0.f) ? C->OrbitTargets.CenterDurS : 0.f;
+    const float UseAltDur    = (C->OrbitTargets.AltDurS    > 0.f) ? C->OrbitTargets.AltDurS    : 0.f;
+    const float UseRadiusDur = (C->OrbitTargets.RadiusDurS > 0.f) ? C->OrbitTargets.RadiusDurS : 0.f;
+    const float UseSpeedDur  = (C->OrbitTargets.SpeedDurS  > 0.f) ? C->OrbitTargets.SpeedDurS  : 0.f;
+
+    const float aC = Eval01(C->OrbitAnchors.CenterStartS, UseCenterDur, Data->CenterInterp, ServerNowS);
+    const float aA = Eval01(C->OrbitAnchors.AltStartS,    UseAltDur,    Data->AltInterp,    ServerNowS);
+    const float aR = Eval01(C->OrbitAnchors.RadiusStartS, UseRadiusDur, Data->RadiusInterp, ServerNowS);
+    const float aS = Eval01(C->OrbitAnchors.SpeedStartS,  UseSpeedDur,  Data->SpeedInterp,  ServerNowS);
 
     const FVector DesiredC = FMath::Lerp(CenterCm, C->OrbitTargets.CenterCm, aC);
     const float   MaxStep  = (Data->MaxCenterDriftCms) * FApp::GetDeltaTime();

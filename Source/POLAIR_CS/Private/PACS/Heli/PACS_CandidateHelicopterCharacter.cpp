@@ -35,6 +35,48 @@ APACS_CandidateHelicopterCharacter::APACS_CandidateHelicopterCharacter(const FOb
 void APACS_CandidateHelicopterCharacter::BeginPlay()
 {
     Super::BeginPlay();
+
+    if (UPACS_HeliMovementComponent* CMC = Cast<UPACS_HeliMovementComponent>(GetCharacterMovement()))
+    {
+        // Ensure custom movement
+        CMC->SetMovementMode(MOVE_Custom, (uint8)EPACS_HeliMoveMode::CMOVE_HeliOrbit);
+        CMC->bConstrainToPlane = true;
+
+        // Prefer-existing: do NOT stomp a valid CMC->Data with nullptr.
+        if (!CMC->Data && Data)      { CMC->Data = Data; }
+        else if (CMC->Data && !Data) { Data = CMC->Data; }
+
+        // Optional diagnostic (remove after validation)
+        // ensureMsgf(CMC->Data != nullptr, TEXT("PACS: CMC->Data is NULL. Set the data asset on either the Character or the CMC in BP."));
+    }
+
+    if (UPACS_HeliMovementComponent* CMC = Cast<UPACS_HeliMovementComponent>(GetCharacterMovement()))
+    {
+        UE_LOG(LogTemp, Log, TEXT("PACS Spawn: Mode=%d Custom=%d Data=%s"),
+            int32(CMC->MovementMode),
+            int32(CMC->CustomMovementMode),
+            CMC->Data ? TEXT("OK") : TEXT("NULL"));
+    }
+}
+
+void APACS_CandidateHelicopterCharacter::PossessedBy(AController* NewController)
+{
+    Super::PossessedBy(NewController);
+
+    if (UPACS_HeliMovementComponent* CMC = Cast<UPACS_HeliMovementComponent>(GetCharacterMovement()))
+    {
+        CMC->SetMovementMode(MOVE_Custom, (uint8)EPACS_HeliMoveMode::CMOVE_HeliOrbit);
+    }
+}
+
+void APACS_CandidateHelicopterCharacter::OnRep_Controller()
+{
+    Super::OnRep_Controller();
+
+    if (UPACS_HeliMovementComponent* CMC = Cast<UPACS_HeliMovementComponent>(GetCharacterMovement()))
+    {
+        CMC->SetMovementMode(MOVE_Custom, (uint8)EPACS_HeliMoveMode::CMOVE_HeliOrbit);
+    }
 }
 
 void APACS_CandidateHelicopterCharacter::Tick(float DeltaSeconds)
@@ -91,7 +133,7 @@ void APACS_CandidateHelicopterCharacter::UpdateBankVisual(float Dt)
 {
     const auto* CMC = Cast<UPACS_HeliMovementComponent>(GetCharacterMovement());
     if (!CMC || !Data || !HelicopterFrame) return;
-    const float Target = -(CMC->SpeedCms / FMath::Max(Data->MaxSpeedCms,1.f)) * Data->MaxBankDeg;
+    const float Target = +(CMC->SpeedCms / FMath::Max(Data->MaxSpeedCms,1.f)) * Data->MaxBankDeg;
     CurrentBankDeg = FMath::FInterpTo(CurrentBankDeg, Target, Dt, BankInterpSpeed);
     HelicopterFrame->SetRelativeRotation(FRotator(0, 0, CurrentBankDeg));
 }
@@ -158,11 +200,21 @@ void APACS_CandidateHelicopterCharacter::Server_ReleaseSelect_Implementation(APl
 
 void APACS_CandidateHelicopterCharacter::ApplyOffsetsThenSeed(const FPACS_OrbitOffsets* Off)
 {
+    const UPACS_CandidateHelicopterData* EffData = Data;
+    if (!EffData)
+    {
+        if (const UPACS_HeliMovementComponent* CMC = Cast<UPACS_HeliMovementComponent>(GetCharacterMovement()))
+        {
+            EffData = CMC->Data;
+        }
+    }
+
     const float S = NowS(GetWorld());
 
-    float Alt = Data ? Data->DefaultAltitudeCm : 20000.f;
-    float Rad = Data ? Data->DefaultRadiusCm   : 15000.f;
-    float Spd = Data ? Data->DefaultSpeedCms   : 2222.22f;
+    float Alt = EffData ? EffData->DefaultAltitudeCm : 20000.f;
+    float Rad = EffData ? EffData->DefaultRadiusCm   : 15000.f;
+    float Spd = EffData ? EffData->DefaultSpeedCms   : 2222.22f;
+    const float MaxSpd = EffData ? EffData->MaxSpeedCms : 6000.f;
 
     if (Off)
     {
@@ -174,8 +226,12 @@ void APACS_CandidateHelicopterCharacter::ApplyOffsetsThenSeed(const FPACS_OrbitO
     OrbitTargets.CenterCm   = FVector(GetActorLocation().X, GetActorLocation().Y, 0.f);
     OrbitTargets.AltitudeCm = FMath::Max(Alt, 100.f);
     OrbitTargets.RadiusCm   = FMath::Max(Rad, 100.f);
-    OrbitTargets.SpeedCms   = FMath::Clamp(Spd, 0.f, Data ? Data->MaxSpeedCms : 6000.f);
+    OrbitTargets.SpeedCms   = FMath::Clamp(Spd, 0.f, MaxSpd);
     OrbitTargets.CenterDurS = OrbitTargets.AltDurS = OrbitTargets.RadiusDurS = OrbitTargets.SpeedDurS = 0.f;
+
+    UE_LOG(LogTemp, Log, TEXT("PACS Seed: Alt=%.0f Rad=%.0f Spd=%.0f (MaxSpd=%.0f)"),
+        OrbitTargets.AltitudeCm, OrbitTargets.RadiusCm, OrbitTargets.SpeedCms,
+        EffData ? EffData->MaxSpeedCms : -1.f);
 
     OrbitAnchors.CenterStartS = OrbitAnchors.AltStartS = OrbitAnchors.RadiusStartS =
     OrbitAnchors.SpeedStartS  = OrbitAnchors.OrbitStartS = S;
@@ -194,8 +250,28 @@ void APACS_CandidateHelicopterCharacter::ApplyOffsetsThenSeed(const FPACS_OrbitO
         CMC->SpeedCms   = OrbitTargets.SpeedCms;
         CMC->AngleRad   = 0.f;
     }
+
+    if (UPACS_HeliMovementComponent* CMC = Cast<UPACS_HeliMovementComponent>(GetCharacterMovement()))
+    {
+        // Ensure next tick uses PhysCustom
+        CMC->SetMovementMode(MOVE_Custom, (uint8)EPACS_HeliMoveMode::CMOVE_HeliOrbit);
+    }
 }
 
-void APACS_CandidateHelicopterCharacter::OnRep_OrbitTargets(){}
+void APACS_CandidateHelicopterCharacter::OnRep_OrbitTargets()
+{
+    if (UPACS_HeliMovementComponent* CMC = Cast<UPACS_HeliMovementComponent>(GetCharacterMovement()))
+    {
+        // Snap CMC working state to replicated targets as soon as they arrive
+        CMC->CenterCm   = OrbitTargets.CenterCm;
+        CMC->AltitudeCm = OrbitTargets.AltitudeCm;
+        CMC->RadiusCm   = OrbitTargets.RadiusCm;
+        CMC->SpeedCms   = OrbitTargets.SpeedCms;
+
+        // Ensure custom mode on clients
+        CMC->SetMovementMode(MOVE_Custom, (uint8)EPACS_HeliMoveMode::CMOVE_HeliOrbit);
+        CMC->bConstrainToPlane = true;
+    }
+}
 void APACS_CandidateHelicopterCharacter::OnRep_OrbitAnchors(){}
 void APACS_CandidateHelicopterCharacter::OnRep_SelectedBy(){}

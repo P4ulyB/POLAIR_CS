@@ -929,3 +929,60 @@ F) Save Offsets
 - Do not implement save IO inside the pawn.
 
 End of document.
+
+
+##Trouble Shooting
+
+If the heli fails to orbit on beginplay ...
+
+on a dedicated server you seed immediately after the pawn is spawned. In your APACSGameMode, do it right after the Super::HandleStartingNewPlayer_Implementation(...) call (and also in the timeout path), so the server sets Centre/Alt/Radius/Speed and stamps anchors on tick 1.
+
+Drop-in snippet (minimal; no scope-creep):
+
+// APACSGameMode.cpp
+#include "PACS_CandidateHelicopterCharacter.h"  // for APACS_CandidateHelicopterCharacter
+// #include "PACS_OrbitMessages.h"              // if you pass FPACS_OrbitOffsets (optional)
+
+// ... inside APACSGameMode::HandleStartingNewPlayer_Implementation(APlayerController* NewPlayer)
+if (APACS_PlayerController* PACSPC = Cast<APACS_PlayerController>(NewPlayer))
+{
+    if (APACS_PlayerState* PACSPS = Cast<APACS_PlayerState>(PACSPC->PlayerState))
+    {
+        if (PACSPS->HMDState != EHMDState::Unknown)
+        {
+            GetWorld()->GetTimerManager().ClearTimer(PACSPC->HMDWaitHandle);
+
+            // Spawn now (server-side)
+            Super::HandleStartingNewPlayer_Implementation(NewPlayer);
+
+            // Seed orbit immediately after spawn (server authority)
+            if (APACS_CandidateHelicopterCharacter* Candidate =
+                    Cast<APACS_CandidateHelicopterCharacter>(NewPlayer->GetPawn()))
+            {
+                // If you have save offsets, pass a pointer; else pass nullptr.
+                // const FPACS_OrbitOffsets* Offsets = SaveSubsystem ? &SaveSubsystem->GetOffsets() : nullptr;
+                Candidate->ApplyOffsetsThenSeed(/*Offsets*/ nullptr);
+            }
+            return;
+        }
+        // else: timer path below…
+    }
+
+    // existing timer setup (unchanged) …
+}
+
+
+Also ensure the timeout path seeds after the forced spawn:
+
+// APACSGameMode::OnHMDTimeout(...)
+Super::HandleStartingNewPlayer_Implementation(PlayerController);
+
+// Seed after forced spawn
+if (APACS_CandidateHelicopterCharacter* Candidate =
+        Cast<APACS_CandidateHelicopterCharacter>(PlayerController ? PlayerController->GetPawn() : nullptr))
+{
+    Candidate->ApplyOffsetsThenSeed(/*Offsets*/ nullptr);
+}
+
+
+That’s it. With this in place the pawn starts orbiting immediately after spawn/seed, using your Data Asset defaults (plus any save offsets if you wire them). It matches your existing GameMode flow that waits for HMD state, spawns, then proceeds.

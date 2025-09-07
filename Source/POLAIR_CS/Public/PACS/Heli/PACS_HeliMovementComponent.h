@@ -6,7 +6,7 @@ UENUM()
 enum class EPACS_HeliMoveMode : uint8 { CMOVE_HeliOrbit = 0 };
 
 UCLASS()
-class UPACS_HeliMovementComponent : public UCharacterMovementComponent
+class POLAIR_CS_API UPACS_HeliMovementComponent : public UCharacterMovementComponent
 {
     GENERATED_BODY()
 public:
@@ -40,5 +40,4 @@ public:
     void StepKinematics(float Dt);
 
 private:
-    mutable FNetworkPredictionData_Client* ClientPredictionData = nullptr;
 };

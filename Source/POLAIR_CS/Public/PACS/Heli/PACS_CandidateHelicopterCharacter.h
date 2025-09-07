@@ -44,7 +44,7 @@ struct FPACS_OrbitOffsets
 };
 
 UCLASS()
-class APACS_CandidateHelicopterCharacter : public ACharacter
+class POLAIR_CS_API APACS_CandidateHelicopterCharacter : public ACharacter
 {
     GENERATED_BODY()
 public:
@@ -73,6 +73,8 @@ public:
 
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out) const override;
     virtual void BeginPlay() override;
+    virtual void PossessedBy(AController* NewController) override;
+    virtual void OnRep_Controller() override;
     virtual void Tick(float DeltaSeconds) override;
 
     UFUNCTION(BlueprintCallable) void CenterSeatedPose(bool bSnapYawToVehicleForward = true);

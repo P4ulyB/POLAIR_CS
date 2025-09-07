@@ -4,7 +4,7 @@
 #include "PACS_CandidateHelicopterData.generated.h"
 
 UCLASS(BlueprintType)
-class UPACS_CandidateHelicopterData : public UPrimaryDataAsset
+class POLAIR_CS_API UPACS_CandidateHelicopterData : public UPrimaryDataAsset
 {
     GENERATED_BODY()
 public:

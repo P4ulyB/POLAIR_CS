@@ -17,7 +17,10 @@ public class POLAIR_CSEditor : ModuleRules
 			"ToolMenus",
 			"POLAIR_CS",
 			"InputCore",
-			"EnhancedInput"
+			"EnhancedInput",
+			"NetCore",
+			"HeadMountedDisplay",
+			"FunctionalTesting"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] 
@@ -26,7 +29,8 @@ public class POLAIR_CSEditor : ModuleRules
 			"EditorWidgets", 
 			"Slate", 
 			"SlateCore",
-			"AutomationTest"
+			"AutomationTest",
+			"Projects"
 		});
 
 		if (Target.Configuration != UnrealTargetConfiguration.Shipping)
