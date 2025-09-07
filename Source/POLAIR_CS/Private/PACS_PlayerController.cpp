@@ -4,6 +4,7 @@
 #include "HeadMountedDisplayFunctionLibrary.h"
 #include "IXRTrackingSystem.h"
 #include "Engine/Engine.h"
+#include "PACS/Heli/PACS_CandidateHelicopterCharacter.h"
 
 #if !UE_SERVER
 #include "EnhancedInputComponent.h"
@@ -19,6 +20,24 @@ void APACS_PlayerController::BeginPlay()
 {
     Super::BeginPlay();
     ValidateInputSystem();
+
+    // Set up VR delegates for local controllers only
+    if (IsLocalController())
+    {
+        OnPutOnHandle   = FCoreDelegates::VRHeadsetPutOnHead.AddUObject(this, &ThisClass::HandleHMDPutOn);
+        OnRemovedHandle = FCoreDelegates::VRHeadsetRemovedFromHead.AddUObject(this, &ThisClass::HandleHMDRemoved);
+        OnRecenterHandle= FCoreDelegates::VRHeadsetRecenter.AddUObject(this, &ThisClass::HandleHMDRecenter);
+    }
+}
+
+void APACS_PlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+    // Clean up VR delegates
+    FCoreDelegates::VRHeadsetPutOnHead.Remove(OnPutOnHandle);
+    FCoreDelegates::VRHeadsetRemovedFromHead.Remove(OnRemovedHandle);
+    FCoreDelegates::VRHeadsetRecenter.Remove(OnRecenterHandle);
+
+    Super::EndPlay(EndPlayReason);
 }
 
 void APACS_PlayerController::SetupInputComponent()
@@ -215,4 +234,21 @@ void APACS_PlayerController::InitPlayerState()
             }
         }
     }
+}
+
+// VR Handler implementations
+void APACS_PlayerController::HandleHMDPutOn()
+{
+    if (auto* Heli = Cast<APACS_CandidateHelicopterCharacter>(GetPawn()))
+        Heli->CenterSeatedPose(true);
+}
+
+void APACS_PlayerController::HandleHMDRecenter()
+{
+    HandleHMDPutOn();
+}
+
+void APACS_PlayerController::HandleHMDRemoved()
+{
+    // No action needed when HMD is removed
 }

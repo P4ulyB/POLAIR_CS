@@ -14,13 +14,15 @@ public class POLAIR_CS : ModuleRules
 			"Engine", 
 			"InputCore", 
 			"EnhancedInput", 
+			"HeadMountedDisplay",
 			"UMG", 
 			"Slate", 
 			"SlateCore",
 			"Json", 
 			"JsonUtilities", 
 			"HTTP", 
-			"PlayFabGSDK" 
+			"PlayFabGSDK",
+			"NetCore"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { 
@@ -32,7 +34,13 @@ public class POLAIR_CS : ModuleRules
 
 		if (Target.Configuration != UnrealTargetConfiguration.Shipping)
 		{
-			PrivateDependencyModuleNames.AddRange(new string[] { "AutomationTest", "UnrealEd" });
+			PrivateDependencyModuleNames.AddRange(new string[] { "AutomationTest" });
+		}
+		
+		// Add UnrealEd only for Editor targets
+		if (Target.Type == TargetType.Editor)
+		{
+			PrivateDependencyModuleNames.AddRange(new string[] { "UnrealEd" });
 		}
 
 		// Uncomment if you are using Slate UI

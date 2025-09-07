@@ -33,12 +33,19 @@ public:
     void ServerReportHMDState(EHMDState DetectedState);
     void ServerReportHMDState_Implementation(EHMDState DetectedState);
 
+    // VR integration delegate handles
+    FDelegateHandle OnPutOnHandle, OnRemovedHandle, OnRecenterHandle;
+    void HandleHMDPutOn();
+    void HandleHMDRemoved();
+    void HandleHMDRecenter();
+
     // Override for server-side PlayerState initialization
     virtual void InitPlayerState() override;
 
 protected:
     virtual void SetupInputComponent() override;
     virtual void BeginPlay() override;
+    virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
     virtual void OnPossess(APawn* InPawn) override;
     virtual void OnUnPossess() override;
 
