@@ -52,6 +52,9 @@ public:
     UFUNCTION(BlueprintPure, Category="Input")
     int32 GetOverlayCount() const { return OverlayStack.Num(); }
 
+    UFUNCTION(BlueprintPure, Category="Input")
+    FString GetCurrentContextName() const;
+
     void HandleAction(const FInputActionInstance& Instance);
 
     void OnSubsystemAvailable();

@@ -42,12 +42,17 @@ public:
     // Override for server-side PlayerState initialization
     virtual void InitPlayerState() override;
 
+    // Debug input context display
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Debug")
+    bool bShowInputContextDebug = false;
+
 protected:
     virtual void SetupInputComponent() override;
     virtual void BeginPlay() override;
     virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
     virtual void OnPossess(APawn* InPawn) override;
     virtual void OnUnPossess() override;
+    virtual void Tick(float DeltaTime) override;
 
 private:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Input", 
@@ -56,4 +61,5 @@ private:
 
     void BindInputActions();
     void ValidateInputSystem();
+    void DisplayInputContextDebug();
 };

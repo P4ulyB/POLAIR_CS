@@ -6,6 +6,8 @@
 #include "GameFramework/SpringArmComponent.h"
 #include "HeadMountedDisplayFunctionLibrary.h"
 #include "Net/UnrealNetwork.h"
+#include "PACS_InputHandlerComponent.h"
+#include "GameFramework/PlayerController.h"
 #include "GameFramework/GameStateBase.h"
 
 APACS_CandidateHelicopterCharacter::APACS_CandidateHelicopterCharacter(const FObjectInitializer& OI)
@@ -67,6 +69,8 @@ void APACS_CandidateHelicopterCharacter::PossessedBy(AController* NewController)
     {
         CMC->SetMovementMode(MOVE_Custom, (uint8)EPACS_HeliMoveMode::CMOVE_HeliOrbit);
     }
+
+    RegisterAsReceiverIfLocal();
 }
 
 void APACS_CandidateHelicopterCharacter::OnRep_Controller()
@@ -77,6 +81,8 @@ void APACS_CandidateHelicopterCharacter::OnRep_Controller()
     {
         CMC->SetMovementMode(MOVE_Custom, (uint8)EPACS_HeliMoveMode::CMOVE_HeliOrbit);
     }
+
+    RegisterAsReceiverIfLocal();
 }
 
 void APACS_CandidateHelicopterCharacter::Tick(float DeltaSeconds)
@@ -275,3 +281,79 @@ void APACS_CandidateHelicopterCharacter::OnRep_OrbitTargets()
 }
 void APACS_CandidateHelicopterCharacter::OnRep_OrbitAnchors(){}
 void APACS_CandidateHelicopterCharacter::OnRep_SelectedBy(){}
+
+void APACS_CandidateHelicopterCharacter::UnPossessed()
+{
+    UnregisterAsReceiver();
+    Super::UnPossessed();
+}
+
+void APACS_CandidateHelicopterCharacter::RegisterAsReceiverIfLocal()
+{
+    if (APlayerController* PC = Cast<APlayerController>(Controller))
+    {
+        if (PC->IsLocalController())
+        {
+            if (UPACS_InputHandlerComponent* IH = PC->FindComponentByClass<UPACS_InputHandlerComponent>())
+            {
+                IH->RegisterReceiver(this, GetInputPriority());
+            }
+        }
+    }
+}
+
+void APACS_CandidateHelicopterCharacter::UnregisterAsReceiver()
+{
+    if (APlayerController* PC = Cast<APlayerController>(Controller))
+    {
+        if (UPACS_InputHandlerComponent* IH = PC->FindComponentByClass<UPACS_InputHandlerComponent>())
+        {
+            IH->UnregisterReceiver(this);
+        }
+    }
+}
+
+// ---- Input Receiver ----
+EPACS_InputHandleResult APACS_CandidateHelicopterCharacter::HandleInputAction(FName ActionName, const FInputActionValue& Value)
+{
+    // The router already resolves UInputAction* -> FName via config
+    if (ActionName == TEXT("VRSeat.Center"))
+    {
+        Seat_Center();
+        return EPACS_InputHandleResult::HandledConsume;
+    }
+    else if (ActionName == TEXT("VRSeat.X"))
+    {
+        Seat_X(Value.Get<float>());
+        return EPACS_InputHandleResult::HandledConsume;
+    }
+    else if (ActionName == TEXT("VRSeat.Y"))
+    {
+        Seat_Y(Value.Get<float>());
+        return EPACS_InputHandleResult::HandledConsume;
+    }
+    else if (ActionName == TEXT("VRSeat.Z"))
+    {
+        Seat_Z(Value.Get<float>());
+        return EPACS_InputHandleResult::HandledConsume;
+    }
+    return EPACS_InputHandleResult::NotHandled;
+}
+
+// ---- Seat helpers (local-only visual offsets you already support) ----
+void APACS_CandidateHelicopterCharacter::Seat_Center()
+{
+    CenterSeatedPose(/*bSnapYawToVehicleForward*/ true);
+}
+void APACS_CandidateHelicopterCharacter::Seat_X(float Axis)
+{
+    NudgeSeatX(Axis * SeatNudgeStepCm);
+}
+void APACS_CandidateHelicopterCharacter::Seat_Y(float Axis)
+{
+    NudgeSeatY(Axis * SeatNudgeStepCm);
+}
+void APACS_CandidateHelicopterCharacter::Seat_Z(float Axis)
+{
+    NudgeSeatZ(Axis * SeatNudgeStepCm);
+}

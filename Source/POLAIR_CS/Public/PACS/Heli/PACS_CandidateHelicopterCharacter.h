@@ -1,5 +1,6 @@
 #pragma once
 #include "GameFramework/Character.h"
+#include "PACS_InputTypes.h"
 #include "PACS_CandidateHelicopterCharacter.generated.h"
 
 class UPACS_HeliMovementComponent;
@@ -44,7 +45,7 @@ struct FPACS_OrbitOffsets
 };
 
 UCLASS()
-class POLAIR_CS_API APACS_CandidateHelicopterCharacter : public ACharacter
+class POLAIR_CS_API APACS_CandidateHelicopterCharacter : public ACharacter, public IPACS_InputReceiver
 {
     GENERATED_BODY()
 public:
@@ -87,6 +88,24 @@ public:
     UFUNCTION(Server, Reliable) void Server_ReleaseSelect(APlayerState* Requestor);
 
     void ApplyOffsetsThenSeed(const FPACS_OrbitOffsets* Off);
+
+    // Register with input on local possess; unregister on unpossess
+    virtual void UnPossessed() override;
+
+    // IPACS_InputReceiver
+    virtual EPACS_InputHandleResult HandleInputAction(FName ActionName, const FInputActionValue& Value) override;
+    virtual int32 GetInputPriority() const override { return PACS_InputPriority::Gameplay; } // keep it at gameplay
+
+private:
+    void RegisterAsReceiverIfLocal();
+    void UnregisterAsReceiver();
+    void Seat_Center();
+    void Seat_X(float Axis);
+    void Seat_Y(float Axis);
+    void Seat_Z(float Axis);
+
+    UPROPERTY(EditDefaultsOnly, Category = "VR Seat")
+    float SeatNudgeStepCm = 2.f; // tune in BP/data
 
 protected:
     UFUNCTION() void OnRep_OrbitTargets();

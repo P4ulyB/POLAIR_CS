@@ -14,6 +14,7 @@
 APACS_PlayerController::APACS_PlayerController()
 {
     InputHandler = CreateDefaultSubobject<UPACS_InputHandlerComponent>(TEXT("InputHandler"));
+    PrimaryActorTick.bCanEverTick = true;
 }
 
 void APACS_PlayerController::BeginPlay()
@@ -251,4 +252,34 @@ void APACS_PlayerController::HandleHMDRecenter()
 void APACS_PlayerController::HandleHMDRemoved()
 {
     // No action needed when HMD is removed
+}
+
+void APACS_PlayerController::Tick(float DeltaTime)
+{
+    Super::Tick(DeltaTime);
+    
+    if (bShowInputContextDebug && IsLocalPlayerController())
+    {
+        DisplayInputContextDebug();
+    }
+}
+
+void APACS_PlayerController::DisplayInputContextDebug()
+{
+    if (!GEngine || !IsLocalPlayerController() || !InputHandler)
+    {
+        return;
+    }
+    
+    FString DebugText = FString::Printf(TEXT("Input Context: %s"), *InputHandler->GetCurrentContextName());
+    
+    // Display persistent debug message at top-left
+    GEngine->AddOnScreenDebugMessage(
+        -1, // Use -1 for persistent message that updates
+        0.0f, // No duration (persistent)
+        FColor::Yellow,
+        DebugText,
+        true, // Newer message overrides older ones
+        FVector2D(1.2f, 1.2f) // Slightly larger text
+    );
 }

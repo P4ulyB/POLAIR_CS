@@ -115,6 +115,43 @@ bool UPACS_InputHandlerComponent::ValidateConfig() const
     return true;
 }
 
+FString UPACS_InputHandlerComponent::GetCurrentContextName() const
+{
+    if (!bIsInitialized || !InputConfig)
+    {
+        return TEXT("Not Initialized");
+    }
+
+    FString ContextName;
+    
+    // Get base context name
+    switch (CurrentBaseMode)
+    {
+        case EPACS_InputContextMode::Gameplay:
+            ContextName = TEXT("Gameplay");
+            break;
+        case EPACS_InputContextMode::Menu:
+            ContextName = TEXT("Menu");
+            break;
+        case EPACS_InputContextMode::UI:
+            ContextName = TEXT("UI");
+            break;
+        default:
+            ContextName = TEXT("Unknown");
+            break;
+    }
+    
+    // Add overlay info if any
+    if (OverlayStack.Num() > 0)
+    {
+        ContextName += FString::Printf(TEXT(" + %d Overlay%s"), 
+            OverlayStack.Num(), 
+            OverlayStack.Num() > 1 ? TEXT("s") : TEXT(""));
+    }
+    
+    return ContextName;
+}
+
 void UPACS_InputHandlerComponent::BuildActionNameMap()
 {
     if (!InputConfig) return;
