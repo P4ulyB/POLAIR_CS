@@ -141,7 +141,7 @@ void UPACS_HeliMovementComponent::ApplyAltitudePlane()
 void UPACS_HeliMovementComponent::StepKinematics(float Dt)
 {
     const float s = FMath::Sin(AngleRad), c = FMath::Cos(AngleRad);
-    const FVector Tangent(-s, c, 0.f);
+    const FVector Tangent(s, c, 0.f); //<-------- Change orbit direction
     Velocity = Tangent * SpeedCms;
     const FRotator Yaw = Tangent.ToOrientationRotator();
 

@@ -7,6 +7,7 @@
 #include "HeadMountedDisplayFunctionLibrary.h"
 #include "Net/UnrealNetwork.h"
 #include "PACS_InputHandlerComponent.h"
+#include "PACS_PlayerController.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/GameStateBase.h"
 
@@ -139,7 +140,7 @@ void APACS_CandidateHelicopterCharacter::UpdateBankVisual(float Dt)
 {
     const auto* CMC = Cast<UPACS_HeliMovementComponent>(GetCharacterMovement());
     if (!CMC || !Data || !HelicopterFrame) return;
-    const float Target = +(CMC->SpeedCms / FMath::Max(Data->MaxSpeedCms,1.f)) * Data->MaxBankDeg;
+    const float Target = -(CMC->SpeedCms / FMath::Max(Data->MaxSpeedCms,1.f)) * Data->MaxBankDeg; //<-------- Change bank direction
     CurrentBankDeg = FMath::FInterpTo(CurrentBankDeg, Target, Dt, BankInterpSpeed);
     HelicopterFrame->SetRelativeRotation(FRotator(0, 0, CurrentBankDeg));
 }
@@ -290,13 +291,27 @@ void APACS_CandidateHelicopterCharacter::UnPossessed()
 
 void APACS_CandidateHelicopterCharacter::RegisterAsReceiverIfLocal()
 {
-    if (APlayerController* PC = Cast<APlayerController>(Controller))
+    if (APACS_PlayerController* PACSPC = Cast<APACS_PlayerController>(Controller))
     {
-        if (PC->IsLocalController())
+        if (PACSPC->IsLocalController())
         {
-            if (UPACS_InputHandlerComponent* IH = PC->FindComponentByClass<UPACS_InputHandlerComponent>())
+            // Direct access to InputHandler component via getter
+            if (UPACS_InputHandlerComponent* IH = PACSPC->GetInputHandler())
             {
-                IH->RegisterReceiver(this, GetInputPriority());
+                // Validate InputHandler is ready before registering
+                if (IH->IsHealthy())
+                {
+                    IH->RegisterReceiver(this, GetInputPriority());
+                    UE_LOG(LogPACSInput, Log, TEXT("Helicopter registered as input receiver"));
+                }
+                else
+                {
+                    UE_LOG(LogPACSInput, Warning, TEXT("Deferring helicopter registration - InputHandler not ready"));
+                }
+            }
+            else
+            {
+                UE_LOG(LogPACSInput, Error, TEXT("InputHandler component not found on PlayerController"));
             }
         }
     }
@@ -304,11 +319,12 @@ void APACS_CandidateHelicopterCharacter::RegisterAsReceiverIfLocal()
 
 void APACS_CandidateHelicopterCharacter::UnregisterAsReceiver()
 {
-    if (APlayerController* PC = Cast<APlayerController>(Controller))
+    if (APACS_PlayerController* PACSPC = Cast<APACS_PlayerController>(Controller))
     {
-        if (UPACS_InputHandlerComponent* IH = PC->FindComponentByClass<UPACS_InputHandlerComponent>())
+        if (UPACS_InputHandlerComponent* IH = PACSPC->GetInputHandler())
         {
             IH->UnregisterReceiver(this);
+            UE_LOG(LogPACSInput, Log, TEXT("Helicopter unregistered as input receiver"));
         }
     }
 }
@@ -316,27 +332,90 @@ void APACS_CandidateHelicopterCharacter::UnregisterAsReceiver()
 // ---- Input Receiver ----
 EPACS_InputHandleResult APACS_CandidateHelicopterCharacter::HandleInputAction(FName ActionName, const FInputActionValue& Value)
 {
+    // Debug: Log ALL actions received by helicopter
+    UE_LOG(LogPACSInput, Warning, TEXT("Helicopter received action: %s (Value: %s, Type: %s)"), 
+        *ActionName.ToString(), *Value.ToString(), 
+        Value.GetValueType() == EInputActionValueType::Axis1D ? TEXT("Axis1D") :
+        Value.GetValueType() == EInputActionValueType::Boolean ? TEXT("Boolean") : TEXT("Other"));
+
     // The router already resolves UInputAction* -> FName via config
     if (ActionName == TEXT("VRSeat.Center"))
     {
+        UE_LOG(LogPACSInput, Warning, TEXT("EXECUTING VRSeat.Center"));
         Seat_Center();
         return EPACS_InputHandleResult::HandledConsume;
     }
     else if (ActionName == TEXT("VRSeat.X"))
     {
-        Seat_X(Value.Get<float>());
+        UE_LOG(LogPACSInput, Warning, TEXT("PROCESSING VRSeat.X"));
+        float AxisValue = Value.Get<float>();
+        UE_LOG(LogPACSInput, Warning, TEXT("VRSeat.X AxisValue: %f (abs: %f)"), AxisValue, FMath::Abs(AxisValue));
+        
+        // Test: Move even with zero values to check if keys are working at all
+        if (HelicopterFrame)
+        {
+            FVector CurrentPos = HelicopterFrame->GetRelativeLocation();
+            FVector NewPos = CurrentPos;
+            // If axis value is zero, assume it's a button press and use fixed movement
+            float MovementValue = (FMath::Abs(AxisValue) > 0.001f) ? AxisValue : 1.0f;
+            NewPos.X += MovementValue * 10.0f; // Larger step for visibility
+            HelicopterFrame->SetRelativeLocation(NewPos);
+            UE_LOG(LogPACSInput, Error, TEXT("VRSeat.X MOVED: %f -> Frame X: %f to %f (using movement: %f)"), AxisValue, CurrentPos.X, NewPos.X, MovementValue);
+        }
+        else
+        {
+            UE_LOG(LogPACSInput, Error, TEXT("VRSeat.X NOT MOVED: HelicopterFrame=%s, AxisValue=%f"), 
+                HelicopterFrame ? TEXT("Valid") : TEXT("NULL"), AxisValue);
+        }
         return EPACS_InputHandleResult::HandledConsume;
     }
     else if (ActionName == TEXT("VRSeat.Y"))
     {
-        Seat_Y(Value.Get<float>());
+        UE_LOG(LogPACSInput, Warning, TEXT("PROCESSING VRSeat.Y"));
+        float AxisValue = Value.Get<float>();
+        UE_LOG(LogPACSInput, Warning, TEXT("VRSeat.Y AxisValue: %f"), AxisValue);
+        
+        if (HelicopterFrame)
+        {
+            FVector CurrentPos = HelicopterFrame->GetRelativeLocation();
+            FVector NewPos = CurrentPos;
+            float MovementValue = (FMath::Abs(AxisValue) > 0.001f) ? AxisValue : 1.0f;
+            NewPos.Y += MovementValue * 10.0f;
+            HelicopterFrame->SetRelativeLocation(NewPos);
+            UE_LOG(LogPACSInput, Error, TEXT("VRSeat.Y MOVED: %f -> Frame Y: %f to %f (using movement: %f)"), AxisValue, CurrentPos.Y, NewPos.Y, MovementValue);
+        }
+        else
+        {
+            UE_LOG(LogPACSInput, Error, TEXT("VRSeat.Y NOT MOVED: HelicopterFrame=%s, AxisValue=%f"), 
+                HelicopterFrame ? TEXT("Valid") : TEXT("NULL"), AxisValue);
+        }
         return EPACS_InputHandleResult::HandledConsume;
     }
     else if (ActionName == TEXT("VRSeat.Z"))
     {
-        Seat_Z(Value.Get<float>());
+        UE_LOG(LogPACSInput, Warning, TEXT("PROCESSING VRSeat.Z"));
+        float AxisValue = Value.Get<float>();
+        UE_LOG(LogPACSInput, Warning, TEXT("VRSeat.Z AxisValue: %f"), AxisValue);
+        
+        if (HelicopterFrame)
+        {
+            FVector CurrentPos = HelicopterFrame->GetRelativeLocation();
+            FVector NewPos = CurrentPos;
+            float MovementValue = (FMath::Abs(AxisValue) > 0.001f) ? AxisValue : 1.0f;
+            NewPos.Z += MovementValue * 10.0f;
+            HelicopterFrame->SetRelativeLocation(NewPos);
+            UE_LOG(LogPACSInput, Error, TEXT("VRSeat.Z MOVED: %f -> Frame Z: %f to %f (using movement: %f)"), AxisValue, CurrentPos.Z, NewPos.Z, MovementValue);
+        }
+        else
+        {
+            UE_LOG(LogPACSInput, Error, TEXT("VRSeat.Z NOT MOVED: HelicopterFrame=%s, AxisValue=%f"), 
+                HelicopterFrame ? TEXT("Valid") : TEXT("NULL"), AxisValue);
+        }
         return EPACS_InputHandleResult::HandledConsume;
     }
+    
+    // Log unhandled actions
+    UE_LOG(LogPACSInput, Warning, TEXT("Helicopter did NOT handle action: %s"), *ActionName.ToString());
     return EPACS_InputHandleResult::NotHandled;
 }
 

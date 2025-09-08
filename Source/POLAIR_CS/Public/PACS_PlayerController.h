@@ -68,6 +68,9 @@ public:
     virtual EPACS_InputHandleResult HandleInputAction(FName ActionName, const FInputActionValue& Value) override;
     virtual int32 GetInputPriority() const override { return PACS_InputPriority::Gameplay; }
 
+    // Getter for InputHandler component
+    UPACS_InputHandlerComponent* GetInputHandler() const { return InputHandler; }
+
 private:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Input", 
         meta=(AllowPrivateAccess="true"))
