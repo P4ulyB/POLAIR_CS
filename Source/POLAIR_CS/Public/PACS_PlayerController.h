@@ -3,12 +3,13 @@
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
 #include "PACS_InputHandlerComponent.h"
+#include "PACS_InputTypes.h"
 #include "PACS_PlayerState.h"
 #include "Engine/TimerHandle.h"
 #include "PACS_PlayerController.generated.h"
 
 UCLASS()
-class POLAIR_CS_API APACS_PlayerController : public APlayerController
+class POLAIR_CS_API APACS_PlayerController : public APlayerController, public IPACS_InputReceiver
 {
     GENERATED_BODY()
 
@@ -17,11 +18,16 @@ public:
 
     // Per-player timer handle for HMD detection timeout
     FTimerHandle HMDWaitHandle;
+    
+    // Timer handle for InputConfig retry binding
+    FTimerHandle InputConfigRetryTimer;
 
     // Client RPC for zero-swap handshake
     UFUNCTION(Client, Reliable)
     void ClientRequestHMDState();
     void ClientRequestHMDState_Implementation();
+
+
 
 public:
     // Allow test access to these members
@@ -54,12 +60,18 @@ protected:
     virtual void OnUnPossess() override;
     virtual void Tick(float DeltaTime) override;
 
+public:
+    // Called by InputHandler when initialization completes
+    void BindInputActions();
+    
+    // IPACS_InputReceiver interface - TEST IMPLEMENTATION
+    virtual EPACS_InputHandleResult HandleInputAction(FName ActionName, const FInputActionValue& Value) override;
+    virtual int32 GetInputPriority() const override { return PACS_InputPriority::Gameplay; }
+
 private:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Input", 
         meta=(AllowPrivateAccess="true"))
     TObjectPtr<UPACS_InputHandlerComponent> InputHandler;
-
-    void BindInputActions();
     void ValidateInputSystem();
     void DisplayInputContextDebug();
 };

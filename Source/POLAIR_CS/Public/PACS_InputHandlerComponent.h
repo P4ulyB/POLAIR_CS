@@ -37,6 +37,9 @@ public:
     void ToggleMenuContext();
 
     UFUNCTION(BlueprintCallable, Category="Input")
+    void ToggleUIContext();
+
+    UFUNCTION(BlueprintCallable, Category="Input")
     void PushOverlay(UInputMappingContext* Context, EPACS_OverlayType Type = EPACS_OverlayType::Blocking, 
         int32 Priority = 1000);
 
@@ -89,6 +92,9 @@ private:
     int32 InvalidReceiverCount = 0;
 
     TWeakObjectPtr<UEnhancedInputLocalPlayerSubsystem> CachedSubsystem;
+    FTimerHandle InitRetryHandle;
+    uint32 LocalControllerRetryCount = 0;
+    static constexpr uint32 MaxLocalControllerRetries = 50; // ~5 seconds at 0.1s intervals
 
     void Initialize();
     void Shutdown();

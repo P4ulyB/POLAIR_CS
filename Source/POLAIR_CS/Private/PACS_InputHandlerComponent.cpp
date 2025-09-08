@@ -1,4 +1,5 @@
 #include "PACS_InputHandlerComponent.h"
+#include "PACS_PlayerController.h"
 
 #if !UE_SERVER
 #include "EnhancedInputSubsystems.h"
@@ -40,11 +41,40 @@ void UPACS_InputHandlerComponent::EndPlay(const EEndPlayReason::Type EndPlayReas
 void UPACS_InputHandlerComponent::Initialize()
 {
     const APlayerController* PC = Cast<APlayerController>(GetOwner());
-    if (!PC || !PC->IsLocalController())
+    if (!PC)
     {
-        PACS_INPUT_WARNING("InputHandler: Not attached to local PlayerController");
+        PACS_INPUT_WARNING("InputHandler: Not attached to PlayerController");
         return;
     }
+    
+    // Epic's pattern: Retry local controller check with timeout
+    if (!PC->IsLocalController())
+    {
+        // Avoid infinite retries on dedicated servers - remote controllers will never be local
+        if (LocalControllerRetryCount >= MaxLocalControllerRetries)
+        {
+            PACS_INPUT_WARNING("InputHandler: Controller not local after %d retries - likely remote controller", 
+                MaxLocalControllerRetries);
+            return;
+        }
+        
+        // Retry with exponential backoff pattern similar to Epic's subsystem handling
+        LocalControllerRetryCount++;
+        const float RetryDelay = LocalControllerRetryCount <= 10 ? 0.1f : 0.2f; // Fast retries initially, then slower
+        
+        if (UWorld* World = PC->GetWorld())
+        {
+            World->GetTimerManager().SetTimer(InitRetryHandle, 
+                this, &ThisClass::Initialize, RetryDelay, false);
+        }
+        
+        PACS_INPUT_VERBOSE("InputHandler: Controller not local yet, retry %d/%d in %.1fs", 
+            LocalControllerRetryCount, MaxLocalControllerRetries, RetryDelay);
+        return;
+    }
+    
+    // Reset retry counter on successful local controller validation
+    LocalControllerRetryCount = 0;
 
     if (!ValidateConfig())
     {
@@ -52,30 +82,73 @@ void UPACS_InputHandlerComponent::Initialize()
         return;
     }
 
+    // Epic's pattern: Defer initialization until subsystem is ready
     if (const ULocalPlayer* LP = PC->GetLocalPlayer())
     {
-        CachedSubsystem = LP->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>();
-        bSubsystemValid = CachedSubsystem.IsValid();
-        
-        if (!bSubsystemValid)
+        UEnhancedInputLocalPlayerSubsystem* Subsystem = LP->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>();
+        if (!Subsystem)
         {
-            PACS_INPUT_ERROR("Enhanced Input Subsystem not available!");
+            // Retry on next tick - Epic's pattern
+            if (UWorld* World = PC->GetWorld())
+            {
+                World->GetTimerManager().SetTimerForNextTick(this, &ThisClass::Initialize);
+            }
             return;
         }
+
+        // Epic's additional validation - check if subsystem is fully initialized
+        if (!Subsystem->IsValidLowLevel() )
+        {
+            if (UWorld* World = PC->GetWorld())
+            {
+                World->GetTimerManager().SetTimer(InitRetryHandle, 
+                    this, &ThisClass::Initialize, 0.1f, false);
+            }
+            return;
+        }
+
+        CachedSubsystem = Subsystem;
+        bSubsystemValid = true;
+    }
+    else
+    {
+        // LocalPlayer not ready, retry
+        if (UWorld* World = PC->GetWorld())
+        {
+            World->GetTimerManager().SetTimerForNextTick(this, &ThisClass::Initialize);
+        }
+        return;
     }
 
     BuildActionNameMap();
+    
+    PACS_INPUT_LOG("ActionNameMap built with %d entries", ActionToNameMap.Num());
     
     if (UEnhancedInputLocalPlayerSubsystem* Subsystem = GetValidSubsystem())
     {
         if (PC->GetPawn() && PC->GetPawn()->InputComponent)
         {
             Subsystem->ClearAllMappings();
+            PACS_INPUT_LOG("Cleared all input mappings");
         }
     }
     
-    SetBaseContext(EPACS_InputContextMode::Gameplay);
     bIsInitialized = true;
+    PACS_INPUT_LOG("Handler marked as initialized (bIsInitialized = true)");
+    SetBaseContext(EPACS_InputContextMode::Gameplay);
+    
+    // Epic's pattern: Notify owner (PlayerController) to rebind actions after initialization
+    if (APlayerController* OwnerPC = Cast<APlayerController>(GetOwner()))
+    {
+        if (OwnerPC->IsLocalController() && OwnerPC->InputComponent)
+        {
+            // Trigger rebinding of input actions now that we're initialized
+            if (APACS_PlayerController* PACSPC = Cast<APACS_PlayerController>(OwnerPC))
+            {
+                PACSPC->BindInputActions();
+            }
+        }
+    }
     
     PACS_INPUT_LOG("InputHandler initialized successfully");
 }
@@ -94,6 +167,7 @@ void UPACS_InputHandlerComponent::Shutdown()
     
     bIsInitialized = false;
     bSubsystemValid = false;
+    LocalControllerRetryCount = 0;
 
     PACS_INPUT_LOG("InputHandler shutdown complete");
 }
@@ -195,7 +269,9 @@ void UPACS_InputHandlerComponent::EnsureActionMapBuilt()
 
 UEnhancedInputLocalPlayerSubsystem* UPACS_InputHandlerComponent::GetValidSubsystem()
 {
-    if (bSubsystemValid && CachedSubsystem.IsValid())
+    // Epic's pattern: Multiple validation layers
+    if (bSubsystemValid && CachedSubsystem.IsValid() && 
+        CachedSubsystem->IsValidLowLevel())
     {
         return CachedSubsystem.Get();
     }
@@ -207,18 +283,16 @@ UEnhancedInputLocalPlayerSubsystem* UPACS_InputHandlerComponent::GetValidSubsyst
     if (!LP) return nullptr;
     
     UEnhancedInputLocalPlayerSubsystem* Subsystem = LP->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>();
-    if (Subsystem)
+    if (Subsystem && Subsystem->IsValidLowLevel() )
     {
         CachedSubsystem = Subsystem;
         bSubsystemValid = true;
         OnSubsystemAvailable();
+        return Subsystem;
     }
-    else
-    {
-        bSubsystemValid = false;
-    }
-    
-    return Subsystem;
+
+    bSubsystemValid = false;
+    return nullptr;
 }
 
 void UPACS_InputHandlerComponent::OnSubsystemAvailable()
@@ -296,21 +370,45 @@ void UPACS_InputHandlerComponent::UnregisterReceiver(UObject* Receiver)
 
 void UPACS_InputHandlerComponent::HandleAction(const FInputActionInstance& Instance)
 {
-    if (!EnsureGameThread()) return;
-    if (!bIsInitialized) return;
+    if (!EnsureGameThread()) 
+    {
+        PACS_INPUT_ERROR("HandleAction called from non-game thread!");
+        return;
+    }
+    
+    if (!bIsInitialized) 
+    {
+        PACS_INPUT_WARNING("HandleAction called but handler not initialized!");
+        return;
+    }
 
     EnsureActionMapBuilt();
 
     const UInputAction* Action = Instance.GetSourceAction();
-    if (!Action) return;
+    if (!Action) 
+    {
+        PACS_INPUT_ERROR("HandleAction received null InputAction!");
+        return;
+    }
+
+    PACS_INPUT_LOG("HandleAction received: %s (ActionMap has %d entries)", 
+        *Action->GetName(), ActionToNameMap.Num());
 
     const FName* ActionNamePtr = ActionToNameMap.Find(Action);
     if (!ActionNamePtr)
     {
-        PACS_INPUT_VERBOSE("Unmapped action: %s", *Action->GetName());
+        PACS_INPUT_WARNING("Unmapped action: %s - Available actions:", *Action->GetName());
+        for (const auto& Pair : ActionToNameMap)
+        {
+            if (Pair.Key)
+            {
+                PACS_INPUT_WARNING("  - %s -> %s", *Pair.Key->GetName(), *Pair.Value.ToString());
+            }
+        }
         return;
     }
 
+    PACS_INPUT_LOG("Routing action %s (mapped to %s)", *Action->GetName(), *ActionNamePtr->ToString());
     RouteActionInternal(*ActionNamePtr, Instance.GetValue());
 }
 
@@ -318,9 +416,11 @@ EPACS_InputHandleResult UPACS_InputHandlerComponent::RouteActionInternal(
     FName ActionName, 
     const FInputActionValue& Value)
 {
+    PACS_INPUT_LOG("RouteActionInternal: %s (Receivers: %d)", *ActionName.ToString(), Receivers.Num());
+    
     if (HasBlockingOverlay() && InputConfig->UIBlockedActions.Contains(ActionName))
     {
-        PACS_INPUT_VERBOSE("Action '%s' blocked by overlay", *ActionName.ToString());
+        PACS_INPUT_LOG("Action '%s' blocked by overlay", *ActionName.ToString());
         return EPACS_InputHandleResult::HandledConsume;
     }
 
@@ -396,6 +496,16 @@ void UPACS_InputHandlerComponent::ToggleMenuContext()
         (CurrentBaseMode == EPACS_InputContextMode::Menu) ? 
         EPACS_InputContextMode::Gameplay : 
         EPACS_InputContextMode::Menu;
+    
+    SetBaseContext(NewMode);
+}
+
+void UPACS_InputHandlerComponent::ToggleUIContext()
+{
+    const EPACS_InputContextMode NewMode = 
+        (CurrentBaseMode == EPACS_InputContextMode::UI) ? 
+        EPACS_InputContextMode::Gameplay : 
+        EPACS_InputContextMode::UI;
     
     SetBaseContext(NewMode);
 }
@@ -490,6 +600,12 @@ void UPACS_InputHandlerComponent::UpdateManagedContexts()
         const int32 Priority = GetBaseContextPriority(CurrentBaseMode);
         Subsystem->AddMappingContext(BaseContext, Priority);
         ManagedContexts.Add(BaseContext);
+        PACS_INPUT_LOG("Added base context: %s with priority %d", 
+            *BaseContext->GetName(), Priority);
+    }
+    else
+    {
+        PACS_INPUT_WARNING("No base context found for mode %d", (int32)CurrentBaseMode);
     }
 
     for (const FPACS_OverlayEntry& Entry : OverlayStack)
@@ -498,10 +614,12 @@ void UPACS_InputHandlerComponent::UpdateManagedContexts()
         {
             Subsystem->AddMappingContext(Entry.Context, Entry.Priority);
             ManagedContexts.Add(Entry.Context);
+            PACS_INPUT_LOG("Added overlay context: %s with priority %d", 
+                *Entry.Context->GetName(), Entry.Priority);
         }
     }
     
-    PACS_INPUT_VERBOSE("Updated managed contexts (Count: %d)", ManagedContexts.Num());
+    PACS_INPUT_LOG("Updated managed contexts (Count: %d)", ManagedContexts.Num());
 }
 
 void UPACS_InputHandlerComponent::RemoveAllManagedContexts()

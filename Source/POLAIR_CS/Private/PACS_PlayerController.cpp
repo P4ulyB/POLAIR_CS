@@ -9,18 +9,27 @@
 #if !UE_SERVER
 #include "EnhancedInputComponent.h"
 #include "PACS_InputTypes.h"
+#include "InputActionValue.h"
 #endif
 
 APACS_PlayerController::APACS_PlayerController()
 {
     InputHandler = CreateDefaultSubobject<UPACS_InputHandlerComponent>(TEXT("InputHandler"));
     PrimaryActorTick.bCanEverTick = true;
+
 }
 
 void APACS_PlayerController::BeginPlay()
 {
     Super::BeginPlay();
     ValidateInputSystem();
+    
+    // TEST: Register PlayerController as input receiver for debugging
+    if (InputHandler && IsLocalController())
+    {
+        InputHandler->RegisterReceiver(this, PACS_InputPriority::Gameplay);
+        UE_LOG(LogPACSInput, Log, TEXT("PlayerController registered as input receiver for testing"));
+    }
 
     // Set up VR delegates for local controllers only
     if (IsLocalController())
@@ -44,8 +53,14 @@ void APACS_PlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 void APACS_PlayerController::SetupInputComponent()
 {
     Super::SetupInputComponent();
+    
+    // Epic's pattern: ALWAYS bind here, regardless of network role
+    // No deferral to OnPossess() needed
 #if !UE_SERVER
-    BindInputActions();
+    if (InputComponent && IsLocalController())
+    {
+        BindInputActions(); // This should happen here for ALL scenarios
+    }
 #endif
 }
 
@@ -53,9 +68,12 @@ void APACS_PlayerController::OnPossess(APawn* InPawn)
 {
     Super::OnPossess(InPawn);
     
+    // Epic's pattern: OnPossess() is for pawn-specific setup
+    // InputHandler initialization happens here, binding already done in SetupInputComponent()
 #if !UE_SERVER
-    if (InputHandler)
+    if (InputHandler && IsLocalController())
     {
+        // Trigger InputHandler to update contexts now that we have a pawn
         InputHandler->OnSubsystemAvailable();
     }
 #endif
@@ -94,10 +112,26 @@ void APACS_PlayerController::ValidateInputSystem()
 void APACS_PlayerController::BindInputActions()
 {
 #if !UE_SERVER
-    if (!InputHandler || !InputHandler->InputConfig)
+    if (!InputHandler)
     {
         UE_LOG(LogPACSInput, Warning, 
-            TEXT("Cannot bind input actions - invalid configuration"));
+            TEXT("Cannot bind input actions - InputHandler is null"));
+        return;
+    }
+
+    // Skip binding if handler isn't initialized yet - it will call us back when ready
+    if (!InputHandler->IsHealthy())
+    {
+        UE_LOG(LogPACSInput, Log, 
+            TEXT("Deferring input binding - InputHandler not ready yet (IsHealthy=%s)"), 
+            InputHandler->IsHealthy() ? TEXT("true") : TEXT("false"));
+        return;
+    }
+
+    if (!InputHandler->InputConfig)
+    {
+        UE_LOG(LogPACSInput, Warning, 
+            TEXT("Cannot bind input actions - InputConfig not set (check Blueprint configuration)"));
         return;
     }
 
@@ -108,6 +142,11 @@ void APACS_PlayerController::BindInputActions()
         return;
     }
 
+    // Clear any existing bindings first
+    EIC->ClearActionBindings();
+    UE_LOG(LogPACSInput, Log, TEXT("Cleared existing action bindings"));
+
+    int32 BindingCount = 0;
     for (const FPACS_InputActionMapping& Mapping : InputHandler->InputConfig->ActionMappings)
     {
         if (!Mapping.InputAction)
@@ -121,35 +160,56 @@ void APACS_PlayerController::BindInputActions()
         {
             EIC->BindAction(Mapping.InputAction.Get(), ETriggerEvent::Started, 
                 InputHandler.Get(), &UPACS_InputHandlerComponent::HandleAction);
+            BindingCount++;
+            UE_LOG(LogPACSInput, VeryVerbose, TEXT("  Bound %s for Started"), 
+                *Mapping.ActionIdentifier.ToString());
         }
         
         if (Mapping.bBindTriggered)
         {
             EIC->BindAction(Mapping.InputAction.Get(), ETriggerEvent::Triggered, 
                 InputHandler.Get(), &UPACS_InputHandlerComponent::HandleAction);
+            BindingCount++;
+            UE_LOG(LogPACSInput, VeryVerbose, TEXT("  Bound %s for Triggered"), 
+                *Mapping.ActionIdentifier.ToString());
         }
         
         if (Mapping.bBindCompleted)
         {
             EIC->BindAction(Mapping.InputAction.Get(), ETriggerEvent::Completed, 
                 InputHandler.Get(), &UPACS_InputHandlerComponent::HandleAction);
+            BindingCount++;
+            UE_LOG(LogPACSInput, VeryVerbose, TEXT("  Bound %s for Completed"), 
+                *Mapping.ActionIdentifier.ToString());
         }
         
         if (Mapping.bBindOngoing)
         {
             EIC->BindAction(Mapping.InputAction.Get(), ETriggerEvent::Ongoing, 
                 InputHandler.Get(), &UPACS_InputHandlerComponent::HandleAction);
+            BindingCount++;
+            UE_LOG(LogPACSInput, VeryVerbose, TEXT("  Bound %s for Ongoing"), 
+                *Mapping.ActionIdentifier.ToString());
         }
         
         if (Mapping.bBindCanceled)
         {
             EIC->BindAction(Mapping.InputAction.Get(), ETriggerEvent::Canceled, 
                 InputHandler.Get(), &UPACS_InputHandlerComponent::HandleAction);
+            BindingCount++;
+            UE_LOG(LogPACSInput, VeryVerbose, TEXT("  Bound %s for Canceled"), 
+                *Mapping.ActionIdentifier.ToString());
         }
     }
     
-    UE_LOG(LogPACSInput, Log, TEXT("Bound %d input actions (permanent bindings)"), 
-        InputHandler->InputConfig->ActionMappings.Num());
+    UE_LOG(LogPACSInput, Log, TEXT("Bound %d input actions from %d mappings (permanent bindings)"), 
+        BindingCount, InputHandler->InputConfig->ActionMappings.Num());
+    
+    // Verify InputComponent state
+    UE_LOG(LogPACSInput, Log, TEXT("InputComponent valid: %s, Handler valid: %s, Handler initialized: %s"),
+        InputComponent ? TEXT("Yes") : TEXT("No"),
+        InputHandler ? TEXT("Yes") : TEXT("No"),
+        InputHandler->IsHealthy() ? TEXT("Yes") : TEXT("No"));
 #endif
 }
 
@@ -283,3 +343,34 @@ void APACS_PlayerController::DisplayInputContextDebug()
         FVector2D(1.2f, 1.2f) // Slightly larger text
     );
 }
+
+EPACS_InputHandleResult APACS_PlayerController::HandleInputAction(FName ActionName, const FInputActionValue& Value)
+{
+    // TEST IMPLEMENTATION - Log all received actions
+    UE_LOG(LogPACSInput, Log, TEXT("PlayerController received action: %s (Value: %s)"), 
+        *ActionName.ToString(), *Value.ToString());
+    
+    // Test specific actions
+    if (ActionName == TEXT("MenuToggle"))
+    {
+        UE_LOG(LogPACSInput, Warning, TEXT("MENU TOGGLE PRESSED!"));
+        if (InputHandler)
+        {
+            InputHandler->ToggleMenuContext();
+        }
+        return EPACS_InputHandleResult::HandledConsume;
+    }
+    else if (ActionName == TEXT("UI"))
+    {
+        UE_LOG(LogPACSInput, Warning, TEXT("UI TOGGLE PRESSED!"));
+        if (InputHandler)
+        {
+            InputHandler->ToggleUIContext();
+        }
+        return EPACS_InputHandleResult::HandledConsume;
+    }
+    
+    // Pass through other actions
+    return EPACS_InputHandleResult::HandledPassThrough;
+}
+
