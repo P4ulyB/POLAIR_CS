@@ -111,8 +111,16 @@ static float NowS(const UWorld* W)
 void APACS_CandidateHelicopterCharacter::CenterSeatedPose(bool bSnapYawToVehicleForward)
 {
     ZeroSeatChain();
+    
+    float TargetYaw = 0.f;
+    if (bSnapYawToVehicleForward && HelicopterFrame)
+    {
+        // Get the helicopter mesh's local rotation yaw to align VR with the mesh's local orientation
+        TargetYaw = HelicopterFrame->GetRelativeRotation().Yaw;
+    }
+    
     UHeadMountedDisplayFunctionLibrary::ResetOrientationAndPosition(
-        bSnapYawToVehicleForward ? GetActorRotation().Yaw : 0.f,
+        TargetYaw,
         EOrientPositionSelector::OrientationAndPosition);
     ApplySeatOffset();
 }
@@ -358,7 +366,7 @@ EPACS_InputHandleResult APACS_CandidateHelicopterCharacter::HandleInputAction(FN
             FVector NewPos = CurrentPos;
             // If axis value is zero, assume it's a button press and use fixed movement
             float MovementValue = (FMath::Abs(AxisValue) > 0.001f) ? AxisValue : 1.0f;
-            NewPos.X += MovementValue * 10.0f; // Larger step for visibility
+            NewPos.X += MovementValue * 4.0f; // Larger step for visibility
             HelicopterFrame->SetRelativeLocation(NewPos);
             UE_LOG(LogPACSInput, Error, TEXT("VRSeat.X MOVED: %f -> Frame X: %f to %f (using movement: %f)"), AxisValue, CurrentPos.X, NewPos.X, MovementValue);
         }
@@ -380,7 +388,7 @@ EPACS_InputHandleResult APACS_CandidateHelicopterCharacter::HandleInputAction(FN
             FVector CurrentPos = HelicopterFrame->GetRelativeLocation();
             FVector NewPos = CurrentPos;
             float MovementValue = (FMath::Abs(AxisValue) > 0.001f) ? AxisValue : 1.0f;
-            NewPos.Y += MovementValue * 10.0f;
+            NewPos.Y += MovementValue * 4.0f;
             HelicopterFrame->SetRelativeLocation(NewPos);
             UE_LOG(LogPACSInput, Error, TEXT("VRSeat.Y MOVED: %f -> Frame Y: %f to %f (using movement: %f)"), AxisValue, CurrentPos.Y, NewPos.Y, MovementValue);
         }
@@ -402,7 +410,7 @@ EPACS_InputHandleResult APACS_CandidateHelicopterCharacter::HandleInputAction(FN
             FVector CurrentPos = HelicopterFrame->GetRelativeLocation();
             FVector NewPos = CurrentPos;
             float MovementValue = (FMath::Abs(AxisValue) > 0.001f) ? AxisValue : 1.0f;
-            NewPos.Z += MovementValue * 10.0f;
+            NewPos.Z += MovementValue * 4.0f;
             HelicopterFrame->SetRelativeLocation(NewPos);
             UE_LOG(LogPACSInput, Error, TEXT("VRSeat.Z MOVED: %f -> Frame Z: %f to %f (using movement: %f)"), AxisValue, CurrentPos.Z, NewPos.Z, MovementValue);
         }
