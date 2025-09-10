@@ -6,6 +6,9 @@
 class UPACS_HeliMovementComponent;
 class UPACS_CandidateHelicopterData;
 class UCameraComponent;
+class USceneCaptureComponent2D;
+class UTextureRenderTarget2D;
+class UMaterialInterface;
 
 USTRUCT()
 struct FPACS_OrbitTargets
@@ -57,8 +60,38 @@ public:
     UPROPERTY(VisibleAnywhere) USceneComponent*      SeatOffsetRoot;
     UPROPERTY(VisibleAnywhere) UCameraComponent*     VRCamera;
 
+    // CCTV Camera System
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CCTV")
+    USceneCaptureComponent2D* ExternalCam = nullptr;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CCTV") 
+    UStaticMeshComponent* MonitorPlane = nullptr;
+
     UPROPERTY() UPACS_HeliMovementComponent* HeliCMC;
     UPROPERTY(EditDefaultsOnly) UPACS_CandidateHelicopterData* Data;
+
+    UPROPERTY(Transient)
+    UMaterialInstanceDynamic* ScreenMID = nullptr;
+
+    UPROPERTY(Transient)  
+    UTextureRenderTarget2D* CameraRT = nullptr;
+
+    // CCTV Configuration
+    UPROPERTY(EditDefaultsOnly, Category = "CCTV")
+    float NormalFOV = 70.f;
+
+    UPROPERTY(EditDefaultsOnly, Category = "CCTV")
+    float ZoomFOV = 25.f;
+
+    UPROPERTY(EditDefaultsOnly, Category = "CCTV")
+    int32 RT_Resolution = 1024;
+
+    UPROPERTY(EditDefaultsOnly, Category = "CCTV", 
+        meta = (DisplayName = "Screen Base Material"))
+    TObjectPtr<UMaterialInterface> ScreenBaseMaterial = nullptr;
+
+    UPROPERTY(Transient)
+    bool bCCTVZoomed = false;
 
     UPROPERTY(ReplicatedUsing=OnRep_OrbitTargets) FPACS_OrbitTargets OrbitTargets;
     UPROPERTY(ReplicatedUsing=OnRep_OrbitAnchors) FPACS_OrbitAnchors OrbitAnchors;
@@ -103,6 +136,10 @@ private:
     void Seat_X(float Axis);
     void Seat_Y(float Axis);
     void Seat_Z(float Axis);
+    
+    // CCTV System
+    void SetupCCTV();
+    void ToggleCamZoom();
 
     UPROPERTY(EditDefaultsOnly, Category = "VR Seat")
     float SeatNudgeStepCm = 2.f; // tune in BP/data
