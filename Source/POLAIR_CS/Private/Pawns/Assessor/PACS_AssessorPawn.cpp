@@ -23,6 +23,13 @@ APACS_AssessorPawn::APACS_AssessorPawn()
     Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
     Camera->SetupAttachment(SpringArm);
 
+    bUseControllerRotationYaw = false;
+    bUseControllerRotationPitch = false;
+    bUseControllerRotationRoll = false;
+
+    SpringArm->bDoCollisionTest = false;
+    SpringArm->bEnableCameraLag = Config ? Config->bEnableCameraLag : true;
+
     // Replicate the pawn for dedicated server, but not movement (client-only navigation)
     bReplicates = true;
     bOnlyRelevantToOwner = true;
@@ -207,18 +214,14 @@ EPACS_InputHandleResult APACS_AssessorPawn::HandleInputAction(FName ActionName, 
         return EPACS_InputHandleResult::NotHandled;
     }
 
-    UE_LOG(LogTemp, Log, TEXT("APACS_AssessorPawn::HandleInputAction called: %s = %s"), *ActionName.ToString(), *Value.ToString());
-
     if (ActionName == TEXT("Assessor.MoveForward"))
     {
         InputForward += Value.Get<float>();
-        UE_LOG(LogTemp, Log, TEXT("APACS_AssessorPawn: InputForward now = %f"), InputForward);
         return EPACS_InputHandleResult::HandledConsume;
     }
     if (ActionName == TEXT("Assessor.MoveRight"))
     {
         InputRight += Value.Get<float>();
-        UE_LOG(LogTemp, Log, TEXT("APACS_AssessorPawn: InputRight now = %f"), InputRight);
         return EPACS_InputHandleResult::HandledConsume;
     }
     if (ActionName == TEXT("Assessor.Zoom"))
@@ -227,6 +230,7 @@ EPACS_InputHandleResult APACS_AssessorPawn::HandleInputAction(FName ActionName, 
         return EPACS_InputHandleResult::HandledConsume;
     }
 #endif
+
     return EPACS_InputHandleResult::NotHandled;
 }
 

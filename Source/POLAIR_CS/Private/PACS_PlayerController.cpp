@@ -25,11 +25,11 @@ void APACS_PlayerController::BeginPlay()
     ValidateInputSystem();
     
     // TEST: Register PlayerController as input receiver for debugging
-    //if (InputHandler && IsLocalController())
-    //{
-    //    InputHandler->RegisterReceiver(this, PACS_InputPriority::Gameplay);
-    //    UE_LOG(LogPACSInput, Log, TEXT("PlayerController registered as input receiver for testing"));
-    //}
+    if (InputHandler && IsLocalController())
+    {
+        InputHandler->RegisterReceiver(this, PACS_InputPriority::UI); // higher
+        UE_LOG(LogPACSInput, Log, TEXT("PC registered as UI receiver"));
+    }
 
     // Set up VR delegates for local controllers only
     if (IsLocalController())
@@ -345,15 +345,9 @@ void APACS_PlayerController::DisplayInputContextDebug()
 }
 
 EPACS_InputHandleResult APACS_PlayerController::HandleInputAction(FName ActionName, const FInputActionValue& Value)
-{
-    // TEST IMPLEMENTATION - Log all received actions
-    UE_LOG(LogPACSInput, Log, TEXT("PlayerController received action: %s (Value: %s)"), 
-        *ActionName.ToString(), *Value.ToString());
-    
-    // Test specific actions
+{  
     if (ActionName == TEXT("MenuToggle"))
     {
-        UE_LOG(LogPACSInput, Warning, TEXT("MENU TOGGLE PRESSED!"));
         if (InputHandler)
         {
             InputHandler->ToggleMenuContext();
@@ -362,7 +356,6 @@ EPACS_InputHandleResult APACS_PlayerController::HandleInputAction(FName ActionNa
     }
     else if (ActionName == TEXT("UI"))
     {
-        UE_LOG(LogPACSInput, Warning, TEXT("UI TOGGLE PRESSED!"));
         if (InputHandler)
         {
             InputHandler->ToggleUIContext();
@@ -371,6 +364,6 @@ EPACS_InputHandleResult APACS_PlayerController::HandleInputAction(FName ActionNa
     }
     
     // Pass through other actions
-    return EPACS_InputHandleResult::HandledPassThrough;
+    return EPACS_InputHandleResult::NotHandled;
 }
 
