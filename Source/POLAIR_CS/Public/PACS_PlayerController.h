@@ -72,7 +72,7 @@ public:
     UPACS_InputHandlerComponent* GetInputHandler() const { return InputHandler; }
 
 private:
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Input", 
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Input",
         meta=(AllowPrivateAccess="true"))
     TObjectPtr<UPACS_InputHandlerComponent> InputHandler;
     void ValidateInputSystem();

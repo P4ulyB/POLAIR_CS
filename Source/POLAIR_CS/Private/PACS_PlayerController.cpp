@@ -25,11 +25,11 @@ void APACS_PlayerController::BeginPlay()
     ValidateInputSystem();
     
     // TEST: Register PlayerController as input receiver for debugging
-    if (InputHandler && IsLocalController())
-    {
-        InputHandler->RegisterReceiver(this, PACS_InputPriority::Gameplay);
-        UE_LOG(LogPACSInput, Log, TEXT("PlayerController registered as input receiver for testing"));
-    }
+    //if (InputHandler && IsLocalController())
+    //{
+    //    InputHandler->RegisterReceiver(this, PACS_InputPriority::Gameplay);
+    //    UE_LOG(LogPACSInput, Log, TEXT("PlayerController registered as input receiver for testing"));
+    //}
 
     // Set up VR delegates for local controllers only
     if (IsLocalController())
@@ -232,7 +232,7 @@ void APACS_PlayerController::ClientRequestHMDState_Implementation()
     #else
     UE_LOG(LogTemp, Log, TEXT("PACS PlayerController: Server build - defaulting to NoHMD"));
     #endif
-    
+
     ServerReportHMDState(DetectedState);
 }
 

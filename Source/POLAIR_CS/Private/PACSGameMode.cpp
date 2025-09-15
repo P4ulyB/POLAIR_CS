@@ -9,6 +9,7 @@
 #include "Engine/NetConnection.h"
 #include "Misc/Parse.h"
 #include "PACS/Heli/PACS_CandidateHelicopterCharacter.h"
+#include "Pawns/Assessor/PACS_AssessorPawn.h"
 #include "TimerManager.h"
 //#include "PACS/Heli/PACS_OrbitMessages.h" // only if saved offsets are passed
 
@@ -16,10 +17,10 @@ APACSGameMode::APACSGameMode()
 {
     // Set default PlayerState class
     PlayerStateClass = APACS_PlayerState::StaticClass();
-    
+
     // Set pawn classes - configure in Blueprint or here
     // CandidatePawnClass = APACS_CandidatePawn::StaticClass();
-    // AssessorPawnClass = APACS_AssessorPawn::StaticClass();
+    AssessorPawnClass = APACS_AssessorPawn::StaticClass();
 }
 
 void APACSGameMode::PreLogin(const FString& Options, const FString& Address, 

@@ -11,14 +11,14 @@ You compile the POLAIR_CS UE5 project from WSL using Windows build tools and rep
 ENVIRONMENT SETUP:
 - WSL environment accessing Windows filesystem
 - Project location: /mnt/c/Devops/Projects/POLAIR_CS
-- UE5 location: /mnt/c/Program Files/Epic Games/UE_5.5
+- UE5 location: /mnt/c/Devops/UESource
 - Visual Studio 2022 required for MSBuild
 
 BUILD COMMANDS:
 
 UE5 BUILD.BAT COMPILATION:
 ```bash
-cmd.exe /c "C:\\Program Files\\Epic Games\\UE_5.5\\Engine\\Build\\BatchFiles\\Build.bat" \
+cmd.exe /c "C:\\C:\\Devops\\UESource\\Engine\\Build\\BatchFiles\\Build.bat" \
   POLAIR_CSEditor Win64 Development \
   -Project="C:\\Devops\\Projects\\POLAIR_CS\\POLAIR_CS.uproject" \
   -WaitMutex -NoHotReload
@@ -32,7 +32,7 @@ cmd.exe /c "msbuild.exe C:\\Devops\\Projects\\POLAIR_CS\\POLAIR_CS.sln \
 
 PROJECT FILE GENERATION:
 ```bash
-cmd.exe /c "C:\\Program Files\\Epic Games\\UE_5.5\\Engine\\Build\\BatchFiles\\GenerateProjectFiles.bat" \
+cmd.exe /c "C:\\Devops\\UESource\\GenerateProjectFiles.bat" \
   "C:\\Devops\\Projects\\POLAIR_CS\\POLAIR_CS.uproject" -Game -Engine
 ```
 
@@ -53,7 +53,7 @@ BUILD VALIDATION CHECKS:
 cmd.exe /c "where msbuild" 2>/dev/null || echo "MSBuild not in PATH"
 
 # Check UE5 Build.bat exists
-ls "/mnt/c/Program Files/Epic Games/UE_5.5/Engine/Build/BatchFiles/Build.bat" || echo "UE Build.bat missing"
+ls "/mnt/c/Devops/UESource/Engine/Build/BatchFiles/Build.bat"" || echo "UE Build.bat missing"
 
 # Verify Visual Studio installation
 ls "/mnt/c/Program Files/Microsoft Visual Studio/2022/" || echo "VS2022 not found"
