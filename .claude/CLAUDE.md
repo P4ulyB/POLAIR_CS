@@ -1,12 +1,12 @@
-# Polair Training Simulation - Claude Code Configuration
+# POLAIR_CS Training Simulation - Claude Code Configuration
 
 ## Quick Navigation (Source of Truth)
 - **Current Status:** `docs/project_progress.md`
 - **Project Metadata:** `docs/project_state.json`
-- **Epic Research:** `docs/project_intelligence.md`  
+- **Epic Research:** `docs/project_intelligence.md`
 - **Phase Guides:** `docs/phases/`
 - **Error Patterns:** `docs/error_logging/error_patterns.json`
-- **MCP Status:** Connected (5 tools available)
+- **MCP Status:** Connected - UE5 Semantic Analysis Server
 
 ## Configuration
 - **max_messages**: 40  # Limit conversation history to reduce token usage
@@ -16,50 +16,33 @@
 **Platform:** PC + Meta Quest 3 VR  
 **Architecture:** Dedicated servers via PlayFab  
 **Session:** 6-8 hours, 8-10 assessors + 1 VR candidate
-**Environment:** WSL + Windows hybrid development (WSL for claude code, Windows for Unreal Engine project)
-
-## Documentation Files (All Connected)
-
-### Core Status Tracking:
-- **project_progress.md** - Human-readable phase status and milestones
-- **project_state.json** - Machine-readable metrics and completion data
-- **project_intelligence.md** - Epic source research and disabled file tracking
-- **error_patterns.json** - Error recording and solution database
-
-### How Agents Use Documentation:
-- **documentation-manager:** Updates all 4 core files
-- **project-manager:** Reads project_progress.md for phase decisions
-- **All agents:** Can query documentation-manager for any file data
+**Environment:** WSL + Windows hybrid development (WSL for Claude Code, Windows for UE)
 
 ## MCP Server Integration
 **Status:** Connected and operational
-**Location:** `C:\Devops\MCP\UE_Semantic_Analysis_MCP_Server`
+**Location:** `C:\Devops\MCP\UEMCP`
 
 ### Available MCP Tools:
-1. `search_ue_patterns` - Search UE codebase for patterns
-2. `get_epic_pattern` - Get specific Epic implementation patterns
-3. `validate_pa_policies` - Validate code against 22-point framework
-4. `get_networking_patterns` - Get networking/replication patterns
-5. `analyze_networking_code` - Analyze network code compliance
+- `ue-mcp-local:code_search` - Search UE5 codebase for patterns
+- `ue-mcp-local:zoekt_read` - Read engine source files with context
+- `ue-mcp-local:symbols_find` - Find symbol definitions and references
+- `ue-mcp-local:xrefs_def` - Semantic definition lookup via clangd LSP
+- `ue-mcp-local:xrefs_refs` - Semantic references via clangd
+- `ue-mcp-local:code_context` - Get surrounding context lines for patterns
 
-### MCP Usage Example:
-```javascript
-// Search for Epic patterns
-await use_mcp_tool("ue-semantic", "search_ue_patterns", {
-  query: "HasAuthority",
-  context: "networking",
-  requireEpicSource: true
-});
-```
+### MCP Usage Strategy:
+**SINGLE INTERFACE:** Only `research_agent` uses MCP tools directly
+**TOKEN EFFICIENCY:** All other agents request research from `research_agent` cache
+**CACHE REUSE:** Research results stored in `.claude/research_cache/` for multiple agent access
 
 ## Core Development Policies
 
 ### Authority & Epic Source Verification
-- Check UE5.5 source via MCP tools before implementing
+- Check UE5.5 source via research_agent before implementing
 - Direct source access: `C:\Devops\UESource\Engine\Source`
 - Call `HasAuthority()` at start of every mutating method
 - Server-authoritative for all state changes
-- Epic source patterns override documentation when clear
+- Epic source patterns override documentation when conflicts exist
 
 ### Performance Targets (Critical)
 - **VR:** 90 FPS minimum (Meta Quest 3)
@@ -71,170 +54,200 @@ await use_mcp_tool("ue-semantic", "search_ue_patterns", {
 - **Prefix:** PACS_ClassName convention
 - **Structure:** Subsystems/, Core/, Components/, Actors/, UI/
 - **Files:** 750 LOC max per file
+- **Emojis:** Never use emojis under any circumstances
 
-## Agent Architecture (Token-Optimised Delegation)
+## Streamlined Agent Architecture (7 Agents)
 
-### Design Phase Agents
+### 1. system_architect
+**Role:** Designs UE5.5 C++ system architecture and class structures  
+**Tools:** Filesystem operations, Google Drive search  
+**Triggers:** User requests new features, systems, or architectural planning  
+**Output:** `.claude/handoffs/[feature-name]-architecture.md`  
+**Next:** research_agent for Epic pattern validation
 
-#### PA_Architect
-Designs UE5.5 system architecture and class structures. Creates implementation plans with Epic pattern specifications. Outputs handoff documents for validation and implementation.
+### 2. research_agent  
+**Role:** Single MCP interface for all UE5 Epic pattern research  
+**Tools:** All MCP tools + web search  
+**Triggers:** Any agent needs Epic source patterns, performance data, API verification  
+**Output:** `.claude/research_cache/[pattern-type]-[timestamp].md`  
+**Next:** code_implementor or requesting agent
 
-#### epic-source-reader
-Reads UE5 source files directly. Extracts exact Epic implementation patterns with line numbers. Validates patterns against engine source code. Works with MCP for semantic analysis.
+### 3. code_implementor
+**Role:** Implements C++ code from validated designs and Epic patterns  
+**Tools:** Filesystem operations (no MCP - reads from research cache)  
+**Triggers:** Architecture complete and research patterns available  
+**Output:** Source files + `.claude/handoffs/[feature-name]-implementation.md`  
+**Next:** implementation_validator (triggered by compilation hook)
 
-### Implementation Phase Agents
+### 4. implementation_validator
+**Role:** Validates compilation, functionality, and policy compliance  
+**Tools:** Bash, filesystem operations  
+**Triggers:** Code implementation complete (manual after compilation)  
+**Output:** `.claude/handoffs/[feature-name]-validation.md`  
+**Next:** project_manager or code_implementor for fixes
 
-#### PA_CodeImplementor
-Implements C++ code from validated designs only. Uses pre-verified Epic patterns without modification. Ensures compilation and PA_ naming conventions. Focuses purely on code implementation.
+### 5. performance_engineer
+**Role:** Analyzes performance against VR 90 FPS, 100KB/s network, 1MB memory targets  
+**Tools:** Bash, filesystem operations  
+**Triggers:** Deep performance analysis needed  
+**Output:** `.claude/handoffs/[feature-name]-performance-analysis.md`  
+**Next:** code_implementor for fixes or system_architect for redesign
 
-#### code-reviewer
-Reviews completed C++ implementations for compilation success, authority patterns, and Australian English compliance. Validates against UE5.5 standards and performance requirements.
+### 6. project_manager
+**Role:** Phase completion decisions and milestone validation  
+**Tools:** Filesystem operations, documentation access  
+**Triggers:** Validation complete, phase gate decisions needed  
+**Output:** Phase completion decisions and next milestone planning  
+**Next:** documentation_manager or next phase agents
 
-### Testing & Validation Agents
+### 7. documentation_manager
+**Role:** Maintains project documentation files  
+**Tools:** Filesystem operations  
+**Triggers:** Project state changes, phase completions  
+**Output:** Updated project_progress.md, project_state.json, error_patterns.json  
+**Next:** Session complete
 
-#### qa-tester
-Tests implementations for compilation, functionality, and runtime stability. Validates core features and network behaviour. Reports specific errors with locations and severity.
+## Automated Hook System
 
-#### wsl-build-tester
-Compiles UE5 projects from WSL using Windows build tools. Handles path translation and reports compilation results. Specialises in WSL environment integration.
-
-#### performance-engineer
-Monitors performance metrics against specific targets. Flags frame rate, memory, and network violations. Provides targeted analysis of performance bottlenecks.
-
-### Management Agents
-
-#### project-manager
-Validates phase completion criteria and makes go/no-go decisions for phase transitions. Focuses on phase gates without daily coordination. Ensures targets are met before advancement.
-
-#### documentation-manager
-Maintains project documentation files. Updates progress tracking, error patterns, and research findings. Single source for all documentation updates.
-
-#### research-agent
-Research technical questions using ONLY official documentation via WebFetch. Never speculate or fill knowledge gaps with assumptions. Provide exact quotes and source URLs. Triggered by `-research` flag or technical deployment questions.
-
-## Agent Delegation Workflow
-
-### Simple Implementation Tasks
+### PostToolUse Hooks:
+```json
+{
+  "matcher": "Edit|Write",
+  "hooks": [{
+    "command": "Auto-compile + suggest implementation_validator"
+  }]
+}
 ```
-User Request → PA_CodeImplementor → code-reviewer → Complete
-(15K tokens estimated)
+- **Triggers:** Any file edit/write operation
+- **Action:** Automatic UE5.5 compilation with error capture to `/tmp/build_result.log`
+- **Output:** Success/failure message + validation suggestion
+
+### MCP Tracking Hook:
+```json
+{
+  "matcher": "mcp__ue-mcp-local__.*", 
+  "hooks": [{
+    "command": "Confirm Epic pattern research completed"
+  }]
+}
 ```
 
-### Design + Implementation Tasks
+### Session Completion Hook:
+- **Triggers:** Session stop
+- **Reminds:** Use implementation_validator, performance_engineer, commit changes
+
+## Agent Workflow Patterns
+
+### Simple Implementation (15K tokens):
 ```
-User Request → PA_Architect → epic-source-reader → PA_CodeImplementor → qa-tester → Complete
-(35K tokens estimated)
+User Request → code_implementor → Auto-compile → implementation_validator → Complete
 ```
 
-### Epic Pattern Research
+### Design + Implementation (35K tokens):
 ```
-User Request → epic-source-reader → Cache Result → Complete
-(8K tokens, reusable)
+User Request → system_architect → research_agent → code_implementor → Auto-compile → implementation_validator → Complete
 ```
 
-### Performance Analysis
+### Performance Analysis (20K tokens):
 ```
-User Request → performance-engineer → PA_CodeImplementor → qa-tester → Complete
-(20K tokens estimated)
+User Request → performance_engineer → code_implementor → Auto-compile → implementation_validator → Complete
 ```
+
+### Epic Pattern Research (8K tokens, reusable):
+```
+User Request → research_agent → Cache Result → Multiple agents reuse
+```
+
+## Token Efficiency Features
+
+### Research Cache System:
+- **Location:** `.claude/research_cache/`
+- **Format:** `[pattern-type]-[timestamp].md`
+- **Reuse:** Multiple agents read same research without duplicate MCP calls
+- **Expiry:** 24-hour cache invalidation
+
+### Handoff Documents:
+- **Location:** `.claude/handoffs/`
+- **Format:** `[feature-name]-[stage].md`
+- **Flow:** system_architect → research_agent → code_implementor → implementation_validator
+
+### Hook Automation:
+- **Auto-compilation:** Eliminates manual build commands
+- **Next-step suggestions:** Reduces coordination overhead
+- **Error capture:** Automatic build log generation for validation
+
+## Quick Commands & Aliases
+
+### Build Commands:
+- **`build`** - Compile client (auto-triggered by hooks)
+- **`buildserver`** - Compile dedicated server manually
+
+### Agent Commands:
+- **`validate`** - Invoke implementation_validator
+- **`perf`** - Invoke performance_engineer  
+- **`research`** - Invoke research_agent
+
+### Analysis Commands:
+- **`check-vr`** - Scan for VR code, suggest performance analysis
+- **`check-authority`** - Scan for HasAuthority patterns, suggest validation
 
 ## Development Environment
 
-### WSL Integration
+### WSL Integration:
 - Claude Code runs in WSL
-- Project files at: `/mnt/c/Devops/Projects/Polair`
-- Build tools accessed via: `cmd.exe /c` or `powershell.exe`
-- Path translation required for Windows tools
+- Project files: `/mnt/c/Devops/Projects/POLAIR_CS`
+- Build tools: Windows via `cmd.exe /c`
+- Path translation handled automatically
 
-### Build Commands (from WSL)
-```bash
-# Compile via Windows tools from WSL
-cmd.exe /c "msbuild.exe C:\\Devops\\Projects\\Polair\\Polair.sln"
+### MCP Server:
+- **Windows Location:** `C:\Devops\MCP\UEMCP`
+- **WSL Access:** Via MCP protocol
+- **Research Cache:** Shared between WSL and Windows
 
-# Generate project files
-cmd.exe /c "C:\\Program Files\\Epic Games\\UE_5.5\\Engine\\Build\\BatchFiles\\GenerateProjectFiles.bat"
-```
-## Workflow Integration
+## Error Handling
 
-### Token-Efficient Development Process:
-1. **Task Analysis:** Determine complexity and required agents
-2. **Agent Selection:** Use minimal agent set for task type
-3. **Sequential Handoffs:** Agents work independently with file-based handoffs
-4. **Quality Gates:** Each agent validates within their specialty
-5. **Documentation:** Track completion in appropriate files
+### Compilation Failures:
+1. **Auto-detected** by compilation hook
+2. **Log captured** to `/tmp/build_result.log`
+3. **Suggestion provided** to use implementation_validator
+4. **Manual analysis** required for fixes
 
-### Epic Pattern Verification Flow:
-1. **MCP Search:** Use `search_ue_patterns` to find patterns
-2. **Source Read:** Use `epic-source-reader` to get exact implementation
-3. **Validation:** Use `validate_pa_policies` to check compliance
-4. **Implementation:** Use `PA_CodeImplementor` for focused coding
-5. **Testing:** Use `qa-tester` and `wsl-build-tester` for validation
-
-### Handoff Document System:
-- **Location:** `.claude/handoffs/[feature-name]-[stage].md`
-- **Design Phase:** PA_Architect creates implementation specifications
-- **Validation Phase:** epic-source-reader updates with verified patterns
-- **Implementation Phase:** PA_CodeImplementor produces working code
-- **Testing Phase:** qa-tester validates functionality
-
-## File Operations Mode
-When working with files:
-- Use minimal context for basic operations
-- Focus on filesystem tasks only
-- Skip complex validation for simple file edits
-- Use WSL paths: `/mnt/c/Devops/Projects/Polair`
-
-## Quick Commands
-
-### Check Project Status:
-```
-Use documentation-manager to read project_progress.md
-```
-
-### Design New Feature:
-```
-Use PA_Architect to create system design and handoff document
-```
-
-### Validate Epic Patterns:
-```
-Use epic-source-reader to verify patterns against UE5.5 source
-```
-
-### Implement Code:
-```
-Use PA_CodeImplementor to write C++ from validated design
-```
-
-### Test Implementation:
-```
-Use qa-tester for functionality and wsl-build-tester for compilation
-```
-
-### Update Documentation:
-```
-Use documentation-manager to update appropriate project files
-```
-
-## Known Issues & Solutions
-
-### MCP Returns 0 Results:
-- Ensure MCP server is running in Windows
-- Check indexes exist in MCP/indexes directory
-- Rebuild indexes: `npm run rebuild-indexes`
-
-### Build Tools Not Found:
-- Use `cmd.exe /c` prefix for Windows tools
-- Ensure VS2022 and UE5.5 installed
-- Check paths in build commands
-
-### Path Issues in WSL:
-- Windows: `C:\Devops\Projects\Polair`
-- WSL: `/mnt/c/Devops/Projects/Polair`
-- Use path translation functions when needed
+### MCP Connection Issues:
+- **Check MCP server** running in Windows
+- **Verify indexes** in MCP/indexes directory  
+- **Use `test-mcp` alias** to verify connection
 
 ### Agent Coordination:
-- No central coordinator needed
-- File-based handoffs eliminate coordination overhead
-- Each agent reads previous output and produces focused results
-- Documentation-manager tracks overall progress
+- **File-based handoffs** prevent coordination failures
+- **Research cache** eliminates duplicate MCP queries
+- **Hook suggestions** provide workflow guidance
+- **Manual invocation** maintains control and token efficiency
+
+## Performance Monitoring
+
+### Automatic Checks:
+- **VR Code Detection:** `check-vr` command
+- **Authority Patterns:** `check-authority` command
+- **Memory Footprint:** performance_engineer analysis
+- **Network Bandwidth:** replication pattern validation
+
+### Targets Enforcement:
+- **90 FPS:** Meta Quest 3 VR performance
+- **100KB/s:** Network bandwidth per client
+- **1MB:** Memory footprint per actor
+- **6-8 hours:** Session stability requirement
+
+## Known Limitations
+
+### Hook System:
+- **No file path filtering** - hooks trigger on all edits
+- **No SubagentStop events** - manual agent coordination required
+- **No conditional logic** - same hook for success/failure
+
+### Workarounds:
+- **Manual agent invocation** maintains token efficiency
+- **Research cache** prevents duplicate MCP calls
+- **Enhanced aliases** provide specific functionality
+- **Session hooks** remind of workflow steps
+
+This architecture provides **maximum token efficiency** while maintaining **full Epic pattern compliance** and **automated compilation feedback** for the POLAIR_CS VR training simulation.
