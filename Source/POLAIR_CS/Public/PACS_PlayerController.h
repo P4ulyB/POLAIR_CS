@@ -6,6 +6,7 @@
 #include "PACS_InputTypes.h"
 #include "PACS_PlayerState.h"
 #include "Engine/TimerHandle.h"
+#include "PACS_EdgeScrollComponent.h"
 #include "PACS_PlayerController.generated.h"
 
 UCLASS()
@@ -71,10 +72,18 @@ public:
     // Getter for InputHandler component
     UPACS_InputHandlerComponent* GetInputHandler() const { return InputHandler; }
 
+    // Getter for EdgeScrollComponent
+    UFUNCTION(BlueprintCallable, Category="Input")
+    UPACS_EdgeScrollComponent* GetEdgeScrollComponent() const { return EdgeScrollComponent; }
+
 private:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Input",
         meta=(AllowPrivateAccess="true"))
     TObjectPtr<UPACS_InputHandlerComponent> InputHandler;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Input",
+        meta=(AllowPrivateAccess="true"))
+    TObjectPtr<UPACS_EdgeScrollComponent> EdgeScrollComponent;
     void ValidateInputSystem();
     void DisplayInputContextDebug();
 };

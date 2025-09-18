@@ -15,6 +15,7 @@
 APACS_PlayerController::APACS_PlayerController()
 {
     InputHandler = CreateDefaultSubobject<UPACS_InputHandlerComponent>(TEXT("InputHandler"));
+    EdgeScrollComponent = CreateDefaultSubobject<UPACS_EdgeScrollComponent>(TEXT("EdgeScrollComponent"));
     PrimaryActorTick.bCanEverTick = true;
 
 }
@@ -23,7 +24,7 @@ void APACS_PlayerController::BeginPlay()
 {
     Super::BeginPlay();
     ValidateInputSystem();
-    
+
     // TEST: Register PlayerController as input receiver for debugging
     if (InputHandler && IsLocalController())
     {
@@ -37,6 +38,7 @@ void APACS_PlayerController::BeginPlay()
         OnPutOnHandle   = FCoreDelegates::VRHeadsetPutOnHead.AddUObject(this, &ThisClass::HandleHMDPutOn);
         OnRemovedHandle = FCoreDelegates::VRHeadsetRemovedFromHead.AddUObject(this, &ThisClass::HandleHMDRemoved);
         OnRecenterHandle= FCoreDelegates::VRHeadsetRecenter.AddUObject(this, &ThisClass::HandleHMDRecenter);
+
     }
 }
 
@@ -67,7 +69,7 @@ void APACS_PlayerController::SetupInputComponent()
 void APACS_PlayerController::OnPossess(APawn* InPawn)
 {
     Super::OnPossess(InPawn);
-    
+
     // Epic's pattern: OnPossess() is for pawn-specific setup
     // InputHandler initialization happens here, binding already done in SetupInputComponent()
 #if !UE_SERVER
@@ -86,8 +88,9 @@ void APACS_PlayerController::OnUnPossess()
     {
         InputHandler->OnSubsystemUnavailable();
     }
+
 #endif
-    
+
     Super::OnUnPossess();
 }
 
@@ -366,4 +369,5 @@ EPACS_InputHandleResult APACS_PlayerController::HandleInputAction(FName ActionNa
     // Pass through other actions
     return EPACS_InputHandleResult::NotHandled;
 }
+
 

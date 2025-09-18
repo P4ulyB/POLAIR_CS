@@ -4,6 +4,8 @@
 #include "Engine/DataAsset.h"
 #include "AssessorPawnConfig.generated.h"
 
+class UInputMappingContext;
+
 UCLASS(BlueprintType)
 class POLAIR_CS_API UAssessorPawnConfig : public UDataAsset
 {
@@ -40,4 +42,26 @@ public:
 
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, meta=(EditCondition="bEnableCameraLag"), Category="Assessor|Lag")
     float CameraLagMaxDistance = 250.f;
+
+    // Edge Scrolling Configuration
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Assessor|EdgeScroll")
+    bool bEdgeScrollEnabled = true;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, meta=(ClampMin="4", ClampMax="128", EditCondition="bEdgeScrollEnabled"), Category="Assessor|EdgeScroll")
+    int32 EdgeMarginPx = 24;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, meta=(ClampMin="0.1", ClampMax="1.0", EditCondition="bEdgeScrollEnabled"), Category="Assessor|EdgeScroll")
+    float EdgeMaxSpeedScale = 0.8f;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, meta=(ClampMin="0.0", ClampMax="0.2", EditCondition="bEdgeScrollEnabled"), Category="Assessor|EdgeScroll")
+    float EdgeScrollDeadZone = 0.05f;
+
+    // Context Control: Edge scrolling will ONLY work when these contexts are active
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Assessor|EdgeScroll",
+        meta=(EditCondition="bEdgeScrollEnabled", DisplayName="Allowed Input Contexts"))
+    TArray<TObjectPtr<UInputMappingContext>> EdgeScrollAllowedContexts;
+
+    // Optional simple world bounds (leave invalid for no clamping)
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Assessor|WorldBounds")
+    FBox OptionalWorldBounds = FBox(ForceInit);
 };
