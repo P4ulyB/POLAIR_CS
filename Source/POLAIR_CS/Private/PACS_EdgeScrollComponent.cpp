@@ -5,6 +5,7 @@
 #include "Data/Configs/AssessorPawnConfig.h"
 #include "Engine/LocalPlayer.h"
 #include "Framework/Application/SlateApplication.h"
+#include "Widgets/SViewport.h"
 
 #if !UE_SERVER
 #include "Blueprint/WidgetLayoutLibrary.h"
@@ -92,6 +93,12 @@ void UPACS_EdgeScrollComponent::TickComponent(float DeltaTime, ELevelTick TickTy
             AssessorPawn->AddPlanarInput(EdgeAxis);
             UE_LOG(LogTemp, VeryVerbose, TEXT("Applied edge scroll input: %s"), *EdgeAxis.ToString());
         }
+    }
+
+    // Draw debug visualization if enabled
+    if (bShowDebugVisualization)
+    {
+        DrawDebugVisualization();
     }
 #endif
 }
@@ -282,25 +289,26 @@ bool UPACS_EdgeScrollComponent::GetDPIAwareMousePosition(FVector2D& OutMousePos)
     return false;
 #endif
 
+    // Epic's recommended pattern: Use UGameViewportClient for viewport-local mouse coordinates
+    if (UGameViewportClient* ViewportClient = GetWorld()->GetGameViewport())
+    {
+        // Epic's preferred method - gets mouse position already in viewport coordinates
+        if (ViewportClient->GetMousePosition(OutMousePos))
+        {
+            return true;
+        }
+    }
+
+    // Fallback to PlayerController method
     APlayerController* PC = GetPlayerController();
-    if (!PC)
+    if (PC)
     {
-        return false;
-    }
-
-    // Try UMG's DPI-aware method first
-    float MouseX, MouseY;
-    if (UWidgetLayoutLibrary::GetMousePositionScaledByDPI(PC, MouseX, MouseY))
-    {
-        OutMousePos.Set(MouseX, MouseY);
-        return true;
-    }
-
-    // Fallback to standard method
-    if (PC->GetMousePosition(MouseX, MouseY))
-    {
-        OutMousePos.Set(MouseX, MouseY);
-        return true;
+        float MouseX, MouseY;
+        if (PC->GetMousePosition(MouseX, MouseY))
+        {
+            OutMousePos.Set(MouseX, MouseY);
+            return true;
+        }
     }
 
     return false;
@@ -474,10 +482,19 @@ bool UPACS_EdgeScrollComponent::UpdateViewportCache() const
         return false;
     }
 
-    FVector2D NewViewportSize; // Non-const variable for GetViewportSize
-    LP->ViewportClient->GetViewportSize(NewViewportSize);
-    CachedViewportSize = NewViewportSize;
-    CachedDPIScale = LP->ViewportClient->GetDPIScale();
+    // Epic's recommended pattern: Use UGameViewportClient for exact render dimensions
+    if (UGameViewportClient* ViewportClient = GetWorld()->GetGameViewport())
+    {
+        // Epic's preferred method - gets actual render target size, not widget geometry
+        FVector2D NewViewportSize;
+        ViewportClient->GetViewportSize(NewViewportSize);
+        CachedViewportSize = NewViewportSize;
+        CachedDPIScale = ViewportClient->GetDPIScale();
+    }
+    else
+    {
+        return false;
+    }
 
     if (CachedViewportSize.X <= 0 || CachedViewportSize.Y <= 0)
     {
@@ -561,6 +578,93 @@ const UAssessorPawnConfig* UPACS_EdgeScrollComponent::GetAssessorConfig() const
 APlayerController* UPACS_EdgeScrollComponent::GetPlayerController() const
 {
     return Cast<APlayerController>(GetOwner());
+}
+
+void UPACS_EdgeScrollComponent::DrawDebugVisualization() const
+{
+#if !UE_SERVER && !UE_BUILD_SHIPPING
+    // Only draw debug if viewport cache is valid
+    if (!bViewportCacheValid || !UpdateViewportCache())
+    {
+        return;
+    }
+
+    const UAssessorPawnConfig* Config = GetAssessorConfig();
+    if (!Config)
+    {
+        return;
+    }
+
+    APlayerController* PC = GetPlayerController();
+    if (!PC || !PC->IsLocalController())
+    {
+        return;
+    }
+
+    // Get DPI-aware edge margin
+    const float EdgeMargin = static_cast<float>(Config->EdgeMarginPx) * CachedDPIScale;
+
+    // Get current mouse position
+    FVector2D MousePos;
+    if (!GetDPIAwareMousePosition(MousePos))
+    {
+        return;
+    }
+
+    // Draw viewport boundaries (green)
+    GEngine->AddOnScreenDebugMessage(-1, 0.0f, FColor::Green,
+        FString::Printf(TEXT("Viewport Size: %.1f x %.1f"), CachedViewportSize.X, CachedViewportSize.Y));
+
+    GEngine->AddOnScreenDebugMessage(-1, 0.0f, FColor::Green,
+        FString::Printf(TEXT("Mouse Pos: %.1f, %.1f"), MousePos.X, MousePos.Y));
+
+    GEngine->AddOnScreenDebugMessage(-1, 0.0f, FColor::Green,
+        FString::Printf(TEXT("Edge Margin: %.1f px (DPI: %.2f)"), EdgeMargin, CachedDPIScale));
+
+    // Draw edge zones using debug lines on HUD
+    UWorld* World = GetWorld();
+    if (World && GEngine && GEngine->GameViewport)
+    {
+        // Draw edge scroll zones as colored rectangles
+        FColor EdgeColor = FColor::Red;
+        EdgeColor.A = 100; // Semi-transparent
+
+        // Top edge zone
+        GEngine->AddOnScreenDebugMessage(-1, 0.0f, EdgeColor,
+            FString::Printf(TEXT("TOP EDGE: 0,0 to %.1f,%.1f"), CachedViewportSize.X, EdgeMargin));
+
+        // Bottom edge zone
+        GEngine->AddOnScreenDebugMessage(-1, 0.0f, EdgeColor,
+            FString::Printf(TEXT("BOTTOM EDGE: 0,%.1f to %.1f,%.1f"),
+                CachedViewportSize.Y - EdgeMargin, CachedViewportSize.X, CachedViewportSize.Y));
+
+        // Left edge zone
+        GEngine->AddOnScreenDebugMessage(-1, 0.0f, EdgeColor,
+            FString::Printf(TEXT("LEFT EDGE: 0,0 to %.1f,%.1f"), EdgeMargin, CachedViewportSize.Y));
+
+        // Right edge zone
+        GEngine->AddOnScreenDebugMessage(-1, 0.0f, EdgeColor,
+            FString::Printf(TEXT("RIGHT EDGE: %.1f,0 to %.1f,%.1f"),
+                CachedViewportSize.X - EdgeMargin, CachedViewportSize.X, CachedViewportSize.Y));
+
+        // Show if mouse is currently in edge zone
+        bool bInLeftEdge = MousePos.X <= EdgeMargin;
+        bool bInRightEdge = MousePos.X >= (CachedViewportSize.X - EdgeMargin);
+        bool bInTopEdge = MousePos.Y <= EdgeMargin;
+        bool bInBottomEdge = MousePos.Y >= (CachedViewportSize.Y - EdgeMargin);
+
+        if (bInLeftEdge || bInRightEdge || bInTopEdge || bInBottomEdge)
+        {
+            FString EdgeStatus = FString::Printf(TEXT("IN EDGE: L:%s R:%s T:%s B:%s"),
+                bInLeftEdge ? TEXT("YES") : TEXT("NO"),
+                bInRightEdge ? TEXT("YES") : TEXT("NO"),
+                bInTopEdge ? TEXT("YES") : TEXT("NO"),
+                bInBottomEdge ? TEXT("YES") : TEXT("NO"));
+
+            GEngine->AddOnScreenDebugMessage(-1, 0.0f, FColor::Yellow, EdgeStatus);
+        }
+    }
+#endif
 }
 
 // Viewport resize handling moved to UpdateViewportCache() method in UE5.5

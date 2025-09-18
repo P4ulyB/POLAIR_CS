@@ -31,6 +31,13 @@ public:
     UFUNCTION(BlueprintPure, Category="EdgeScroll")
     bool IsActivelyScrolling() const { return bIsActivelyScrolling; }
 
+    // Debug visualization
+    UFUNCTION(BlueprintCallable, Category="EdgeScroll|Debug")
+    void SetDebugVisualization(bool bNewDebugEnabled) { bShowDebugVisualization = bNewDebugEnabled; }
+
+    UFUNCTION(BlueprintPure, Category="EdgeScroll|Debug")
+    bool IsDebugVisualizationEnabled() const { return bShowDebugVisualization; }
+
 protected:
     virtual void BeginPlay() override;
     virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
@@ -40,6 +47,10 @@ private:
     // Configuration
     UPROPERTY(EditDefaultsOnly, Category="EdgeScroll")
     bool bEnabled = true;
+
+    // Debug visualization
+    UPROPERTY(EditDefaultsOnly, Category="EdgeScroll|Debug")
+    bool bShowDebugVisualization = false;
 
     // State tracking
     bool bIsActivelyScrolling = false;
@@ -75,6 +86,7 @@ private:
     bool UpdateViewportCache() const;
     void UpdateComponentReadiness();
     void InvalidateCaches();
+    void DrawDebugVisualization() const;
 
     // Safe getters
     UPACS_InputHandlerComponent* GetInputHandler() const;
