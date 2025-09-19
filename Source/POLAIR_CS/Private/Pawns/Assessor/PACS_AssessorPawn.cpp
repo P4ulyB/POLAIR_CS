@@ -149,9 +149,9 @@ void APACS_AssessorPawn::ApplyConfigDefaults()
 
     TargetArmLength = Arm;
 
-    // Initialize rotation state
-    CurrentYaw = 0.0f;
-    TargetYaw = 0.0f;
+    // Initialize cumulative rotation state
+    CumulativeYaw = 0.0f;
+    TargetCumulativeYaw = 0.0f;
     bIsRotating = false;
 
     bConfigApplied = true;
@@ -279,21 +279,14 @@ void APACS_AssessorPawn::AddRotationInput(float Direction)
         return;
     }
 
-    // Only process input if we're not already rotating
-    if (bIsRotating)
-    {
-        return;
-    }
-
     const float RotationStep = Config->RotationDegreesPerStep;
     const float RotationDirection = FMath::Sign(Direction);
 
-    // Calculate target yaw
-    TargetYaw = NormalizeYaw(CurrentYaw + (RotationDirection * RotationStep));
-    bIsRotating = true;
+    // Add to cumulative target (no blocking, no normalization)
+    TargetCumulativeYaw += (RotationDirection * RotationStep);
 
-    UE_LOG(LogTemp, Log, TEXT("APACS_AssessorPawn: Starting rotation from %.1f to %.1f degrees"),
-        CurrentYaw, TargetYaw);
+    UE_LOG(LogTemp, Log, TEXT("APACS_AssessorPawn: Adding rotation %.1f degrees, target cumulative: %.1f"),
+        RotationDirection * RotationStep, TargetCumulativeYaw);
 #endif
 }
 
@@ -409,30 +402,29 @@ void APACS_AssessorPawn::OnRep_Controller()
 
 void APACS_AssessorPawn::UpdateRotation(float DeltaTime)
 {
-    if (!bIsRotating || !Config)
+    if (!Config)
     {
         return;
     }
 
     const float InterpSpeed = Config->RotationInterpSpeed;
-    const float NewYaw = FMath::FInterpTo(CurrentYaw, TargetYaw, DeltaTime, InterpSpeed);
 
-    // Check if we've reached the target (within a small tolerance)
-    if (FMath::IsNearlyEqual(NewYaw, TargetYaw, 0.1f))
-    {
-        CurrentYaw = TargetYaw;
-        bIsRotating = false;
+    // Smooth interpolation toward target cumulative rotation
+    CumulativeYaw = FMath::FInterpTo(CumulativeYaw, TargetCumulativeYaw, DeltaTime, InterpSpeed);
 
-        UE_LOG(LogTemp, Log, TEXT("APACS_AssessorPawn: Rotation complete at %.1f degrees"), CurrentYaw);
-    }
-    else
-    {
-        CurrentYaw = NewYaw;
-    }
+    // Update bIsRotating state for external systems
+    bIsRotating = !FMath::IsNearlyEqual(CumulativeYaw, TargetCumulativeYaw, 0.1f);
 
-    // Apply the rotation to the AxisBasis component
-    const FRotator NewRotation(0.0f, CurrentYaw, 0.0f);
+    // Apply normalized rotation to component (only normalize for component rotation)
+    const FRotator NewRotation(0.0f, NormalizeYaw(CumulativeYaw), 0.0f);
     AxisBasis->SetWorldRotation(NewRotation);
+
+    // Debug logging
+    if (bIsRotating)
+    {
+        UE_LOG(LogTemp, VeryVerbose, TEXT("APACS_AssessorPawn: Rotating - Cumulative: %.1f, Target: %.1f, Applied: %.1f"),
+            CumulativeYaw, TargetCumulativeYaw, NormalizeYaw(CumulativeYaw));
+    }
 }
 
 float APACS_AssessorPawn::NormalizeYaw(float Yaw)

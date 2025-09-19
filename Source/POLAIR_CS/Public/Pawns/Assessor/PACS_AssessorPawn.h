@@ -71,10 +71,10 @@ private:
     // Target zoom (ArmLength)
     float TargetArmLength = 0.f;
 
-    // Rotation state
-    float CurrentYaw = 0.0f;
-    float TargetYaw = 0.0f;
-    bool bIsRotating = false;
+    // Rotation state - using cumulative tracking to avoid direction reversal
+    float CumulativeYaw = 0.0f;         // Total rotation applied (can exceed 360°)
+    float TargetCumulativeYaw = 0.0f;    // Target cumulative rotation
+    bool bIsRotating = false;            // For external systems that need rotation state
 
     // Optional: set this to a DA in content to guarantee a config even if the BP forgot to assign one.
     UPROPERTY(EditDefaultsOnly, Category="Assessor|Config")
