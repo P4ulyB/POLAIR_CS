@@ -38,6 +38,7 @@ public:
     // Narrow navigation API (controller may call later).
     void AddPlanarInput(const FVector2D& Axis01); // Accumulate this frame (X=Right, Y=Forward)
     void AddZoomSteps(float Steps);                // Discrete wheel ticks
+    void AddRotationInput(float Direction);        // Discrete rotation steps (+1 right, -1 left)
 
 protected:
     virtual void BeginPlay() override;
@@ -70,6 +71,11 @@ private:
     // Target zoom (ArmLength)
     float TargetArmLength = 0.f;
 
+    // Rotation state
+    float CurrentYaw = 0.0f;
+    float TargetYaw = 0.0f;
+    bool bIsRotating = false;
+
     // Optional: set this to a DA in content to guarantee a config even if the BP forgot to assign one.
     UPROPERTY(EditDefaultsOnly, Category="Assessor|Config")
     TSoftObjectPtr<class UAssessorPawnConfig> FallbackConfig;
@@ -81,6 +87,8 @@ private:
     void UnregisterFromInputHandler(APACS_PlayerController* PC);
     void ApplyConfigDefaults();
     void StepZoom(float AxisValue);
+    void UpdateRotation(float DeltaTime);
+    float NormalizeYaw(float Yaw);
 
     // Ensures Config is non-null; tries FallbackConfig if needed. Returns true if we have a config.
     bool EnsureConfigReady();

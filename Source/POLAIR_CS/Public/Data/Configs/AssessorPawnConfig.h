@@ -61,6 +61,16 @@ public:
         meta=(EditCondition="bEdgeScrollEnabled", DisplayName="Allowed Input Contexts"))
     TArray<TObjectPtr<UInputMappingContext>> EdgeScrollAllowedContexts;
 
+    // Rotation Configuration
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Assessor|Rotation")
+    bool bRotationEnabled = true;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, meta=(ClampMin="15.0", ClampMax="90.0", EditCondition="bRotationEnabled"), Category="Assessor|Rotation")
+    float RotationDegreesPerStep = 45.0f;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, meta=(ClampMin="0.5", ClampMax="5.0", EditCondition="bRotationEnabled"), Category="Assessor|Rotation")
+    float RotationInterpSpeed = 2.0f;
+
     // Optional simple world bounds (leave invalid for no clamping)
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Assessor|WorldBounds")
     FBox OptionalWorldBounds = FBox(ForceInit);

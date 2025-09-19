@@ -149,6 +149,11 @@ void APACS_AssessorPawn::ApplyConfigDefaults()
 
     TargetArmLength = Arm;
 
+    // Initialize rotation state
+    CurrentYaw = 0.0f;
+    TargetYaw = 0.0f;
+    bIsRotating = false;
+
     bConfigApplied = true;
 }
 
@@ -187,6 +192,11 @@ void APACS_AssessorPawn::Tick(float DeltaSeconds)
 
     // Drive ArmLength toward Target (instant for now)
     SpringArm->TargetArmLength = TargetArmLength;
+
+    // Update rotation interpolation
+#if !UE_SERVER
+    UpdateRotation(DeltaSeconds);
+#endif
 
     // Consume per-frame inputs
     InputForward = 0.f;
@@ -229,6 +239,16 @@ EPACS_InputHandleResult APACS_AssessorPawn::HandleInputAction(FName ActionName, 
         StepZoom(Value.Get<float>());
         return EPACS_InputHandleResult::HandledConsume;
     }
+    if (ActionName == TEXT("Assessor.RotateLeft"))
+    {
+        AddRotationInput(-1.0f);
+        return EPACS_InputHandleResult::HandledConsume;
+    }
+    if (ActionName == TEXT("Assessor.RotateRight"))
+    {
+        AddRotationInput(1.0f);
+        return EPACS_InputHandleResult::HandledConsume;
+    }
 #endif
 
     return EPACS_InputHandleResult::NotHandled;
@@ -244,6 +264,37 @@ void APACS_AssessorPawn::AddPlanarInput(const FVector2D& Axis01)
 void APACS_AssessorPawn::AddZoomSteps(float Steps)
 {
     StepZoom(Steps);
+}
+
+void APACS_AssessorPawn::AddRotationInput(float Direction)
+{
+#if !UE_SERVER
+    if (!Config || !Config->bRotationEnabled)
+    {
+        return;
+    }
+
+    if (FMath::IsNearlyZero(Direction))
+    {
+        return;
+    }
+
+    // Only process input if we're not already rotating
+    if (bIsRotating)
+    {
+        return;
+    }
+
+    const float RotationStep = Config->RotationDegreesPerStep;
+    const float RotationDirection = FMath::Sign(Direction);
+
+    // Calculate target yaw
+    TargetYaw = NormalizeYaw(CurrentYaw + (RotationDirection * RotationStep));
+    bIsRotating = true;
+
+    UE_LOG(LogTemp, Log, TEXT("APACS_AssessorPawn: Starting rotation from %.1f to %.1f degrees"),
+        CurrentYaw, TargetYaw);
+#endif
 }
 
 void APACS_AssessorPawn::RegisterWithInputHandler(APACS_PlayerController* PC)
@@ -354,4 +405,46 @@ void APACS_AssessorPawn::OnRep_Controller()
         ApplyConfigDefaults(); // guarded by your bConfigApplied
     }
 #endif
+}
+
+void APACS_AssessorPawn::UpdateRotation(float DeltaTime)
+{
+    if (!bIsRotating || !Config)
+    {
+        return;
+    }
+
+    const float InterpSpeed = Config->RotationInterpSpeed;
+    const float NewYaw = FMath::FInterpTo(CurrentYaw, TargetYaw, DeltaTime, InterpSpeed);
+
+    // Check if we've reached the target (within a small tolerance)
+    if (FMath::IsNearlyEqual(NewYaw, TargetYaw, 0.1f))
+    {
+        CurrentYaw = TargetYaw;
+        bIsRotating = false;
+
+        UE_LOG(LogTemp, Log, TEXT("APACS_AssessorPawn: Rotation complete at %.1f degrees"), CurrentYaw);
+    }
+    else
+    {
+        CurrentYaw = NewYaw;
+    }
+
+    // Apply the rotation to the AxisBasis component
+    const FRotator NewRotation(0.0f, CurrentYaw, 0.0f);
+    AxisBasis->SetWorldRotation(NewRotation);
+}
+
+float APACS_AssessorPawn::NormalizeYaw(float Yaw)
+{
+    // Normalize yaw to [-180, 180] range
+    while (Yaw > 180.0f)
+    {
+        Yaw -= 360.0f;
+    }
+    while (Yaw < -180.0f)
+    {
+        Yaw += 360.0f;
+    }
+    return Yaw;
 }
