@@ -241,12 +241,12 @@ EPACS_InputHandleResult APACS_AssessorPawn::HandleInputAction(FName ActionName, 
     }
     if (ActionName == TEXT("Assessor.RotateLeft"))
     {
-        AddRotationInput(-1.0f);
+        AddRotationInput(1.0f);
         return EPACS_InputHandleResult::HandledConsume;
     }
     if (ActionName == TEXT("Assessor.RotateRight"))
     {
-        AddRotationInput(1.0f);
+        AddRotationInput(-1.0f);
         return EPACS_InputHandleResult::HandledConsume;
     }
 #endif
