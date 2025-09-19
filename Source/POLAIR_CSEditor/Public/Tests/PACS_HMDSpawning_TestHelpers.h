@@ -4,7 +4,7 @@
 #include "GameFramework/Pawn.h"
 #include "PACSGameMode.h"
 #include "PACS_PlayerController.h"
-#include "PACS_PlayerState.h"
+#include "Players/PACS_PlayerState.h"
 #include "PACS_HMDSpawning_TestHelpers.generated.h"
 
 /**
