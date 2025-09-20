@@ -2,7 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
-#include "Players/PACS_PlayerState.h"
+#include "PACS_PlayerState.h"
 #include "PACSGameMode.generated.h"
 
 UCLASS()

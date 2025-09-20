@@ -24,17 +24,9 @@ public:
     UPROPERTY(ReplicatedUsing=OnRep_HMDState, BlueprintReadOnly, Category = "PACS")
     EHMDState HMDState = EHMDState::Unknown;
 
-    // Is this player an assessor (not VR candidate)?
-    UPROPERTY(ReplicatedUsing=OnRep_IsAssessor, BlueprintReadOnly, Category = "PACS")
-    bool bIsAssessor = false;
-
     // RepNotify for HMD state changes - made public for testing
     UFUNCTION()
     void OnRep_HMDState();
-
-    // RepNotify for assessor state changes
-    UFUNCTION()
-    void OnRep_IsAssessor();
 
 protected:
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
