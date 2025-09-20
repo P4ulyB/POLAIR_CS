@@ -10,7 +10,7 @@ struct POLAIR_CS_API FPACS_NPCVisualConfig
 	GENERATED_BODY()
 
 	UPROPERTY()
-	uint8 FieldsMask = 0; // bit0: Mesh, bit1: Anim
+	uint8 FieldsMask = 0; // bit0: Mesh, bit1: Anim, bit2: CollisionScale
 
 	UPROPERTY()
 	FSoftObjectPath MeshPath;
@@ -18,9 +18,12 @@ struct POLAIR_CS_API FPACS_NPCVisualConfig
 	UPROPERTY()
 	FSoftObjectPath AnimClassPath;
 
+	UPROPERTY()
+	uint8 CollisionScaleSteps = 0;
+
 	bool operator==(const FPACS_NPCVisualConfig& Other) const
 	{
-		return FieldsMask == Other.FieldsMask && MeshPath == Other.MeshPath && AnimClassPath == Other.AnimClassPath;
+		return FieldsMask == Other.FieldsMask && MeshPath == Other.MeshPath && AnimClassPath == Other.AnimClassPath && CollisionScaleSteps == Other.CollisionScaleSteps;
 	}
 
 	bool operator!=(const FPACS_NPCVisualConfig& Other) const
@@ -31,9 +34,10 @@ struct POLAIR_CS_API FPACS_NPCVisualConfig
 	// Initial-only, tiny; serialise just the bits/paths
 	bool NetSerialize(FArchive& Ar, UPackageMap*, bool& bOutSuccess)
 	{
-		Ar.SerializeBits(&FieldsMask, 2);
+		Ar.SerializeBits(&FieldsMask, 3); // Now 3 bits for Mesh, Anim, CollisionScale
 		if (FieldsMask & 0x1) Ar << MeshPath;
 		if (FieldsMask & 0x2) Ar << AnimClassPath;
+		if (FieldsMask & 0x4) Ar << CollisionScaleSteps;
 		bOutSuccess = true;
 		return true;
 	}

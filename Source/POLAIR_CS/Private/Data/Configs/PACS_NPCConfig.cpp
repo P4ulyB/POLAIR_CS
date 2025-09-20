@@ -20,6 +20,9 @@ void UPACS_NPCConfig::ToVisualConfig(FPACS_NPCVisualConfig& Out) const
 		Out.FieldsMask |= 0x2;
 		Out.AnimClassPath = AnimClass.ToSoftObjectPath();
 	}
+	// Always include collision scale even if 0
+	Out.FieldsMask |= 0x4;
+	Out.CollisionScaleSteps = CollisionScaleSteps;
 }
 
 #if WITH_EDITOR

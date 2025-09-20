@@ -24,6 +24,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NPC|Visuals")
 	TSoftClassPtr<UAnimInstance> AnimClass;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NPC|Collision", meta = (ClampMin = "0", ClampMax = "10", DisplayName = "Collision Scale Steps"))
+	uint8 CollisionScaleSteps = 0; // 0 = no offset, 1 = +10%, 10 = +100%
+
 	void ToVisualConfig(struct FPACS_NPCVisualConfig& Out) const;
 
 #if WITH_EDITOR

@@ -6,6 +6,7 @@
 #include "Engine/SkeletalMesh.h"
 #include "Engine/Blueprint.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Components/BoxComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 
 APACS_NPCCharacter::APACS_NPCCharacter()
@@ -16,6 +17,17 @@ APACS_NPCCharacter::APACS_NPCCharacter()
 
 	// Disable movement for now as specified in the design
 	GetCharacterMovement()->SetComponentTickEnabled(false);
+
+	// Create collision box component
+	CollisionBox = CreateDefaultSubobject<UBoxComponent>(TEXT("CollisionBox"));
+	CollisionBox->SetupAttachment(GetMesh());
+	CollisionBox->SetCollisionProfileName(TEXT("Pawn"));
+	CollisionBox->SetRelativeLocation(FVector::ZeroVector);
+
+#if UE_SERVER
+	// Server collision optional - disable for performance
+	CollisionBox->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+#endif
 }
 
 void APACS_NPCCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -83,6 +95,9 @@ void APACS_NPCCharacter::ApplyVisuals_Client()
 		GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::OnlyTickPoseWhenRendered;
 		GetMesh()->bEnableUpdateRateOptimizations = true;
 
+		// Apply collision after mesh is loaded
+		ApplyCollisionFromMesh();
+
 		bVisualsApplied = true;
 	}));
 }
@@ -103,4 +118,29 @@ void APACS_NPCCharacter::BuildVisualConfigFromAsset_Server()
 	{
 		ApplyVisuals_Client();
 	}
+}
+
+void APACS_NPCCharacter::ApplyCollisionFromMesh()
+{
+	if (!GetMesh() || !GetMesh()->GetSkeletalMeshAsset() || !CollisionBox)
+	{
+		return;
+	}
+
+	// Get bounds from the skeletal mesh
+	const FBoxSphereBounds Bounds = GetMesh()->GetSkeletalMeshAsset()->GetBounds();
+
+	// Find the highest dimension from the box extent
+	const FVector& BoxExtent = Bounds.BoxExtent;
+	const float MaxDimension = FMath::Max3(BoxExtent.X, BoxExtent.Y, BoxExtent.Z);
+
+	// Calculate scale factor from CollisionScaleSteps (0 = 1.0, 1 = 1.1, 10 = 2.0)
+	const float ScaleFactor = 1.0f + (0.1f * static_cast<float>(VisualConfig.CollisionScaleSteps));
+
+	// Apply uniform scaled extents using the highest dimension for all sides
+	const float UniformExtent = MaxDimension * ScaleFactor;
+	CollisionBox->SetBoxExtent(FVector(UniformExtent, UniformExtent, UniformExtent), true);
+
+	// Align collision box center with mesh bounds center
+	CollisionBox->SetRelativeLocation(Bounds.Origin);
 }

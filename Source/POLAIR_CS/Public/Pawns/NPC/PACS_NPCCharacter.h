@@ -6,6 +6,7 @@
 #include "PACS_NPCCharacter.generated.h"
 
 class UPACS_NPCConfig;
+class UBoxComponent;
 struct FStreamableHandle;
 
 UCLASS(BlueprintType, Blueprintable)
@@ -23,6 +24,9 @@ protected:
 	UPROPERTY(ReplicatedUsing = OnRep_VisualConfig, meta = (RepNotifyCondition = "REPNOTIFY_OnChanged"))
 	FPACS_NPCVisualConfig VisualConfig;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "NPC|Collision")
+	TObjectPtr<UBoxComponent> CollisionBox;
+
 public:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	virtual void PreInitializeComponents() override;
@@ -34,6 +38,7 @@ protected:
 
 	void ApplyVisuals_Client();
 	void BuildVisualConfigFromAsset_Server();
+	void ApplyCollisionFromMesh();
 
 private:
 	bool bVisualsApplied = false;
