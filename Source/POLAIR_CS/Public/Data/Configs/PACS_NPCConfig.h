@@ -27,9 +27,6 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NPC|Collision", meta = (ClampMin = "0", ClampMax = "100", DisplayName = "Collision Scale Steps"))
 	uint8 CollisionScaleSteps = 0; // 0 = no offset, 1 = +10%, 10 = +100%
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NPC|Decal", meta = (ClampMin = "0", ClampMax = "200", DisplayName = "Decal Size Multiplier"))
-	uint8 DecalSizeMultiplier = 100; // 100 = 1.0x, 0 = 0.0x, 200 = 2.0x
-
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NPC|Decal")
 	TSoftObjectPtr<class UMaterialInterface> DecalMaterial;
 
