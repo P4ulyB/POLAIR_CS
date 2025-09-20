@@ -4,7 +4,7 @@
 #include "GameFramework/PlayerController.h"
 #include "PACS_InputHandlerComponent.h"
 #include "PACS_InputTypes.h"
-#include "Players/PACS_PlayerState.h"
+#include "PACS_PlayerState.h"
 #include "Engine/TimerHandle.h"
 #include "PACS_EdgeScrollComponent.h"
 #include "PACS_PlayerController.generated.h"
