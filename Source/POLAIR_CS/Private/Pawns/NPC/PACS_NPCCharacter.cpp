@@ -7,6 +7,8 @@
 #include "Engine/Blueprint.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/BoxComponent.h"
+#include "Components/DecalComponent.h"
+#include "Materials/MaterialInterface.h"
 #include "GameFramework/CharacterMovementComponent.h"
 
 APACS_NPCCharacter::APACS_NPCCharacter()
@@ -24,9 +26,17 @@ APACS_NPCCharacter::APACS_NPCCharacter()
 	CollisionBox->SetCollisionProfileName(TEXT("Pawn"));
 	CollisionBox->SetRelativeLocation(FVector::ZeroVector);
 
+	// Create decal component nested in collision box
+	CollisionDecal = CreateDefaultSubobject<UDecalComponent>(TEXT("CollisionDecal"));
+	CollisionDecal->SetupAttachment(CollisionBox);
+	CollisionDecal->SetRelativeLocation(FVector::ZeroVector);
+	CollisionDecal->SetRelativeRotation(FRotator(-90.0f, 0.0f, 0.0f)); // Point downward by default
+	CollisionDecal->DecalSize = FVector(100.0f, 100.0f, 100.0f); // Initial size, will be updated
+
 #if UE_SERVER
 	// Server collision optional - disable for performance
 	CollisionBox->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	CollisionDecal->SetVisibility(false);
 #endif
 }
 
@@ -77,6 +87,7 @@ void APACS_NPCCharacter::ApplyVisuals_Client()
 	TArray<FSoftObjectPath> ToLoad;
 	if (VisualConfig.FieldsMask & 0x1) ToLoad.Add(VisualConfig.MeshPath);
 	if (VisualConfig.FieldsMask & 0x2) ToLoad.Add(VisualConfig.AnimClassPath);
+	if (VisualConfig.FieldsMask & 0x10) ToLoad.Add(VisualConfig.DecalMaterialPath);
 	if (ToLoad.Num() == 0) return;
 
 	auto& StreamableManager = UAssetManager::GetStreamableManager();
@@ -94,6 +105,19 @@ void APACS_NPCCharacter::ApplyVisuals_Client()
 
 		GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::OnlyTickPoseWhenRendered;
 		GetMesh()->bEnableUpdateRateOptimizations = true;
+
+		// Apply loaded decal material if specified
+		if (VisualConfig.FieldsMask & 0x10)
+		{
+			UObject* DecalMaterialObj = VisualConfig.DecalMaterialPath.TryLoad();
+			if (UMaterialInterface* DecalMat = Cast<UMaterialInterface>(DecalMaterialObj))
+			{
+				if (CollisionDecal)
+				{
+					CollisionDecal->SetDecalMaterial(DecalMat);
+				}
+			}
+		}
 
 		// Apply collision after mesh is loaded
 		ApplyCollisionFromMesh();
@@ -143,4 +167,13 @@ void APACS_NPCCharacter::ApplyCollisionFromMesh()
 
 	// Align collision box center with mesh bounds center
 	CollisionBox->SetRelativeLocation(Bounds.Origin);
+
+	// Apply same dimensions to decal if it exists
+	if (CollisionDecal)
+	{
+		// Apply decal size multiplier (100 = 1.0x, 200 = 2.0x, etc.)
+		const float DecalScaleFactor = VisualConfig.DecalSizeMultiplier / 100.0f;
+		const float DecalExtent = UniformExtent * DecalScaleFactor;
+		CollisionDecal->DecalSize = FVector(DecalExtent, DecalExtent, DecalExtent);
+	}
 }

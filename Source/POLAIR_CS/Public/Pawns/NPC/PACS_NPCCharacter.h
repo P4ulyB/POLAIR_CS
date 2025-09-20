@@ -7,6 +7,7 @@
 
 class UPACS_NPCConfig;
 class UBoxComponent;
+class UDecalComponent;
 struct FStreamableHandle;
 
 UCLASS(BlueprintType, Blueprintable)
@@ -26,6 +27,9 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "NPC|Collision")
 	TObjectPtr<UBoxComponent> CollisionBox;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "NPC|Collision")
+	TObjectPtr<UDecalComponent> CollisionDecal;
 
 public:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;

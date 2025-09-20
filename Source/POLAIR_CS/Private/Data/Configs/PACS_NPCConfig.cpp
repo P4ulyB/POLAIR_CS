@@ -23,6 +23,17 @@ void UPACS_NPCConfig::ToVisualConfig(FPACS_NPCVisualConfig& Out) const
 	// Always include collision scale even if 0
 	Out.FieldsMask |= 0x4;
 	Out.CollisionScaleSteps = CollisionScaleSteps;
+
+	// Always include decal size multiplier
+	Out.FieldsMask |= 0x8;
+	Out.DecalSizeMultiplier = DecalSizeMultiplier;
+
+	// Include decal material if set
+	if (DecalMaterial.IsValid() || DecalMaterial.ToSoftObjectPath().IsValid())
+	{
+		Out.FieldsMask |= 0x10;
+		Out.DecalMaterialPath = DecalMaterial.ToSoftObjectPath();
+	}
 }
 
 #if WITH_EDITOR
