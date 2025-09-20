@@ -2,7 +2,8 @@
 
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
-#include "Engine/AssetManager.h"
+#include "Engine/SkeletalMesh.h"
+#include "Animation/AnimInstance.h"
 #include "Data/PACS_NPCVisualConfig.h"
 
 #if WITH_EDITOR
@@ -17,11 +18,11 @@ class POLAIR_CS_API UPACS_NPCConfig : public UDataAsset
 	GENERATED_BODY()
 
 public:
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Visual", meta = (DisplayName = "Skeletal Mesh"))
-	FPrimaryAssetId SkeletalMeshId;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NPC|Visuals")
+	TSoftObjectPtr<USkeletalMesh> SkeletalMesh;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Visual", meta = (DisplayName = "Animation Blueprint"))
-	FPrimaryAssetId AnimBPId;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NPC|Visuals")
+	TSoftClassPtr<UAnimInstance> AnimClass;
 
 	void ToVisualConfig(struct FPACS_NPCVisualConfig& Out) const;
 

@@ -2,31 +2,25 @@
 
 #include "CoreMinimal.h"
 #include "Engine/NetSerialization.h"
-#include "Engine/AssetManager.h"
 #include "PACS_NPCVisualConfig.generated.h"
 
-USTRUCT(BlueprintType)
+USTRUCT()
 struct POLAIR_CS_API FPACS_NPCVisualConfig
 {
 	GENERATED_BODY()
 
 	UPROPERTY()
-	FPrimaryAssetId MeshId;
+	uint8 FieldsMask = 0; // bit0: Mesh, bit1: Anim
 
 	UPROPERTY()
-	FPrimaryAssetId AnimBPId;
+	FSoftObjectPath MeshPath;
 
 	UPROPERTY()
-	uint8 FieldsMask = 0;
-
-	FPACS_NPCVisualConfig()
-		: FieldsMask(0)
-	{
-	}
+	FSoftObjectPath AnimClassPath;
 
 	bool operator==(const FPACS_NPCVisualConfig& Other) const
 	{
-		return MeshId == Other.MeshId && AnimBPId == Other.AnimBPId && FieldsMask == Other.FieldsMask;
+		return FieldsMask == Other.FieldsMask && MeshPath == Other.MeshPath && AnimClassPath == Other.AnimClassPath;
 	}
 
 	bool operator!=(const FPACS_NPCVisualConfig& Other) const
@@ -34,7 +28,15 @@ struct POLAIR_CS_API FPACS_NPCVisualConfig
 		return !(*this == Other);
 	}
 
-	bool NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess);
+	// Initial-only, tiny; serialise just the bits/paths
+	bool NetSerialize(FArchive& Ar, UPackageMap*, bool& bOutSuccess)
+	{
+		Ar.SerializeBits(&FieldsMask, 2);
+		if (FieldsMask & 0x1) Ar << MeshPath;
+		if (FieldsMask & 0x2) Ar << AnimClassPath;
+		bOutSuccess = true;
+		return true;
+	}
 };
 
 template<>

@@ -25,6 +25,7 @@ protected:
 
 public:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+	virtual void PreInitializeComponents() override;
 	virtual void BeginPlay() override;
 
 protected:
@@ -33,7 +34,6 @@ protected:
 
 	void ApplyVisuals_Client();
 	void BuildVisualConfigFromAsset_Server();
-	void OnAssetsLoaded();
 
 private:
 	bool bVisualsApplied = false;
