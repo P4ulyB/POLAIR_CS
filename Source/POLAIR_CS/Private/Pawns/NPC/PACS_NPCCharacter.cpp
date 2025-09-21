@@ -106,6 +106,14 @@ void APACS_NPCCharacter::ApplyVisuals_Client()
 		GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::OnlyTickPoseWhenRendered;
 		GetMesh()->bEnableUpdateRateOptimizations = true;
 
+		// Apply mesh transform if specified
+		if (VisualConfig.FieldsMask & 0x10)
+		{
+			GetMesh()->SetRelativeLocation(VisualConfig.MeshLocation);
+			GetMesh()->SetRelativeRotation(VisualConfig.MeshRotation);
+			GetMesh()->SetRelativeScale3D(VisualConfig.MeshScale);
+		}
+
 		// Apply loaded decal material if specified
 		if (VisualConfig.FieldsMask & 0x8)
 		{

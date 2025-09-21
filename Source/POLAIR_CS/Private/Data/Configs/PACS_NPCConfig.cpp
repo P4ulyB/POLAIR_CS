@@ -30,6 +30,15 @@ void UPACS_NPCConfig::ToVisualConfig(FPACS_NPCVisualConfig& Out) const
 		Out.FieldsMask |= 0x8;
 		Out.DecalMaterialPath = DecalMaterial.ToSoftObjectPath();
 	}
+
+	// Include mesh transform if different from defaults
+	if (!MeshLocation.IsZero() || !MeshRotation.IsZero() || !MeshScale.Equals(FVector::OneVector))
+	{
+		Out.FieldsMask |= 0x10;
+		Out.MeshLocation = MeshLocation;
+		Out.MeshRotation = MeshRotation;
+		Out.MeshScale = MeshScale;
+	}
 }
 
 #if WITH_EDITOR
