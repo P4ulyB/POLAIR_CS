@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Engine/DeveloperSettings.h"
+#include "Engine/Texture2D.h"
 #include "Data/PACS_NPCVisualConfig.h"
 #include "PACS_SelectionClassConfig.generated.h"
 
@@ -31,19 +32,17 @@ public:
 		meta = (DisplayName = "Selection Material Instance"))
 	TSoftObjectPtr<UMaterialInterface> SelectionMaterial;
 
-	// Material scalar parameters (matching user requirements)
-	// Epic naming convention: Semantic names, not abbreviated (from MaterialExpressionParameter)
+	// Material parameters
+
+	// Epic pattern: FLinearColor for color parameters (used by material instances)
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Material Parameters",
-		meta = (DisplayName = "Brightness", ClampMin = 0.0f, ClampMax = 2.0f))
+		meta = (DisplayName = "Colour"))
+	FLinearColor Colour = FLinearColor::White;
+
+	// Epic pattern: Scalar for brightness intensity
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Material Parameters",
+		meta = (DisplayName = "Brightness", ClampMin = 0.0f, ClampMax = 40.0f))
 	float Brightness = 1.0f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Material Parameters",
-		meta = (DisplayName = "Texture", ClampMin = 0.0f, ClampMax = 10.0f))
-	float Texture = 0.0f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Material Parameters",
-		meta = (DisplayName = "Colour", ClampMin = 0.0f, ClampMax = 10.0f))
-	float Colour = 0.0f;
 
 	// Validation and utility methods
 	bool IsValid() const;

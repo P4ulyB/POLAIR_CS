@@ -88,7 +88,6 @@ void FPACS_NPCVisualConfig::ApplySelectionFromGlobalSettings(const UClass* Chara
 
 		// Apply selection parameters
 		SelectionBrightness = Config->Brightness;
-		SelectionTexture = Config->Texture;
 		SelectionColour = Config->Colour;
 		FieldsMask |= 0x20; // Set selection parameters bit
 	}

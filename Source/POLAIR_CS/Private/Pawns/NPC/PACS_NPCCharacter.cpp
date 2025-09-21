@@ -10,6 +10,8 @@
 #include "Components/BoxComponent.h"
 #include "Components/DecalComponent.h"
 #include "Materials/MaterialInterface.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "Engine/Texture2D.h"
 #include "GameFramework/CharacterMovementComponent.h"
 
 APACS_NPCCharacter::APACS_NPCCharacter()
@@ -129,7 +131,29 @@ void APACS_NPCCharacter::ApplyVisuals_Client()
 			{
 				if (CollisionDecal)
 				{
-					CollisionDecal->SetDecalMaterial(DecalMat);
+					// Check if selection parameters are specified
+					if (VisualConfig.FieldsMask & 0x20)
+					{
+						// Create dynamic material instance to apply parameters
+						// Epic pattern: UMaterialInstanceDynamic::Create with outer as this actor
+						UMaterialInstanceDynamic* DynamicDecalMat = UMaterialInstanceDynamic::Create(DecalMat, this);
+						if (DynamicDecalMat)
+						{
+							// Apply brightness scalar parameter
+							DynamicDecalMat->SetScalarParameterValue(FName(TEXT("Brightness")), VisualConfig.SelectionBrightness);
+
+							// Apply color vector parameter
+							DynamicDecalMat->SetVectorParameterValue(FName(TEXT("Colour")), VisualConfig.SelectionColour);
+
+							// Set the dynamic material instance on the decal
+							CollisionDecal->SetDecalMaterial(DynamicDecalMat);
+						}
+					}
+					else
+					{
+						// No parameters specified, use material as-is
+						CollisionDecal->SetDecalMaterial(DecalMat);
+					}
 				}
 			}
 		}

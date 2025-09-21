@@ -7,8 +7,7 @@ FPACS_SelectionClassConfig::FPACS_SelectionClassConfig()
 {
 	// Initialize with sensible defaults
 	Brightness = 1.0f;
-	Texture = 0.0f;
-	Colour = 0.0f;
+	Colour = FLinearColor::White;
 }
 
 bool FPACS_SelectionClassConfig::IsValid() const
@@ -55,8 +54,7 @@ bool FPACS_SelectionClassConfig::operator==(const FPACS_SelectionClassConfig& Ot
 	return TargetClass == Other.TargetClass &&
 		   SelectionMaterial == Other.SelectionMaterial &&
 		   FMath::IsNearlyEqual(Brightness, Other.Brightness) &&
-		   FMath::IsNearlyEqual(Texture, Other.Texture) &&
-		   FMath::IsNearlyEqual(Colour, Other.Colour);
+		   Colour.Equals(Other.Colour);
 }
 
 bool FPACS_SelectionClassConfig::operator!=(const FPACS_SelectionClassConfig& Other) const

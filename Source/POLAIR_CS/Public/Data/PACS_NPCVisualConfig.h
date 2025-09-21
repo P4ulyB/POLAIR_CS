@@ -39,10 +39,7 @@ struct POLAIR_CS_API FPACS_NPCVisualConfig
 	float SelectionBrightness = 1.0f;
 
 	UPROPERTY()
-	float SelectionTexture = 0.0f;
-
-	UPROPERTY()
-	float SelectionColour = 0.0f;
+	FLinearColor SelectionColour = FLinearColor::White;
 
 	// Global selection system integration methods
 	void ApplySelectionFromGlobalSettings(const UClass* CharacterClass);
@@ -51,7 +48,7 @@ struct POLAIR_CS_API FPACS_NPCVisualConfig
 
 	bool operator==(const FPACS_NPCVisualConfig& Other) const
 	{
-		return FieldsMask == Other.FieldsMask && MeshPath == Other.MeshPath && AnimClassPath == Other.AnimClassPath && CollisionScaleSteps == Other.CollisionScaleSteps && DecalMaterialPath == Other.DecalMaterialPath && MeshLocation.Equals(Other.MeshLocation) && MeshRotation.Equals(Other.MeshRotation) && MeshScale.Equals(Other.MeshScale) && FMath::IsNearlyEqual(SelectionBrightness, Other.SelectionBrightness) && FMath::IsNearlyEqual(SelectionTexture, Other.SelectionTexture) && FMath::IsNearlyEqual(SelectionColour, Other.SelectionColour);
+		return FieldsMask == Other.FieldsMask && MeshPath == Other.MeshPath && AnimClassPath == Other.AnimClassPath && CollisionScaleSteps == Other.CollisionScaleSteps && DecalMaterialPath == Other.DecalMaterialPath && MeshLocation.Equals(Other.MeshLocation) && MeshRotation.Equals(Other.MeshRotation) && MeshScale.Equals(Other.MeshScale) && FMath::IsNearlyEqual(SelectionBrightness, Other.SelectionBrightness) && SelectionColour.Equals(Other.SelectionColour);
 	}
 
 	bool operator!=(const FPACS_NPCVisualConfig& Other) const
@@ -76,7 +73,6 @@ struct POLAIR_CS_API FPACS_NPCVisualConfig
 		if (FieldsMask & 0x20)
 		{
 			Ar << SelectionBrightness;
-			Ar << SelectionTexture;
 			Ar << SelectionColour;
 		}
 		bOutSuccess = true;
