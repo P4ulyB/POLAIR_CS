@@ -226,6 +226,16 @@ FString UPACS_InputHandlerComponent::GetCurrentContextName() const
     return ContextName;
 }
 
+UInputMappingContext* UPACS_InputHandlerComponent::GetCurrentBaseContext() const
+{
+    if (!bIsInitialized || !InputConfig)
+    {
+        return nullptr;
+    }
+
+    return GetBaseContext(CurrentBaseMode);
+}
+
 void UPACS_InputHandlerComponent::BuildActionNameMap()
 {
     if (!InputConfig) return;

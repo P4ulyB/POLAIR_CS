@@ -58,6 +58,10 @@ public:
     UFUNCTION(BlueprintPure, Category="Input")
     FString GetCurrentContextName() const;
 
+    // Get current active base context for hover probe integration
+    UFUNCTION(BlueprintPure, Category="Input")
+    UInputMappingContext* GetCurrentBaseContext() const;
+
     void HandleAction(const FInputActionInstance& Instance);
 
     void OnSubsystemAvailable();

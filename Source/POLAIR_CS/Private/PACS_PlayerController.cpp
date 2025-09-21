@@ -16,6 +16,7 @@ APACS_PlayerController::APACS_PlayerController()
 {
     InputHandler = CreateDefaultSubobject<UPACS_InputHandlerComponent>(TEXT("InputHandler"));
     EdgeScrollComponent = CreateDefaultSubobject<UPACS_EdgeScrollComponent>(TEXT("EdgeScrollComponent"));
+    HoverProbe = CreateDefaultSubobject<UPACS_HoverProbe>(TEXT("HoverProbe"));
     PrimaryActorTick.bCanEverTick = true;
 
 }

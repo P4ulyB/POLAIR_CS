@@ -7,6 +7,7 @@
 #include "PACS_PlayerState.h"
 #include "Engine/TimerHandle.h"
 #include "PACS_EdgeScrollComponent.h"
+#include "Components/PACS_HoverProbe.h"
 #include "PACS_PlayerController.generated.h"
 
 UCLASS()
@@ -76,6 +77,10 @@ public:
     UFUNCTION(BlueprintCallable, Category="Input")
     UPACS_EdgeScrollComponent* GetEdgeScrollComponent() const { return EdgeScrollComponent; }
 
+    // Getter for HoverProbe component
+    UFUNCTION(BlueprintCallable, Category="Selection")
+    UPACS_HoverProbe* GetHoverProbe() const { return HoverProbe; }
+
 private:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Input",
         meta=(AllowPrivateAccess="true"))
@@ -84,6 +89,11 @@ private:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Input",
         meta=(AllowPrivateAccess="true"))
     TObjectPtr<UPACS_EdgeScrollComponent> EdgeScrollComponent;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Selection",
+        meta=(AllowPrivateAccess="true"))
+    TObjectPtr<UPACS_HoverProbe> HoverProbe;
+
     void ValidateInputSystem();
     void DisplayInputContextDebug();
 };
