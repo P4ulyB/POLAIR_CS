@@ -1,5 +1,6 @@
 #include "Data/Configs/PACS_NPCConfig.h"
 #include "Data/PACS_NPCVisualConfig.h"
+#include "Settings/PACS_SelectionSystemSettings.h"
 
 #if WITH_EDITOR
 #include "Engine/Blueprint.h"
@@ -61,3 +62,46 @@ EDataValidationResult UPACS_NPCConfig::IsDataValid(FDataValidationContext& Conte
 	return Result;
 }
 #endif
+
+// FPACS_NPCVisualConfig method implementations
+void FPACS_NPCVisualConfig::ApplySelectionFromGlobalSettings(const UClass* CharacterClass)
+{
+	if (!CharacterClass)
+	{
+		return;
+	}
+
+	// Get global selection settings
+	const UPACS_SelectionSystemSettings* Settings = UPACS_SelectionSystemSettings::Get();
+	if (!Settings || !Settings->HasValidConfiguration())
+	{
+		return;
+	}
+
+	// Find configuration for this character class
+	const FPACS_SelectionClassConfig* Config = Settings->GetConfigForClass(CharacterClass);
+	if (Config && Config->IsValid())
+	{
+		// Apply selection material and parameters
+		DecalMaterialPath = Config->SelectionMaterial.ToSoftObjectPath();
+		FieldsMask |= 0x8; // Set decal material bit
+
+		// Apply selection parameters
+		SelectionBrightness = Config->Brightness;
+		SelectionTexture = Config->Texture;
+		SelectionColour = Config->Colour;
+		FieldsMask |= 0x20; // Set selection parameters bit
+	}
+}
+
+bool FPACS_NPCVisualConfig::HasSelectionConfiguration() const
+{
+	return (FieldsMask & 0x20) != 0; // Check if selection parameters bit is set
+}
+
+FPACS_NPCVisualConfig FPACS_NPCVisualConfig::FromGlobalSettings(const UClass* CharacterClass)
+{
+	FPACS_NPCVisualConfig Config;
+	Config.ApplySelectionFromGlobalSettings(CharacterClass);
+	return Config;
+}

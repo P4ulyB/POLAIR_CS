@@ -1,5 +1,6 @@
 #include "Pawns/NPC/PACS_NPCCharacter.h"
 #include "Data/Configs/PACS_NPCConfig.h"
+#include "Settings/PACS_SelectionSystemSettings.h"
 #include "Net/UnrealNetwork.h"
 #include "Engine/AssetManager.h"
 #include "Engine/StreamableManager.h"
@@ -61,6 +62,12 @@ void APACS_NPCCharacter::PreInitializeComponents()
 void APACS_NPCCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// Server: Apply global selection settings after base visual config is built
+	if (HasAuthority())
+	{
+		ApplyGlobalSelectionSettings();
+	}
 
 	// Client: if VisualConfig already valid, apply visuals
 	if (!HasAuthority() && VisualConfig.FieldsMask != 0 && !bVisualsApplied)
@@ -182,4 +189,21 @@ void APACS_NPCCharacter::ApplyCollisionFromMesh()
 		// Decal size uses the same uniform extent for all dimensions to match collision box
 		CollisionDecal->DecalSize = FVector(UniformExtent, UniformExtent, UniformExtent);
 	}
+}
+
+void APACS_NPCCharacter::ApplyGlobalSelectionSettings()
+{
+	// Epic pattern: Server authority check at start of mutating method
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	// Apply global selection configuration to this character
+	// This extends the existing VisualConfig with selection parameters
+	VisualConfig.ApplySelectionFromGlobalSettings(GetClass());
+
+	// Note: No need to call OnRep_VisualConfig() here as the replication
+	// will be triggered automatically when VisualConfig is modified
+	// The clients will receive the updated VisualConfig and apply the selection materials
 }

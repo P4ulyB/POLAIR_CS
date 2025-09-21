@@ -8,28 +8,30 @@ public class POLAIR_CS : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 	
-		PublicDependencyModuleNames.AddRange(new string[] { 
-			"Core", 
-			"CoreUObject", 
-			"Engine", 
-			"InputCore", 
-			"EnhancedInput", 
+		PublicDependencyModuleNames.AddRange(new string[] {
+			"Core",
+			"CoreUObject",
+			"Engine",
+			"InputCore",
+			"EnhancedInput",
 			"HeadMountedDisplay",
-			"UMG", 
-			"Slate", 
+			"UMG",
+			"Slate",
 			"SlateCore",
-			"Json", 
-			"JsonUtilities", 
-			"HTTP", 
+			"Json",
+			"JsonUtilities",
+			"HTTP",
 			"PlayFabGSDK",
-			"NetCore"
+			"NetCore",
+			"DeveloperSettings" // Required for PACS Selection System settings
 		});
 
-		PrivateDependencyModuleNames.AddRange(new string[] { 
-			"PlayFab", 
-			"PlayFabCpp", 
+		PrivateDependencyModuleNames.AddRange(new string[] {
+			"PlayFab",
+			"PlayFabCpp",
 			"PlayFabCommon",
-			"XRBase" // Required for UHeadMountedDisplayFunctionLibrary
+			"XRBase", // Required for UHeadMountedDisplayFunctionLibrary
+			"Settings" // Required for ISettingsModule registration
 		});
 
 		if (Target.Configuration != UnrealTargetConfiguration.Shipping)

@@ -43,6 +43,7 @@ protected:
 	void ApplyVisuals_Client();
 	void BuildVisualConfigFromAsset_Server();
 	void ApplyCollisionFromMesh();
+	void ApplyGlobalSelectionSettings();
 
 private:
 	bool bVisualsApplied = false;
