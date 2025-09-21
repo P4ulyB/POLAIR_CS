@@ -6,8 +6,14 @@
 FPACS_SelectionClassConfig::FPACS_SelectionClassConfig()
 {
 	// Initialize with sensible defaults
-	Brightness = 1.0f;
-	Colour = FLinearColor::White;
+	AvailableBrightness = 1.0f;
+	AvailableColour = FLinearColor::Green;
+	SelectedBrightness = 1.5f;
+	SelectedColour = FLinearColor::Yellow;
+	HoveredBrightness = 2.0f;
+	HoveredColour = FLinearColor(0.0f, 1.0f, 1.0f, 1.0f);
+	UnavailableBrightness = 0.5f;
+	UnavailableColour = FLinearColor::Red;
 }
 
 bool FPACS_SelectionClassConfig::IsValid() const
@@ -53,8 +59,14 @@ bool FPACS_SelectionClassConfig::operator==(const FPACS_SelectionClassConfig& Ot
 {
 	return TargetClass == Other.TargetClass &&
 		   SelectionMaterial == Other.SelectionMaterial &&
-		   FMath::IsNearlyEqual(Brightness, Other.Brightness) &&
-		   Colour.Equals(Other.Colour);
+		   FMath::IsNearlyEqual(AvailableBrightness, Other.AvailableBrightness) &&
+		   AvailableColour.Equals(Other.AvailableColour) &&
+		   FMath::IsNearlyEqual(SelectedBrightness, Other.SelectedBrightness) &&
+		   SelectedColour.Equals(Other.SelectedColour) &&
+		   FMath::IsNearlyEqual(HoveredBrightness, Other.HoveredBrightness) &&
+		   HoveredColour.Equals(Other.HoveredColour) &&
+		   FMath::IsNearlyEqual(UnavailableBrightness, Other.UnavailableBrightness) &&
+		   UnavailableColour.Equals(Other.UnavailableColour);
 }
 
 bool FPACS_SelectionClassConfig::operator!=(const FPACS_SelectionClassConfig& Other) const

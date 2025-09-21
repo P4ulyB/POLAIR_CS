@@ -32,17 +32,49 @@ public:
 		meta = (DisplayName = "Selection Material Instance"))
 	TSoftObjectPtr<UMaterialInterface> SelectionMaterial;
 
-	// Material parameters
+	// Available State (default startup state)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Available State",
+		meta = (DisplayName = "Available Brightness", ClampMin = 0.0f, ClampMax = 40.0f,
+				ToolTip = "Brightness when NPC is available for interaction"))
+	float AvailableBrightness = 1.0f;
 
-	// Epic pattern: FLinearColor for color parameters (used by material instances)
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Material Parameters",
-		meta = (DisplayName = "Colour"))
-	FLinearColor Colour = FLinearColor::White;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Available State",
+		meta = (DisplayName = "Available Colour",
+				ToolTip = "Color when NPC is available for interaction"))
+	FLinearColor AvailableColour = FLinearColor::Green;
 
-	// Epic pattern: Scalar for brightness intensity
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Material Parameters",
-		meta = (DisplayName = "Brightness", ClampMin = 0.0f, ClampMax = 40.0f))
-	float Brightness = 1.0f;
+	// Selected State
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Selected State",
+		meta = (DisplayName = "Selected Brightness", ClampMin = 0.0f, ClampMax = 40.0f,
+				ToolTip = "Brightness when NPC is currently selected"))
+	float SelectedBrightness = 1.5f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Selected State",
+		meta = (DisplayName = "Selected Colour",
+				ToolTip = "Color when NPC is currently selected"))
+	FLinearColor SelectedColour = FLinearColor::Yellow;
+
+	// Hovered State
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hovered State",
+		meta = (DisplayName = "Hovered Brightness", ClampMin = 0.0f, ClampMax = 40.0f,
+				ToolTip = "Brightness when NPC is being hovered over"))
+	float HoveredBrightness = 2.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hovered State",
+		meta = (DisplayName = "Hovered Colour",
+				ToolTip = "Color when NPC is being hovered over"))
+	FLinearColor HoveredColour = FLinearColor(0.0f, 1.0f, 1.0f, 1.0f);
+
+	// Unavailable State
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Unavailable State",
+		meta = (DisplayName = "Unavailable Brightness", ClampMin = 0.0f, ClampMax = 40.0f,
+				ToolTip = "Brightness when NPC is unavailable for interaction"))
+	float UnavailableBrightness = 0.5f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Unavailable State",
+		meta = (DisplayName = "Unavailable Colour",
+				ToolTip = "Color when NPC is unavailable for interaction"))
+	FLinearColor UnavailableColour = FLinearColor::Red;
 
 	// Validation and utility methods
 	bool IsValid() const;

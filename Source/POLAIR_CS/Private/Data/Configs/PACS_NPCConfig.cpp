@@ -10,7 +10,7 @@
 
 void UPACS_NPCConfig::ToVisualConfig(FPACS_NPCVisualConfig& Out) const
 {
-	Out = {};
+	Out = FPACS_NPCVisualConfig();
 	if (SkeletalMesh.IsValid() || SkeletalMesh.ToSoftObjectPath().IsValid())
 	{
 		Out.FieldsMask |= 0x1;
@@ -40,6 +40,20 @@ void UPACS_NPCConfig::ToVisualConfig(FPACS_NPCVisualConfig& Out) const
 		Out.MeshRotation = MeshRotation;
 		Out.MeshScale = MeshScale;
 	}
+
+	// Include selection parameters from this NPC config
+	Out.FieldsMask |= 0x20; // Set selection parameters bit
+	Out.AvailableBrightness = AvailableBrightness;
+	Out.AvailableColour = AvailableColour;
+	Out.SelectedBrightness = SelectedBrightness;
+	Out.SelectedColour = SelectedColour;
+	Out.HoveredBrightness = HoveredBrightness;
+	Out.HoveredColour = HoveredColour;
+	Out.UnavailableBrightness = UnavailableBrightness;
+	Out.UnavailableColour = UnavailableColour;
+
+	// Set Available state as default startup state
+	Out.SetSelectionState(FPACS_NPCVisualConfig::ESelectionState::Available);
 }
 
 #if WITH_EDITOR
@@ -86,9 +100,18 @@ void FPACS_NPCVisualConfig::ApplySelectionFromGlobalSettings(const UClass* Chara
 		DecalMaterialPath = Config->SelectionMaterial.ToSoftObjectPath();
 		FieldsMask |= 0x8; // Set decal material bit
 
-		// Apply selection parameters
-		SelectionBrightness = Config->Brightness;
-		SelectionColour = Config->Colour;
+		// Store all state parameters
+		AvailableBrightness = Config->AvailableBrightness;
+		AvailableColour = Config->AvailableColour;
+		SelectedBrightness = Config->SelectedBrightness;
+		SelectedColour = Config->SelectedColour;
+		HoveredBrightness = Config->HoveredBrightness;
+		HoveredColour = Config->HoveredColour;
+		UnavailableBrightness = Config->UnavailableBrightness;
+		UnavailableColour = Config->UnavailableColour;
+
+		// Set Available state as default startup state
+		SetSelectionState(ESelectionState::Available);
 		FieldsMask |= 0x20; // Set selection parameters bit
 	}
 }
@@ -96,6 +119,37 @@ void FPACS_NPCVisualConfig::ApplySelectionFromGlobalSettings(const UClass* Chara
 bool FPACS_NPCVisualConfig::HasSelectionConfiguration() const
 {
 	return (FieldsMask & 0x20) != 0; // Check if selection parameters bit is set
+}
+
+void FPACS_NPCVisualConfig::SetSelectionState(ESelectionState NewState)
+{
+	CurrentSelectionState = static_cast<uint8>(NewState);
+
+	// Update active parameters based on state
+	switch (NewState)
+	{
+		case ESelectionState::Available:
+			SelectionBrightness = AvailableBrightness;
+			SelectionColour = AvailableColour;
+			break;
+		case ESelectionState::Selected:
+			SelectionBrightness = SelectedBrightness;
+			SelectionColour = SelectedColour;
+			break;
+		case ESelectionState::Hovered:
+			SelectionBrightness = HoveredBrightness;
+			SelectionColour = HoveredColour;
+			break;
+		case ESelectionState::Unavailable:
+			SelectionBrightness = UnavailableBrightness;
+			SelectionColour = UnavailableColour;
+			break;
+	}
+}
+
+FPACS_NPCVisualConfig::ESelectionState FPACS_NPCVisualConfig::GetCurrentSelectionState() const
+{
+	return static_cast<ESelectionState>(CurrentSelectionState);
 }
 
 FPACS_NPCVisualConfig FPACS_NPCVisualConfig::FromGlobalSettings(const UClass* CharacterClass)

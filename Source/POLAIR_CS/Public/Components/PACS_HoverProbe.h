@@ -30,6 +30,11 @@ public:
 				ToolTip="Hover probe only works when one of these input contexts is active. Leave empty to always be active."))
 	TArray<TObjectPtr<UInputMappingContext>> ActiveInputContexts;
 
+	// Enable/disable debug messages for hover hits
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Hover|Debug",
+		meta=(DisplayName="Show Debug Messages"))
+	bool bShowDebugMessages = false;
+
 	// Read-only status for debugging
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Hover",
 		meta=(DisplayName="Currently Active"))
@@ -65,6 +70,7 @@ private:
 
 	void ProbeOnce();
 	void ClearHover();
+	void ShowHoverDebugMessage(const FHitResult& Hit);
 
 	// Cleanup handlers
 	UFUNCTION()

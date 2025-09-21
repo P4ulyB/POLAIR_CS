@@ -39,6 +39,50 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NPC|Decal|Materials")
 	TSoftObjectPtr<class UMaterialInterface> DecalMaterial;
 
+	// Available State (default startup state)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NPC|Selection|Available State",
+		meta = (DisplayName = "Brightness", ClampMin = 0.0f, ClampMax = 40.0f,
+				ToolTip = "Brightness when NPC is available for interaction"))
+	float AvailableBrightness = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NPC|Selection|Available State",
+		meta = (DisplayName = "Colour",
+				ToolTip = "Color when NPC is available for interaction"))
+	FLinearColor AvailableColour = FLinearColor::Green;
+
+	// Selected State
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NPC|Selection|Selected State",
+		meta = (DisplayName = "Brightness", ClampMin = 0.0f, ClampMax = 40.0f,
+				ToolTip = "Brightness when NPC is currently selected"))
+	float SelectedBrightness = 1.5f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NPC|Selection|Selected State",
+		meta = (DisplayName = "Colour",
+				ToolTip = "Color when NPC is currently selected"))
+	FLinearColor SelectedColour = FLinearColor::Yellow;
+
+	// Hovered State
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NPC|Selection|Hovered State",
+		meta = (DisplayName = "Brightness", ClampMin = 0.0f, ClampMax = 40.0f,
+				ToolTip = "Brightness when NPC is being hovered over"))
+	float HoveredBrightness = 2.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NPC|Selection|Hovered State",
+		meta = (DisplayName = "Colour",
+				ToolTip = "Color when NPC is being hovered over"))
+	FLinearColor HoveredColour = FLinearColor(0.0f, 1.0f, 1.0f, 1.0f);
+
+	// Unavailable State
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NPC|Selection|Unavailable State",
+		meta = (DisplayName = "Brightness", ClampMin = 0.0f, ClampMax = 40.0f,
+				ToolTip = "Brightness when NPC is unavailable for interaction"))
+	float UnavailableBrightness = 0.5f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NPC|Selection|Unavailable State",
+		meta = (DisplayName = "Colour",
+				ToolTip = "Color when NPC is unavailable for interaction"))
+	FLinearColor UnavailableColour = FLinearColor::Red;
+
 	void ToVisualConfig(struct FPACS_NPCVisualConfig& Out) const;
 
 #if WITH_EDITOR
