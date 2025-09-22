@@ -41,6 +41,11 @@ public:
     void ServerReportHMDState(EHMDState DetectedState);
     void ServerReportHMDState_Implementation(EHMDState DetectedState);
 
+    // Server RPC for PlayFab player name transmission
+    UFUNCTION(Server, Reliable)
+    void ServerSetPlayFabPlayerName(const FString& PlayerName);
+    void ServerSetPlayFabPlayerName_Implementation(const FString& PlayerName);
+
     // VR integration delegate handles
     FDelegateHandle OnPutOnHandle, OnRemovedHandle, OnRecenterHandle;
     void HandleHMDPutOn();

@@ -5,6 +5,7 @@
 #include "IXRTrackingSystem.h"
 #include "Engine/Engine.h"
 #include "PACS/Heli/PACS_CandidateHelicopterCharacter.h"
+#include "PACSLaunchArgSubsystem.h"
 
 #if !UE_SERVER
 #include "EnhancedInputComponent.h"
@@ -40,6 +41,25 @@ void APACS_PlayerController::BeginPlay()
         OnRemovedHandle = FCoreDelegates::VRHeadsetRemovedFromHead.AddUObject(this, &ThisClass::HandleHMDRemoved);
         OnRecenterHandle= FCoreDelegates::VRHeadsetRecenter.AddUObject(this, &ThisClass::HandleHMDRecenter);
 
+    }
+
+    // Client sends PlayFab player name to server
+    if (!HasAuthority())
+    {
+        FString PlayerName = TEXT("NoUser"); // Default fallback
+
+        if (UGameInstance* GI = GetGameInstance())
+        {
+            if (UPACSLaunchArgSubsystem* LaunchArgs = GI->GetSubsystem<UPACSLaunchArgSubsystem>())
+            {
+                if (!LaunchArgs->Parsed.PlayFabPlayerName.IsEmpty())
+                {
+                    PlayerName = LaunchArgs->Parsed.PlayFabPlayerName;
+                }
+            }
+        }
+
+        ServerSetPlayFabPlayerName(PlayerName);
     }
 }
 
@@ -349,7 +369,7 @@ void APACS_PlayerController::DisplayInputContextDebug()
 }
 
 EPACS_InputHandleResult APACS_PlayerController::HandleInputAction(FName ActionName, const FInputActionValue& Value)
-{  
+{
     if (ActionName == TEXT("MenuToggle"))
     {
         if (InputHandler)
@@ -366,9 +386,33 @@ EPACS_InputHandleResult APACS_PlayerController::HandleInputAction(FName ActionNa
         }
         return EPACS_InputHandleResult::HandledConsume;
     }
-    
+
     // Pass through other actions
     return EPACS_InputHandleResult::NotHandled;
+}
+
+void APACS_PlayerController::ServerSetPlayFabPlayerName_Implementation(const FString& PlayerName)
+{
+    // Server: Epic pattern - authority check and validation
+    if (HasAuthority() && PlayerState)
+    {
+        // Validate name (basic checks for safety)
+        FString SafeName = PlayerName.IsEmpty() ? TEXT("NoUser") : PlayerName;
+
+        // Limit name length for network efficiency
+        if (SafeName.Len() > 50)
+        {
+            SafeName = SafeName.Left(50);
+        }
+
+        // Remove invalid characters (basic sanitization)
+        SafeName = SafeName.Replace(TEXT("<"), TEXT("")).Replace(TEXT(">"), TEXT(""));
+
+        // Use Epic's SetPlayerName - handles replication automatically
+        PlayerState->SetPlayerName(SafeName);
+
+        UE_LOG(LogTemp, Log, TEXT("PACS PlayerController: Set PlayFab player name to '%s'"), *SafeName);
+    }
 }
 
 
