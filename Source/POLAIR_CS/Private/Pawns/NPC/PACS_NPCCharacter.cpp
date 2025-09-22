@@ -139,6 +139,9 @@ void APACS_NPCCharacter::ApplyVisuals_Client()
 						UMaterialInstanceDynamic* DynamicDecalMat = UMaterialInstanceDynamic::Create(DecalMat, this);
 						if (DynamicDecalMat)
 						{
+							// Cache for direct hover access
+							CachedDecalMaterial = DynamicDecalMat;
+
 							// Apply brightness scalar parameter
 							DynamicDecalMat->SetScalarParameterValue(FName(TEXT("Brightness")), VisualConfig.SelectionBrightness);
 
@@ -230,4 +233,33 @@ void APACS_NPCCharacter::ApplyGlobalSelectionSettings()
 	// Note: No need to call OnRep_VisualConfig() here as the replication
 	// will be triggered automatically when VisualConfig is modified
 	// The clients will receive the updated VisualConfig and apply the selection materials
+}
+
+void APACS_NPCCharacter::SetLocalHover(bool bHovered)
+{
+	if (!CachedDecalMaterial)
+	{
+		return;
+	}
+
+	if (bHovered)
+	{
+		// Safety rail: only apply hover if material is "clean" (brightness <= 0)
+		float CurrentBrightness = 0.0f;
+		CachedDecalMaterial->GetScalarParameterValue(FName("Brightness"), CurrentBrightness);
+
+		if (CurrentBrightness <= 0.0f)
+		{
+			bIsLocallyHovered = true;
+			CachedDecalMaterial->SetScalarParameterValue(FName("Brightness"), VisualConfig.HoveredBrightness);
+			CachedDecalMaterial->SetVectorParameterValue(FName("Colour"), VisualConfig.HoveredColour);
+		}
+	}
+	else
+	{
+		// Always restore to available state on unhover
+		bIsLocallyHovered = false;
+		CachedDecalMaterial->SetScalarParameterValue(FName("Brightness"), VisualConfig.AvailableBrightness);
+		CachedDecalMaterial->SetVectorParameterValue(FName("Colour"), VisualConfig.AvailableColour);
+	}
 }

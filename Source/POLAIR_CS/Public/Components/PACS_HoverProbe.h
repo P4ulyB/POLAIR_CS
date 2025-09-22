@@ -5,7 +5,6 @@
 #include "Engine/EngineTypes.h"
 #include "PACS_HoverProbe.generated.h"
 
-class APACS_SelectionCueProxy;
 class APACS_NPCCharacter;
 class APACS_PlayerController;
 class UInputMappingContext;
@@ -29,11 +28,6 @@ public:
 		meta=(DisplayName="Active Input Contexts",
 				ToolTip="Hover probe only works when one of these input contexts is active. Leave empty to always be active."))
 	TArray<TObjectPtr<UInputMappingContext>> ActiveInputContexts;
-
-	// Enable/disable debug messages for hover hits
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Hover|Debug",
-		meta=(DisplayName="Show Debug Messages"))
-	bool bShowDebugMessages = false;
 
 	// Read-only status for debugging
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Hover",
@@ -59,7 +53,7 @@ protected:
 
 private:
 	TWeakObjectPtr<APACS_PlayerController> OwnerPC;
-	TWeakObjectPtr<APACS_SelectionCueProxy> CurrentProxy;
+	TWeakObjectPtr<APACS_NPCCharacter> CurrentNPC;
 
 	// Input context monitoring for automatic cleanup
 	FDelegateHandle InputContextHandle;
@@ -70,21 +64,20 @@ private:
 
 	void ProbeOnce();
 	void ClearHover();
-	void ShowHoverDebugMessage(const FHitResult& Hit);
 
 	// Cleanup handlers
 	UFUNCTION()
-	void OnProxyDestroyed(AActor* DestroyedActor);
+	void OnNPCDestroyed(AActor* DestroyedActor);
 	void OnInputContextChanged();
 
 	// Context monitoring
 	bool IsInputContextActive() const;
 	UInputMappingContext* GetCurrentActiveContext() const;
 
-	// Resolve NPC → Proxy from a hit result (box may be child of NPC)
-	APACS_SelectionCueProxy* ResolveProxyFrom(const FHitResult& Hit) const;
+	// Resolve NPC from a hit result (box may be child of NPC)
+	APACS_NPCCharacter* ResolveNPCFrom(const FHitResult& Hit) const;
 
 	// Safe cleanup helpers
-	void UnbindProxyDelegates();
+	void UnbindNPCDelegates();
 	void UnbindInputDelegates();
 };

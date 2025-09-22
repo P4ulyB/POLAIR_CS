@@ -31,10 +31,21 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "NPC|Collision")
 	TObjectPtr<UDecalComponent> CollisionDecal;
 
+	// Cache dynamic material instance for direct hover access
+	UPROPERTY()
+	TObjectPtr<UMaterialInstanceDynamic> CachedDecalMaterial;
+
 public:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	virtual void PreInitializeComponents() override;
 	virtual void BeginPlay() override;
+
+	// Local-only hover methods (no replication)
+	UFUNCTION(BlueprintCallable, Category="Selection")
+	void SetLocalHover(bool bHovered);
+
+	UFUNCTION(BlueprintCallable, Category="Selection")
+	bool IsLocallyHovered() const { return bIsLocallyHovered; }
 
 protected:
 	UFUNCTION()
@@ -47,5 +58,6 @@ protected:
 
 private:
 	bool bVisualsApplied = false;
+	bool bIsLocallyHovered = false;
 	TSharedPtr<FStreamableHandle> AssetLoadHandle;
 };
