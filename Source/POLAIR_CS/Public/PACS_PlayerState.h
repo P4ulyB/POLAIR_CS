@@ -2,6 +2,10 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerState.h"
+
+// Forward declaration with proper include for weak pointer usage
+#include "Pawns/NPC/PACS_NPCCharacter.h"
+
 #include "PACS_PlayerState.generated.h"
 
 UENUM(BlueprintType)
@@ -28,6 +32,20 @@ public:
     UFUNCTION()
     void OnRep_HMDState();
 
+    // Selection System - Server-only tracking (not replicated)
+    UFUNCTION(BlueprintCallable, Category = "Selection")
+    APACS_NPCCharacter* GetSelectedNPC() const { return SelectedNPC_ServerOnly.Get(); }
+
+    void SetSelectedNPC(APACS_NPCCharacter* InNPC);
+
+    // Debug helper to log current selection state
+    UFUNCTION(BlueprintCallable, Category = "Selection|Debug")
+    void LogCurrentSelection() const;
+
 protected:
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+private:
+    // Server-only: currently selected NPC for this player (weak ptr for safety)
+    TWeakObjectPtr<APACS_NPCCharacter> SelectedNPC_ServerOnly;
 };

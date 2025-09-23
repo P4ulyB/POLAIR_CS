@@ -10,6 +10,7 @@
 #include "Misc/Parse.h"
 #include "PACS/Heli/PACS_CandidateHelicopterCharacter.h"
 #include "Pawns/Assessor/PACS_AssessorPawn.h"
+#include "Pawns/NPC/PACS_NPCCharacter.h"
 #include "TimerManager.h"
 //#include "PACS/Heli/PACS_OrbitMessages.h" // only if saved offsets are passed
 
@@ -112,8 +113,23 @@ void APACSGameMode::Logout(AController* Exiting)
         return;
     }
 
+    // Clean up any NPC selections before logout
+    if (APACS_PlayerState* PS = Exiting ? Exiting->GetPlayerState<APACS_PlayerState>() : nullptr)
+    {
+        if (APACS_NPCCharacter* SelectedNPC = PS->GetSelectedNPC())
+        {
+            // Clear the selection to make NPC available again
+            SelectedNPC->CurrentSelector = nullptr;
+            SelectedNPC->ForceNetUpdate();
+            PS->SetSelectedNPC(nullptr);
+
+            UE_LOG(LogTemp, Log, TEXT("PACS GameMode: Cleared selection for disconnecting player %s"),
+                *PS->GetPlayerName());
+        }
+    }
+
     // Unregister from keepalive system before logout
-    if (UPACSServerKeepaliveSubsystem* KeepaliveSystem = 
+    if (UPACSServerKeepaliveSubsystem* KeepaliveSystem =
         GetGameInstance()->GetSubsystem<UPACSServerKeepaliveSubsystem>())
     {
         if (APlayerController* PC = Cast<APlayerController>(Exiting))

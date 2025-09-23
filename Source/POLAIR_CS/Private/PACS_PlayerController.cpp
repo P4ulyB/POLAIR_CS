@@ -6,6 +6,7 @@
 #include "Engine/Engine.h"
 #include "PACS/Heli/PACS_CandidateHelicopterCharacter.h"
 #include "PACSLaunchArgSubsystem.h"
+#include "Pawns/NPC/PACS_NPCCharacter.h"
 
 #if !UE_SERVER
 #include "EnhancedInputComponent.h"
@@ -386,6 +387,65 @@ EPACS_InputHandleResult APACS_PlayerController::HandleInputAction(FName ActionNa
         }
         return EPACS_InputHandleResult::HandledConsume;
     }
+    else if (ActionName == TEXT("Select") || ActionName == TEXT("LeftClick"))
+    {
+        // Handle selection through hover probe's current target
+        if (HoverProbe)
+        {
+            // Get current selection for debug logging
+            APACS_PlayerState* PS = GetPlayerState<APACS_PlayerState>();
+            APACS_NPCCharacter* CurrentSelection = PS ? PS->GetSelectedNPC() : nullptr;
+
+            UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] Player %s clicked - Current selection: %s"),
+                PS ? *PS->GetPlayerName() : TEXT("Unknown"),
+                CurrentSelection ? *CurrentSelection->GetName() : TEXT("None"));
+
+            // Perform line trace to get the actor under cursor
+            FHitResult HitResult;
+            if (GetHitResultUnderCursor(ECC_Visibility, false, HitResult))
+            {
+                UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] Hit actor: %s at location %s"),
+                    HitResult.GetActor() ? *HitResult.GetActor()->GetName() : TEXT("None"),
+                    *HitResult.Location.ToString());
+
+                if (APACS_NPCCharacter* NPC = Cast<APACS_NPCCharacter>(HitResult.GetActor()))
+                {
+                    UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] Clicked on NPC: %s (Currently selected by: %s)"),
+                        *NPC->GetName(),
+                        NPC->CurrentSelector ? *NPC->CurrentSelector->GetPlayerName() : TEXT("Nobody"));
+
+                    // Request selection of the NPC
+                    ServerRequestSelect(NPC);
+                }
+                else
+                {
+                    UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] Clicked on non-NPC actor: %s - deselecting"),
+                        HitResult.GetActor() ? *HitResult.GetActor()->GetName() : TEXT("Unknown"));
+
+                    // Clicked empty space - deselect
+                    ServerRequestDeselect();
+                }
+            }
+            else
+            {
+                UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] No hit result - deselecting"));
+
+                // No hit - deselect
+                ServerRequestDeselect();
+            }
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("[SELECTION DEBUG] HoverProbe not available!"));
+        }
+        return EPACS_InputHandleResult::HandledConsume;
+    }
+    else if (ActionName == TEXT("Deselect") || ActionName == TEXT("RightClick"))
+    {
+        // Explicit deselection
+        ServerRequestDeselect();
+        return EPACS_InputHandleResult::HandledConsume;
+    }
 
     // Pass through other actions
     return EPACS_InputHandleResult::NotHandled;
@@ -412,6 +472,92 @@ void APACS_PlayerController::ServerSetPlayFabPlayerName_Implementation(const FSt
         PlayerState->SetPlayerName(SafeName);
 
         UE_LOG(LogTemp, Log, TEXT("PACS PlayerController: Set PlayFab player name to '%s'"), *SafeName);
+    }
+}
+
+void APACS_PlayerController::ServerRequestSelect_Implementation(AActor* TargetActor)
+{
+    // Server authority check
+    if (!HasAuthority() || !IsValid(TargetActor))
+    {
+        UE_LOG(LogTemp, Error, TEXT("[SELECTION DEBUG] ServerRequestSelect failed - No authority or invalid target"));
+        return;
+    }
+
+    APACS_PlayerState* PS = GetPlayerState<APACS_PlayerState>();
+    APACS_NPCCharacter* TargetNPC = Cast<APACS_NPCCharacter>(TargetActor);
+
+    UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] ServerRequestSelect - Player: %s, Target: %s, NPC Cast: %s"),
+        PS ? *PS->GetPlayerName() : TEXT("NULL"),
+        *TargetActor->GetName(),
+        TargetNPC ? TEXT("SUCCESS") : TEXT("FAILED"));
+
+    if (!PS || !TargetNPC)
+    {
+        UE_LOG(LogTemp, Error, TEXT("[SELECTION DEBUG] ServerRequestSelect failed - PlayerState or NPC cast failed"));
+        return;
+    }
+
+    // Release previous selection if any
+    if (APACS_NPCCharacter* PreviousNPC = PS->GetSelectedNPC())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] Releasing previous selection: %s"), *PreviousNPC->GetName());
+        PreviousNPC->CurrentSelector = nullptr;
+        PreviousNPC->ForceNetUpdate();
+        PS->SetSelectedNPC(nullptr);
+    }
+
+    // If target is available (not selected by anyone), claim it
+    if (!TargetNPC->CurrentSelector)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] SUCCESS: %s selected %s"),
+            *PS->GetPlayerName(), *TargetNPC->GetName());
+
+        TargetNPC->CurrentSelector = PS;
+        TargetNPC->ForceNetUpdate();
+        PS->SetSelectedNPC(TargetNPC);
+    }
+    else
+    {
+        // Already owned by someone else
+        UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] BLOCKED: %s tried to select %s but it's already selected by %s"),
+            *PS->GetPlayerName(), *TargetNPC->GetName(),
+            *TargetNPC->CurrentSelector->GetPlayerName());
+    }
+}
+
+void APACS_PlayerController::ServerRequestDeselect_Implementation()
+{
+    // Server authority check
+    if (!HasAuthority())
+    {
+        UE_LOG(LogTemp, Error, TEXT("[SELECTION DEBUG] ServerRequestDeselect failed - No authority"));
+        return;
+    }
+
+    APACS_PlayerState* PS = GetPlayerState<APACS_PlayerState>();
+    if (!PS)
+    {
+        UE_LOG(LogTemp, Error, TEXT("[SELECTION DEBUG] ServerRequestDeselect failed - No PlayerState"));
+        return;
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] ServerRequestDeselect - Player: %s"), *PS->GetPlayerName());
+
+    // Release current selection
+    if (APACS_NPCCharacter* NPC = PS->GetSelectedNPC())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] SUCCESS: %s deselected %s"),
+            *PS->GetPlayerName(), *NPC->GetName());
+
+        NPC->CurrentSelector = nullptr;
+        NPC->ForceNetUpdate();
+        PS->SetSelectedNPC(nullptr);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] %s tried to deselect but had no selection"),
+            *PS->GetPlayerName());
     }
 }
 

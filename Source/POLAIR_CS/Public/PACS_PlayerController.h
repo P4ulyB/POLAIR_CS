@@ -86,6 +86,13 @@ public:
     UFUNCTION(BlueprintCallable, Category="Selection")
     UPACS_HoverProbe* GetHoverProbe() const { return HoverProbe; }
 
+    // Selection System RPCs
+    UFUNCTION(Server, Reliable)
+    void ServerRequestSelect(AActor* TargetActor);
+
+    UFUNCTION(Server, Reliable)
+    void ServerRequestDeselect();
+
 private:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Input",
         meta=(AllowPrivateAccess="true"))

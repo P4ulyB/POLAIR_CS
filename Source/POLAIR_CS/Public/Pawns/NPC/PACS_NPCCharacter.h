@@ -8,6 +8,7 @@
 class UPACS_NPCConfig;
 class UBoxComponent;
 class UDecalComponent;
+class APlayerState;
 struct FStreamableHandle;
 
 UCLASS(BlueprintType, Blueprintable)
@@ -17,6 +18,10 @@ class POLAIR_CS_API APACS_NPCCharacter : public ACharacter
 
 public:
 	APACS_NPCCharacter();
+
+	// Selection System - Server-authoritative ownership
+	UPROPERTY(ReplicatedUsing = OnRep_CurrentSelector, BlueprintReadOnly, Category = "Selection")
+	TObjectPtr<APlayerState> CurrentSelector = nullptr;
 
 protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NPC", meta = (DisplayName = "NPC Configuration"))
@@ -39,6 +44,7 @@ public:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	virtual void PreInitializeComponents() override;
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	// Local-only hover methods (no replication)
 	UFUNCTION(BlueprintCallable, Category="Selection")
@@ -47,17 +53,39 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Selection")
 	bool IsLocallyHovered() const { return bIsLocallyHovered; }
 
+	// Selection System Methods
+	UFUNCTION(BlueprintCallable, Category="Selection")
+	bool IsSelected() const { return CurrentSelector != nullptr; }
+
+	UFUNCTION(BlueprintCallable, Category="Selection")
+	bool IsSelectedBy(APlayerState* InPlayerState) const { return CurrentSelector == InPlayerState; }
+
 protected:
 	UFUNCTION()
 	void OnRep_VisualConfig();
+
+	UFUNCTION()
+	void OnRep_CurrentSelector();
 
 	void ApplyVisuals_Client();
 	void BuildVisualConfigFromAsset_Server();
 	void ApplyCollisionFromMesh();
 	void ApplyGlobalSelectionSettings();
+	void UpdateVisualState();
 
 private:
 	bool bVisualsApplied = false;
 	bool bIsLocallyHovered = false;
 	TSharedPtr<FStreamableHandle> AssetLoadHandle;
+
+	// Visual state priority system
+	enum class EVisualPriority : uint8
+	{
+		Available = 0,
+		Hovered = 1,
+		Unavailable = 2,
+		Selected = 3  // Highest priority
+	};
+
+	EVisualPriority GetCurrentVisualPriority() const;
 };

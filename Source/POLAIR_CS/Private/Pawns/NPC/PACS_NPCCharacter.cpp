@@ -1,6 +1,7 @@
 #include "Pawns/NPC/PACS_NPCCharacter.h"
 #include "Data/Configs/PACS_NPCConfig.h"
 #include "Settings/PACS_SelectionSystemSettings.h"
+#include "PACS_PlayerState.h"
 #include "Net/UnrealNetwork.h"
 #include "Engine/AssetManager.h"
 #include "Engine/StreamableManager.h"
@@ -49,6 +50,7 @@ void APACS_NPCCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& O
 
 	// Use standard replication instead of COND_InitialOnly to avoid dormancy race condition
 	DOREPLIFETIME(APACS_NPCCharacter, VisualConfig);
+	DOREPLIFETIME(APACS_NPCCharacter, CurrentSelector);
 }
 
 void APACS_NPCCharacter::PreInitializeComponents()
@@ -76,6 +78,36 @@ void APACS_NPCCharacter::BeginPlay()
 	{
 		ApplyVisuals_Client();
 	}
+}
+
+void APACS_NPCCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	// Clean up selection on server when NPC is destroyed
+	if (HasAuthority() && CurrentSelector)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] NPC EndPlay - %s was selected by %s, cleaning up"),
+			*GetName(), *CurrentSelector->GetPlayerName());
+
+		// Clear the selector's reference to this NPC
+		if (APACS_PlayerState* PS = Cast<APACS_PlayerState>(CurrentSelector))
+		{
+			if (PS->GetSelectedNPC() == this)
+			{
+				UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] Clearing PlayerState selection reference"));
+				PS->SetSelectedNPC(nullptr);
+			}
+		}
+
+		// Clear our selector reference and push the update
+		CurrentSelector = nullptr;
+		ForceNetUpdate();
+	}
+	else if (HasAuthority())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] NPC EndPlay - %s had no selector"), *GetName());
+	}
+
+	Super::EndPlay(EndPlayReason);
 }
 
 void APACS_NPCCharacter::OnRep_VisualConfig()
@@ -237,29 +269,119 @@ void APACS_NPCCharacter::ApplyGlobalSelectionSettings()
 
 void APACS_NPCCharacter::SetLocalHover(bool bHovered)
 {
-	if (!CachedDecalMaterial)
+	bIsLocallyHovered = bHovered;
+	UpdateVisualState();
+}
+
+void APACS_NPCCharacter::OnRep_CurrentSelector()
+{
+	// Dedicated servers don't need visuals
+	if (IsRunningDedicatedServer())
 	{
 		return;
 	}
 
-	if (bHovered)
-	{
-		// Safety rail: only apply hover if material is "clean" (brightness <= 0)
-		float CurrentBrightness = 0.0f;
-		CachedDecalMaterial->GetScalarParameterValue(FName("Brightness"), CurrentBrightness);
+	// Debug logging for replication
+	UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] OnRep_CurrentSelector - NPC: %s, New Selector: %s"),
+		*GetName(),
+		CurrentSelector ? *CurrentSelector->GetPlayerName() : TEXT("None"));
 
-		if (CurrentBrightness <= 0.0f)
-		{
-			bIsLocallyHovered = true;
-			CachedDecalMaterial->SetScalarParameterValue(FName("Brightness"), VisualConfig.HoveredBrightness);
-			CachedDecalMaterial->SetVectorParameterValue(FName("Colour"), VisualConfig.HoveredColour);
-		}
-	}
-	else
+	// Update visual state based on new selection
+	UpdateVisualState();
+}
+
+void APACS_NPCCharacter::UpdateVisualState()
+{
+	if (!CachedDecalMaterial)
 	{
-		// Always restore to available state on unhover
-		bIsLocallyHovered = false;
+		UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] UpdateVisualState - NPC: %s - No cached material"), *GetName());
+		return;
+	}
+
+	// Determine which visual state to apply based on priority
+	EVisualPriority Priority = GetCurrentVisualPriority();
+
+	// Debug logging for visual state changes
+	FString PriorityString;
+	FLinearColor NewColour;
+	float NewBrightness;
+
+	switch (Priority)
+	{
+	case EVisualPriority::Selected:
+		PriorityString = TEXT("Selected");
+		NewColour = VisualConfig.SelectedColour;
+		NewBrightness = VisualConfig.SelectedBrightness;
+		CachedDecalMaterial->SetScalarParameterValue(FName("Brightness"), VisualConfig.SelectedBrightness);
+		CachedDecalMaterial->SetVectorParameterValue(FName("Colour"), VisualConfig.SelectedColour);
+		break;
+
+	case EVisualPriority::Unavailable:
+		PriorityString = TEXT("Unavailable");
+		NewColour = VisualConfig.UnavailableColour;
+		NewBrightness = VisualConfig.UnavailableBrightness;
+		CachedDecalMaterial->SetScalarParameterValue(FName("Brightness"), VisualConfig.UnavailableBrightness);
+		CachedDecalMaterial->SetVectorParameterValue(FName("Colour"), VisualConfig.UnavailableColour);
+		break;
+
+	case EVisualPriority::Hovered:
+		PriorityString = TEXT("Hovered");
+		NewColour = VisualConfig.HoveredColour;
+		NewBrightness = VisualConfig.HoveredBrightness;
+		CachedDecalMaterial->SetScalarParameterValue(FName("Brightness"), VisualConfig.HoveredBrightness);
+		CachedDecalMaterial->SetVectorParameterValue(FName("Colour"), VisualConfig.HoveredColour);
+		break;
+
+	case EVisualPriority::Available:
+	default:
+		PriorityString = TEXT("Available");
+		NewColour = VisualConfig.AvailableColour;
+		NewBrightness = VisualConfig.AvailableBrightness;
 		CachedDecalMaterial->SetScalarParameterValue(FName("Brightness"), VisualConfig.AvailableBrightness);
 		CachedDecalMaterial->SetVectorParameterValue(FName("Colour"), VisualConfig.AvailableColour);
+		break;
 	}
+
+	UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] UpdateVisualState - NPC: %s - State: %s - Brightness: %.2f - Color: %s"),
+		*GetName(), *PriorityString, NewBrightness, *NewColour.ToString());
+}
+
+APACS_NPCCharacter::EVisualPriority APACS_NPCCharacter::GetCurrentVisualPriority() const
+{
+	// Priority order: Selected > Unavailable > Hovered > Available
+
+	// Get local player state to determine if we're the selector
+	APlayerController* LocalPC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
+	APlayerState* LocalPlayerState = LocalPC ? LocalPC->PlayerState : nullptr;
+
+	UE_LOG(LogTemp, VeryVerbose, TEXT("[SELECTION DEBUG] GetCurrentVisualPriority - NPC: %s, CurrentSelector: %s, LocalPlayer: %s, IsHovered: %s"),
+		*GetName(),
+		CurrentSelector ? *CurrentSelector->GetPlayerName() : TEXT("None"),
+		LocalPlayerState ? *LocalPlayerState->GetPlayerName() : TEXT("None"),
+		bIsLocallyHovered ? TEXT("Yes") : TEXT("No"));
+
+	// Check if we're selected by local player
+	if (CurrentSelector && CurrentSelector == LocalPlayerState)
+	{
+		UE_LOG(LogTemp, VeryVerbose, TEXT("[SELECTION DEBUG] Priority: Selected (by local player)"));
+		return EVisualPriority::Selected;
+	}
+
+	// Check if we're selected by someone else (unavailable)
+	if (CurrentSelector && CurrentSelector != LocalPlayerState)
+	{
+		UE_LOG(LogTemp, VeryVerbose, TEXT("[SELECTION DEBUG] Priority: Unavailable (selected by %s)"), *CurrentSelector->GetPlayerName());
+		return EVisualPriority::Unavailable;
+	}
+
+	// Check if we're being hovered (local only)
+	if (bIsLocallyHovered)
+	{
+		UE_LOG(LogTemp, VeryVerbose, TEXT("[SELECTION DEBUG] Priority: Hovered"));
+		return EVisualPriority::Hovered;
+	}
+
+	// Default to available
+	UE_LOG(LogTemp, VeryVerbose, TEXT("[SELECTION DEBUG] Priority: Available"));
+	return EVisualPriority::Available;
 }
