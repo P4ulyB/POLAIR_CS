@@ -1,5 +1,6 @@
 #include "PACS_PlayerState.h"
 #include "Net/UnrealNetwork.h"
+#include "PACS_PlayerController.h"
 
 APACS_PlayerState::APACS_PlayerState()
 {
@@ -19,6 +20,13 @@ void APACS_PlayerState::OnRep_HMDState()
     // Handle HMD state changes - update UI, notify systems, etc.
     // Called on clients when HMD state replicates
     UE_LOG(LogTemp, Log, TEXT("PACS PlayerState: HMD state changed to %d"), static_cast<int32>(HMDState));
+
+    // Update NPC decal visibility based on VR state
+    if (APACS_PlayerController* PC = Cast<APACS_PlayerController>(GetOwner()))
+    {
+        bool bIsVRClient = (HMDState == EHMDState::HasHMD);
+        PC->UpdateNPCDecalVisibility(bIsVRClient);
+    }
 }
 
 void APACS_PlayerState::SetSelectedNPC(APACS_NPCCharacter* InNPC)

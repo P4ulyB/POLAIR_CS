@@ -7,6 +7,8 @@
 #include "PACS/Heli/PACS_CandidateHelicopterCharacter.h"
 #include "PACSLaunchArgSubsystem.h"
 #include "Pawns/NPC/PACS_NPCCharacter.h"
+#include "EngineUtils.h"
+#include "Components/DecalComponent.h"
 
 #if !UE_SERVER
 #include "EnhancedInputComponent.h"
@@ -559,6 +561,42 @@ void APACS_PlayerController::ServerRequestDeselect_Implementation()
         UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] %s tried to deselect but had no selection"),
             *PS->GetPlayerName());
     }
+}
+
+void APACS_PlayerController::UpdateNPCDecalVisibility(bool bIsVRClient)
+{
+    // Only update on local client - this is a client-side rendering decision
+    if (!IsLocalController())
+    {
+        return;
+    }
+
+    UWorld* World = GetWorld();
+    if (!World)
+    {
+        return;
+    }
+
+    int32 UpdatedDecals = 0;
+
+    // Iterate through all NPCs and update their decal visibility
+    for (TActorIterator<APACS_NPCCharacter> ActorItr(World); ActorItr; ++ActorItr)
+    {
+        if (APACS_NPCCharacter* NPC = *ActorItr)
+        {
+            // Get the collision decal component
+            if (UDecalComponent* CollisionDecal = NPC->GetCollisionDecal())
+            {
+                // Hide decals from VR clients, show to assessor clients
+                bool bShouldBeVisible = !bIsVRClient;
+                CollisionDecal->SetVisibility(bShouldBeVisible);
+                UpdatedDecals++;
+            }
+        }
+    }
+
+    UE_LOG(LogTemp, Log, TEXT("PACS PlayerController: Updated %d NPC decals for %s client"),
+        UpdatedDecals, bIsVRClient ? TEXT("VR") : TEXT("Assessor"));
 }
 
 

@@ -86,6 +86,10 @@ public:
     UFUNCTION(BlueprintCallable, Category="Selection")
     UPACS_HoverProbe* GetHoverProbe() const { return HoverProbe; }
 
+    // VR Decal Visibility Control
+    UFUNCTION(BlueprintCallable, Category="VR")
+    void UpdateNPCDecalVisibility(bool bIsVRClient);
+
     // Selection System RPCs
     UFUNCTION(Server, Reliable)
     void ServerRequestSelect(AActor* TargetActor);

@@ -60,6 +60,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Selection")
 	bool IsSelectedBy(APlayerState* InPlayerState) const { return CurrentSelector == InPlayerState; }
 
+	// Getter for collision decal component
+	UFUNCTION(BlueprintCallable, Category="NPC")
+	UDecalComponent* GetCollisionDecal() const { return CollisionDecal; }
+
 protected:
 	UFUNCTION()
 	void OnRep_VisualConfig();
