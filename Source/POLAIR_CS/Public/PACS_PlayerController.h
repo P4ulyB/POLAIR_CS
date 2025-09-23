@@ -59,6 +59,15 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Debug")
     bool bShowInputContextDebug = false;
 
+    // Trace channels for selection and movement
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Input|Trace Channels",
+        meta=(DisplayName="Selection Trace Channel"))
+    TEnumAsByte<ECollisionChannel> SelectionTraceChannel = ECC_Visibility;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Input|Trace Channels",
+        meta=(DisplayName="Movement Trace Channel"))
+    TEnumAsByte<ECollisionChannel> MovementTraceChannel = ECC_Visibility;
+
 protected:
     virtual void SetupInputComponent() override;
     virtual void BeginPlay() override;
@@ -96,6 +105,10 @@ public:
 
     UFUNCTION(Server, Reliable)
     void ServerRequestDeselect();
+
+    // NPC Movement RPC
+    UFUNCTION(Server, Reliable)
+    void ServerRequestNPCMove(APACS_NPCCharacter* TargetNPC, FVector TargetLocation);
 
 private:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Input",

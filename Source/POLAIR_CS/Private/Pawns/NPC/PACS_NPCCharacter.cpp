@@ -14,6 +14,8 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Engine/Texture2D.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "AIController.h"
+#include "Blueprint/AIBlueprintHelperLibrary.h"
 
 APACS_NPCCharacter::APACS_NPCCharacter()
 {
@@ -21,8 +23,13 @@ APACS_NPCCharacter::APACS_NPCCharacter()
 	bReplicates = true;
 	SetNetUpdateFrequency(10.0f);
 
-	// Disable movement for now as specified in the design
-	GetCharacterMovement()->SetComponentTickEnabled(false);
+	// Enable movement for right-click to move functionality
+	GetCharacterMovement()->SetComponentTickEnabled(true);
+
+	// Enable AI rotation toward movement direction for natural locomotion
+	GetCharacterMovement()->bOrientRotationToMovement = true;
+	GetCharacterMovement()->bUseControllerDesiredRotation = false;
+	GetCharacterMovement()->RotationRate = FRotator(0.0f, 540.0f, 0.0f); // Fast yaw rotation
 
 	// Create collision box component
 	CollisionBox = CreateDefaultSubobject<UBoxComponent>(TEXT("CollisionBox"));
@@ -63,9 +70,12 @@ void APACS_NPCCharacter::PreInitializeComponents()
 	}
 }
 
-void APACS_NPCCharacter::BeginPlay()
+void APACS_NPCCharacter::PostInitializeComponents()
 {
-	Super::BeginPlay();
+	Super::PostInitializeComponents();
+
+	// Apply visual settings earlier in initialization to prevent AI from overriding transforms
+	// This runs after PreInitializeComponents (where VisualConfig is built) but before BeginPlay
 
 	// Server: Apply global selection settings after base visual config is built
 	if (HasAuthority())
@@ -78,6 +88,19 @@ void APACS_NPCCharacter::BeginPlay()
 	{
 		ApplyVisuals_Client();
 	}
+
+
+}
+
+void APACS_NPCCharacter::BeginPlay()
+{
+	Super::BeginPlay();
+
+	// Visual application moved to PostInitializeComponents for earlier timing
+	// BeginPlay can now focus on other initialization that needs to happen after components are fully set up
+
+		// Set up AI controller for movement
+	AIControllerClass = AAIController::StaticClass();
 }
 
 void APACS_NPCCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -109,6 +132,7 @@ void APACS_NPCCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
 	Super::EndPlay(EndPlayReason);
 }
+
 
 void APACS_NPCCharacter::OnRep_VisualConfig()
 {
@@ -153,6 +177,9 @@ void APACS_NPCCharacter::ApplyVisuals_Client()
 			GetMesh()->SetRelativeLocation(VisualConfig.MeshLocation);
 			GetMesh()->SetRelativeRotation(VisualConfig.MeshRotation);
 			GetMesh()->SetRelativeScale3D(VisualConfig.MeshScale);
+
+			UE_LOG(LogTemp, Log, TEXT("[NPC MESH] Applied mesh transforms from data asset for %s"),
+				*GetName());
 		}
 
 		// Apply loaded decal material if specified
@@ -384,4 +411,31 @@ APACS_NPCCharacter::EVisualPriority APACS_NPCCharacter::GetCurrentVisualPriority
 	// Default to available
 	UE_LOG(LogTemp, VeryVerbose, TEXT("[SELECTION DEBUG] Priority: Available"));
 	return EVisualPriority::Available;
+}
+
+void APACS_NPCCharacter::ServerMoveToLocation_Implementation(FVector TargetLocation)
+{
+	// Server authority check
+	if (!HasAuthority())
+	{
+		UE_LOG(LogTemp, Error, TEXT("[NPC MOVE] ServerMoveToLocation failed - No authority"));
+		return;
+	}
+
+	// Basic validation - check if target location is reasonable
+	FVector CurrentLocation = GetActorLocation();
+	float Distance = FVector::Dist(CurrentLocation, TargetLocation);
+
+	// Reasonable distance check (prevent teleporting across map)
+	if (Distance > 10000.0f) // 100 meters max
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[NPC MOVE] Target location too far: %f units"), Distance);
+		return;
+	}
+
+	// Use UE5 AI movement system - this will handle pathfinding automatically
+	UAIBlueprintHelperLibrary::SimpleMoveToLocation(GetController(), TargetLocation);
+
+	UE_LOG(LogTemp, Log, TEXT("[NPC MOVE] %s moving to location %s (Distance: %f)"),
+		*GetName(), *TargetLocation.ToString(), Distance);
 }

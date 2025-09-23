@@ -43,6 +43,7 @@ protected:
 public:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	virtual void PreInitializeComponents() override;
+	virtual void PostInitializeComponents() override;
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
@@ -63,6 +64,10 @@ public:
 	// Getter for collision decal component
 	UFUNCTION(BlueprintCallable, Category="NPC")
 	UDecalComponent* GetCollisionDecal() const { return CollisionDecal; }
+
+	// Movement System - Server RPC for right-click to move
+	UFUNCTION(Server, Reliable)
+	void ServerMoveToLocation(FVector TargetLocation);
 
 protected:
 	UFUNCTION()

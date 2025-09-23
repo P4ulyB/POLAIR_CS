@@ -404,7 +404,7 @@ EPACS_InputHandleResult APACS_PlayerController::HandleInputAction(FName ActionNa
 
             // Perform line trace to get the actor under cursor
             FHitResult HitResult;
-            if (GetHitResultUnderCursor(ECC_Visibility, false, HitResult))
+            if (GetHitResultUnderCursor(SelectionTraceChannel, false, HitResult))
             {
                 UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] Hit actor: %s at location %s"),
                     HitResult.GetActor() ? *HitResult.GetActor()->GetName() : TEXT("None"),
@@ -442,9 +442,69 @@ EPACS_InputHandleResult APACS_PlayerController::HandleInputAction(FName ActionNa
         }
         return EPACS_InputHandleResult::HandledConsume;
     }
-    else if (ActionName == TEXT("Deselect") || ActionName == TEXT("RightClick"))
+    else if (ActionName == TEXT("RightClick"))
     {
-        // Explicit deselection
+        // Right-click: Move selected NPC to cursor location (never deselect)
+        APACS_PlayerState* PS = GetPlayerState<APACS_PlayerState>();
+        APACS_NPCCharacter* SelectedNPC = nullptr;
+
+        if (HasAuthority())
+        {
+            // Server: Use server-only selection tracking
+            SelectedNPC = PS ? PS->GetSelectedNPC() : nullptr;
+        }
+        else
+        {
+            // Client: Find NPC that has us as CurrentSelector (replicated data)
+            if (PS && GetWorld())
+            {
+                for (TActorIterator<APACS_NPCCharacter> ActorItr(GetWorld()); ActorItr; ++ActorItr)
+                {
+                    if (APACS_NPCCharacter* NPC = *ActorItr)
+                    {
+                        if (NPC->CurrentSelector == PS)
+                        {
+                            SelectedNPC = NPC;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        UE_LOG(LogTemp, Warning, TEXT("[NPC MOVE DEBUG] Right-click - PlayerState: %s, SelectedNPC: %s, HasAuthority: %s"),
+            PS ? *PS->GetPlayerName() : TEXT("NULL"),
+            SelectedNPC ? *SelectedNPC->GetName() : TEXT("NULL"),
+            HasAuthority() ? TEXT("TRUE") : TEXT("FALSE"));
+
+        if (SelectedNPC)
+        {
+            // We have a selected NPC - perform line trace to get move target location
+            FHitResult HitResult;
+            if (GetHitResultUnderCursor(MovementTraceChannel, false, HitResult))
+            {
+                FVector TargetLocation = HitResult.Location;
+
+                UE_LOG(LogTemp, Log, TEXT("[NPC MOVE] Right-click move: %s to location %s"),
+                    *SelectedNPC->GetName(), *TargetLocation.ToString());
+
+                // Send move command via PlayerController RPC (we own this connection)
+                ServerRequestNPCMove(SelectedNPC, TargetLocation);
+            }
+            else
+            {
+                UE_LOG(LogTemp, Warning, TEXT("[NPC MOVE] Right-click failed - no hit result"));
+            }
+        }
+        else
+        {
+            UE_LOG(LogTemp, Log, TEXT("[NPC MOVE] Right-click ignored - no NPC selected"));
+        }
+        return EPACS_InputHandleResult::HandledConsume;
+    }
+    else if (ActionName == TEXT("Deselect"))
+    {
+        // Explicit deselection command (separate from right-click)
         ServerRequestDeselect();
         return EPACS_InputHandleResult::HandledConsume;
     }
@@ -561,6 +621,46 @@ void APACS_PlayerController::ServerRequestDeselect_Implementation()
         UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] %s tried to deselect but had no selection"),
             *PS->GetPlayerName());
     }
+}
+
+void APACS_PlayerController::ServerRequestNPCMove_Implementation(APACS_NPCCharacter* TargetNPC, FVector TargetLocation)
+{
+    // Server authority check
+    if (!HasAuthority())
+    {
+        UE_LOG(LogTemp, Error, TEXT("[NPC MOVE] ServerRequestNPCMove failed - No authority"));
+        return;
+    }
+
+    // Validate parameters
+    if (!IsValid(TargetNPC))
+    {
+        UE_LOG(LogTemp, Error, TEXT("[NPC MOVE] ServerRequestNPCMove failed - Invalid target NPC"));
+        return;
+    }
+
+    // Verify this player actually has the NPC selected
+    APACS_PlayerState* PS = GetPlayerState<APACS_PlayerState>();
+    if (!PS || PS->GetSelectedNPC() != TargetNPC)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[NPC MOVE] ServerRequestNPCMove rejected - Player %s doesn't have NPC %s selected"),
+            PS ? *PS->GetPlayerName() : TEXT("NULL"), *TargetNPC->GetName());
+        return;
+    }
+
+    // Additional check: Verify NPC thinks this player is the selector
+    if (TargetNPC->CurrentSelector != PS)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[NPC MOVE] ServerRequestNPCMove rejected - NPC %s selector mismatch"),
+            *TargetNPC->GetName());
+        return;
+    }
+
+    UE_LOG(LogTemp, Log, TEXT("[NPC MOVE] ServerRequestNPCMove validated - %s moving %s to %s"),
+        *PS->GetPlayerName(), *TargetNPC->GetName(), *TargetLocation.ToString());
+
+    // Call the NPC's movement function directly on server
+    TargetNPC->ServerMoveToLocation_Implementation(TargetLocation);
 }
 
 void APACS_PlayerController::UpdateNPCDecalVisibility(bool bIsVRClient)

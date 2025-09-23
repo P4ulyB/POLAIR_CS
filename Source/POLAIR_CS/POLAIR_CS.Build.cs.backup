@@ -23,9 +23,7 @@ public class POLAIR_CS : ModuleRules
 			"HTTP",
 			"PlayFabGSDK",
 			"NetCore",
-			"DeveloperSettings", // Required for PACS Selection System settings
-			"AIModule", // Required for AIController and UAIBlueprintHelperLibrary
-			"NavigationSystem" // Required for AI pathfinding
+			"DeveloperSettings" // Required for PACS Selection System settings
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] {
