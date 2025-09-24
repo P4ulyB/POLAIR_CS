@@ -7,6 +7,8 @@
 - **Phase Guides:** `docs/phases/`
 - **Error Patterns:** `docs/error_logging/error_patterns.json`
 - **MCP Status:** Connected - UE5 Semantic Analysis Server
+- **UnrealInsights.exe** - C:\Devops\UESource\Engine\Binaries\Win64
+- **Unreal Build Tool** - C:\Devops\UESource\Engine\Binaries\Win64
 
 ## Configuration
 - **max_messages**: 40  # Limit conversation history to reduce token usage
