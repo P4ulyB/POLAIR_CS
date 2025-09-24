@@ -11,6 +11,8 @@
 #include "PACS/Heli/PACS_CandidateHelicopterCharacter.h"
 #include "Pawns/Assessor/PACS_AssessorPawn.h"
 #include "Pawns/NPC/PACS_NPCCharacter.h"
+#include "Systems/PACS_CharacterPool.h"
+#include "Systems/PACS_NPCSpawnManager.h"
 #include "TimerManager.h"
 //#include "PACS/Heli/PACS_OrbitMessages.h" // only if saved offsets are passed
 
@@ -22,6 +24,42 @@ APACSGameMode::APACSGameMode()
     // Set pawn classes - configure in Blueprint or here
     // CandidatePawnClass = APACS_CandidatePawn::StaticClass();
     AssessorPawnClass = APACS_AssessorPawn::StaticClass();
+}
+
+void APACSGameMode::BeginPlay()
+{
+    Super::BeginPlay();
+
+    // Only spawn NPCs on server
+    if (!HasAuthority())
+    {
+        return;
+    }
+
+    // Initialize character pool and preload assets
+    if (UPACS_CharacterPool* CharacterPool = GetGameInstance() ?
+        GetGameInstance()->GetSubsystem<UPACS_CharacterPool>() : nullptr)
+    {
+        CharacterPool->PreloadCharacterAssets();
+
+        // Warm up pools for immediate use
+        CharacterPool->WarmUpPool(EPACSCharacterType::Civilian, 30);
+        CharacterPool->WarmUpPool(EPACSCharacterType::Police, 10);
+        CharacterPool->WarmUpPool(EPACSCharacterType::Firefighter, 5);
+        CharacterPool->WarmUpPool(EPACSCharacterType::Paramedic, 5);
+
+        UE_LOG(LogTemp, Log, TEXT("PACS GameMode: Character pool initialized and warmed up"));
+    }
+
+    // Spawn all NPCs at spawn points
+    if (UPACS_NPCSpawnManager* SpawnManager = GetWorld() ?
+        GetWorld()->GetSubsystem<UPACS_NPCSpawnManager>() : nullptr)
+    {
+        SpawnManager->SpawnAllNPCs();
+
+        int32 SpawnedCount = SpawnManager->GetSpawnedNPCCount();
+        UE_LOG(LogTemp, Log, TEXT("PACS GameMode: Spawned %d NPCs from pool"), SpawnedCount);
+    }
 }
 
 void APACSGameMode::PreLogin(const FString& Options, const FString& Address, 

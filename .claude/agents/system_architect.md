@@ -2,7 +2,7 @@
 name: system_architect
 description: Design UE5.5 C++ system architecture and class structures when user requests new features, systems, or architectural planning
 tools: Filesystem:read_file, Filesystem:write_file, google_drive_search
-model: sonnet
+model: opus
 ---
 
 ## Role Definition

@@ -74,6 +74,27 @@ void APACS_NPCCharacter::PostInitializeComponents()
 {
 	Super::PostInitializeComponents();
 
+	UE_LOG(LogTemp, Warning, TEXT("[NPC DEBUG] PostInitializeComponents for: %s"), *GetName());
+
+	// Debug: Check initial controller state
+	AController* InitialController = GetController();
+	UE_LOG(LogTemp, Warning, TEXT("[NPC DEBUG] Initial controller: %s"), InitialController ? *InitialController->GetName() : TEXT("NULL"));
+
+	// Ensure AI controller is set for movement (if not already set by Blueprint)
+	// This is critical for pooled NPCs to work with SimpleMoveToLocation
+	if (!AIControllerClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[NPC DEBUG] Setting AIControllerClass to default AAIController"));
+		AIControllerClass = AAIController::StaticClass();
+		AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[NPC DEBUG] AIControllerClass already set: %s"), *AIControllerClass->GetName());
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("[NPC DEBUG] AutoPossessAI: %d"), (int32)AutoPossessAI);
+
 	// Apply visual settings earlier in initialization to prevent AI from overriding transforms
 	// This runs after PreInitializeComponents (where VisualConfig is built) but before BeginPlay
 
@@ -89,7 +110,9 @@ void APACS_NPCCharacter::PostInitializeComponents()
 		ApplyVisuals_Client();
 	}
 
-
+	// Debug: Check controller state after setup
+	AController* PostSetupController = GetController();
+	UE_LOG(LogTemp, Warning, TEXT("[NPC DEBUG] Post-setup controller: %s"), PostSetupController ? *PostSetupController->GetName() : TEXT("NULL"));
 }
 
 void APACS_NPCCharacter::BeginPlay()
@@ -99,8 +122,7 @@ void APACS_NPCCharacter::BeginPlay()
 	// Visual application moved to PostInitializeComponents for earlier timing
 	// BeginPlay can now focus on other initialization that needs to happen after components are fully set up
 
-	// Set up AI controller for movement
-	AIControllerClass = AAIController::StaticClass();
+	// AI controller is now set in constructor for proper pooling support
 }
 
 void APACS_NPCCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -387,6 +409,38 @@ void APACS_NPCCharacter::ServerMoveToLocation_Implementation(FVector TargetLocat
 		return;
 	}
 
+	// Debug: Log character state
+	UE_LOG(LogTemp, Warning, TEXT("[NPC MOVE DEBUG] %s - ServerMoveToLocation called"), *GetName());
+	UE_LOG(LogTemp, Warning, TEXT("[NPC MOVE DEBUG] Current Location: %s"), *GetActorLocation().ToString());
+	UE_LOG(LogTemp, Warning, TEXT("[NPC MOVE DEBUG] Target Location: %s"), *TargetLocation.ToString());
+
+	// Debug: Check controller state
+	AController* MyController = GetController();
+	UE_LOG(LogTemp, Warning, TEXT("[NPC MOVE DEBUG] Controller: %s"), MyController ? *MyController->GetName() : TEXT("NULL"));
+	UE_LOG(LogTemp, Warning, TEXT("[NPC MOVE DEBUG] Controller Class: %s"), MyController ? *MyController->GetClass()->GetName() : TEXT("NULL"));
+	UE_LOG(LogTemp, Warning, TEXT("[NPC MOVE DEBUG] AI Controller Class Set: %s"), AIControllerClass ? *AIControllerClass->GetName() : TEXT("NULL"));
+	UE_LOG(LogTemp, Warning, TEXT("[NPC MOVE DEBUG] AutoPossessAI: %d"), (int32)AutoPossessAI);
+
+	// Debug: Check movement component
+	UCharacterMovementComponent* MovementComp = GetCharacterMovement();
+	UE_LOG(LogTemp, Warning, TEXT("[NPC MOVE DEBUG] Movement Component: %s"), MovementComp ? TEXT("Valid") : TEXT("NULL"));
+	if (MovementComp)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[NPC MOVE DEBUG] Movement Mode: %d"), (int32)MovementComp->MovementMode);
+		UE_LOG(LogTemp, Warning, TEXT("[NPC MOVE DEBUG] Is Movement Component Enabled: %s"), MovementComp->IsComponentTickEnabled() ? TEXT("Yes") : TEXT("No"));
+	}
+
+	// Debug: Check AI controller specifically
+	if (AAIController* AIController = Cast<AAIController>(MyController))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[NPC MOVE DEBUG] AI Controller found: %s"), *AIController->GetName());
+		UE_LOG(LogTemp, Warning, TEXT("[NPC MOVE DEBUG] AI Controller Pawn: %s"), AIController->GetPawn() ? *AIController->GetPawn()->GetName() : TEXT("NULL"));
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("[NPC MOVE DEBUG] NO AI CONTROLLER - This is likely the problem!"));
+	}
+
 	// Basic validation - check if target location is reasonable
 	FVector CurrentLocation = GetActorLocation();
 	float Distance = FVector::Dist(CurrentLocation, TargetLocation);
@@ -399,6 +453,7 @@ void APACS_NPCCharacter::ServerMoveToLocation_Implementation(FVector TargetLocat
 	}
 
 	// Use UE5 AI movement system - this will handle pathfinding automatically
+	UE_LOG(LogTemp, Warning, TEXT("[NPC MOVE DEBUG] Calling SimpleMoveToLocation..."));
 	UAIBlueprintHelperLibrary::SimpleMoveToLocation(GetController(), TargetLocation);
 
 	UE_LOG(LogTemp, Log, TEXT("[NPC MOVE] %s moving to location %s (Distance: %f)"),

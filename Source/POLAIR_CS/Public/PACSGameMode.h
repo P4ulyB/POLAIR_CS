@@ -13,6 +13,8 @@ class POLAIR_CS_API APACSGameMode : public AGameModeBase
 public:
     APACSGameMode();
 
+    virtual void BeginPlay() override;
+
     // Override for player connection handling
     virtual void PostLogin(APlayerController* NewPlayer) override;
         
