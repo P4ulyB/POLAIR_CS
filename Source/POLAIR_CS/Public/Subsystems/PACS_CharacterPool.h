@@ -8,8 +8,10 @@
 #include "PACS_CharacterPool.generated.h"
 
 class APACS_NPCCharacter;
+class APACS_NPC_Humanoid;
 class UMaterialInstanceDynamic;
 class UPACS_NPCConfig;
+class UPACS_NPC_v2_Config;
 
 /**
  * Character type identifier for pooling system
@@ -21,25 +23,39 @@ enum class EPACSCharacterType : uint8
     Police,
     Firefighter,
     Paramedic,
+    // Lightweight NPCs
+    LightweightCivilian,
+    LightweightPolice,
+    LightweightFirefighter,
+    LightweightParamedic,
     MAX UMETA(Hidden)
 };
 
 /**
  * Pooled character instance with state tracking
+ * Now supports both heavyweight and lightweight NPCs
  */
 USTRUCT()
 struct FPACSPooledCharacter
 {
     GENERATED_BODY()
 
+    // Either heavyweight or lightweight NPC (only one will be valid)
     UPROPERTY()
     APACS_NPCCharacter* Character = nullptr;
+
+    UPROPERTY()
+    APACS_NPC_Humanoid* LightweightCharacter = nullptr;
 
     UPROPERTY()
     bool bInUse = false;
 
     UPROPERTY()
     EPACSCharacterType CharacterType = EPACSCharacterType::Civilian;
+
+    // Helper to get as interface
+    class APawn* GetPawn() const;
+    class IPACS_SelectableCharacterInterface* GetSelectableInterface() const;
 
     FPACSPooledCharacter() = default;
 };
@@ -58,8 +74,12 @@ struct FPACSCharacterPoolConfig
     UPROPERTY()
     int32 MaxPoolSize = 50;
 
+    // Support both heavyweight and lightweight classes
     UPROPERTY()
     TSoftClassPtr<APACS_NPCCharacter> CharacterClass;
+
+    UPROPERTY()
+    TSoftClassPtr<APACS_NPC_Humanoid> LightweightCharacterClass;
 
     UPROPERTY()
     TArray<TSoftObjectPtr<USkeletalMesh>> MeshVariants;
@@ -103,11 +123,27 @@ public:
     APACS_NPCCharacter* AcquireCharacter(EPACSCharacterType CharacterType, UWorld* WorldContext);
 
     /**
+     * Acquire a lightweight character from the pool
+     * @param CharacterType Type of character to acquire (should be Lightweight*)
+     * @param WorldContext World to spawn in if pool is empty
+     * @return Pooled lightweight character or nullptr if unavailable
+     */
+    UFUNCTION(BlueprintCallable, Category = "PACS|CharacterPool")
+    APACS_NPC_Humanoid* AcquireLightweightCharacter(EPACSCharacterType CharacterType, UWorld* WorldContext);
+
+    /**
      * Release a character back to the pool
      * @param Character Character to release
      */
     UFUNCTION(BlueprintCallable, Category = "PACS|CharacterPool")
     void ReleaseCharacter(APACS_NPCCharacter* Character);
+
+    /**
+     * Release a lightweight character back to the pool
+     * @param Character Lightweight character to release
+     */
+    UFUNCTION(BlueprintCallable, Category = "PACS|CharacterPool")
+    void ReleaseLightweightCharacter(APACS_NPC_Humanoid* Character);
 
     /**
      * Get current pool statistics for monitoring
@@ -136,14 +172,21 @@ protected:
     APACS_NPCCharacter* SpawnPooledCharacter(EPACSCharacterType CharacterType, UWorld* WorldContext);
 
     /**
+     * Spawn a new lightweight character for the pool
+     */
+    APACS_NPC_Humanoid* SpawnLightweightCharacter(EPACSCharacterType CharacterType, UWorld* WorldContext);
+
+    /**
      * Reset character state for reuse
      */
     void ResetCharacterState(APACS_NPCCharacter* Character);
+    void ResetLightweightCharacterState(APACS_NPC_Humanoid* Character);
 
     /**
      * Configure character with shared assets
      */
     void ConfigureCharacterAssets(APACS_NPCCharacter* Character, EPACSCharacterType CharacterType);
+    void ConfigureLightweightCharacterAssets(APACS_NPC_Humanoid* Character, EPACSCharacterType CharacterType);
 
 private:
     // Character pools organised by type - using non-UPROPERTY for complex containers
@@ -154,6 +197,9 @@ private:
 
     // NPCConfig assets per character type
     TMap<EPACSCharacterType, UPACS_NPCConfig*> NPCConfigurations;
+
+    // Lightweight NPCConfig assets per character type
+    TMap<EPACSCharacterType, UPACS_NPC_v2_Config*> LightweightNPCConfigurations;
 
     // Shared material instances to reduce memory footprint
     UPROPERTY()

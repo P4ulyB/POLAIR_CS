@@ -3,6 +3,7 @@
 #include "Data/Settings/PACS_SelectionSystemSettings.h"
 #include "Core/PACS_PlayerState.h"
 #include "Core/PACS_SimpleNPCAIController.h"
+#include "Core/PACS_OptimizationSubsystem.h"
 #include "Net/UnrealNetwork.h"
 #include "Engine/AssetManager.h"
 #include "Engine/StreamableManager.h"
@@ -15,9 +16,13 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Engine/Texture2D.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Components/CapsuleComponent.h"
 #include "AIController.h"
 #include "Blueprint/AIBlueprintHelperLibrary.h"
 #include "Engine/World.h"
+#include "Navigation/PathFollowingComponent.h"
+#include "AITypes.h"
+#include "NavigationSystem.h"
 
 APACS_NPCCharacter::APACS_NPCCharacter()
 {
@@ -27,8 +32,8 @@ APACS_NPCCharacter::APACS_NPCCharacter()
 	bReplicates = true;
 	SetNetUpdateFrequency(10.0f);
 
-	// Keep movement component enabled for simplicity - optimization can come later
-	GetCharacterMovement()->SetComponentTickEnabled(true);
+	// Disable movement component tick by default - will enable on demand
+	GetCharacterMovement()->SetComponentTickEnabled(false);
 
 	// Reduce movement component overhead
 	GetCharacterMovement()->bOrientRotationToMovement = true;
@@ -41,6 +46,8 @@ APACS_NPCCharacter::APACS_NPCCharacter()
 	GetCharacterMovement()->MaxSimulationIterations = 1; // Reduce physics iterations
 	GetCharacterMovement()->bEnablePhysicsInteraction = false; // NPCs don't need physics interaction
 
+	// Client-only visual components - not needed on dedicated server
+#if !UE_SERVER
 	// Create collision box component
 	CollisionBox = CreateDefaultSubobject<UBoxComponent>(TEXT("CollisionBox"));
 	CollisionBox->SetupAttachment(GetMesh());
@@ -53,17 +60,12 @@ APACS_NPCCharacter::APACS_NPCCharacter()
 	CollisionDecal->SetRelativeLocation(FVector::ZeroVector);
 	CollisionDecal->SetRelativeRotation(FRotator(-90.0f, 0.0f, 0.0f)); // Point downward by default
 	CollisionDecal->DecalSize = FVector(100.0f, 100.0f, 100.0f); // Initial size, will be updated
+#endif
 
 	// Initialize movement state tracking
 	bIsMoving = false;
 	LastMovementTime = 0.0f;
 	MovementTimeoutDuration = 2.0f; // 2 seconds without velocity change before stopping movement tick
-
-#if UE_SERVER
-	// Server collision optional - disable for performance
-	CollisionBox->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	CollisionDecal->SetVisibility(false);
-#endif
 }
 
 void APACS_NPCCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -124,157 +126,160 @@ void APACS_NPCCharacter::BeginPlay()
 
 	// AI controller is now set in constructor for proper pooling support
 
-	// Set initial optimizations based on distance
+	// Set stable network frequency once (not changing per-tick)
+	if (HasAuthority())
+	{
+		SetNetUpdateFrequency(10.0f);
+		SetMinNetUpdateFrequency(2.0f);
+
+		// Epic pattern: Start with dormancy for idle NPCs
+		// Will wake on selection or movement
+		SetNetDormancy(DORM_Initial);
+	}
+
+	// Client-side initial optimizations - SET ONCE, not every tick!
+#if !UE_SERVER
+	// Apply optimization settings once at startup
 	UpdateDistanceBasedOptimizations();
+
+	// Register with optimization subsystem for animation budget and significance
+	if (!IsRunningDedicatedServer())
+	{
+		if (UGameInstance* GI = GetGameInstance())
+		{
+			if (UPACS_OptimizationSubsystem* OptSubsystem = GI->GetSubsystem<UPACS_OptimizationSubsystem>())
+			{
+				OptSubsystem->RegisterNPCForOptimization(this);
+			}
+		}
+	}
+#endif
+
+	// Configure Character Movement Component for NPCs
+	if (UCharacterMovementComponent* CMC = GetCharacterMovement())
+	{
+		// Don't disable CMC at start - it breaks initial movement
+		// It will be managed during movement start/stop
+
+		// Reduce tick interval for NPCs - they don't need 60Hz movement updates
+		CMC->SetComponentTickInterval(0.05f); // 20Hz is a good balance
+
+		// Additional movement optimizations
+		CMC->bUseRVOAvoidance = false; // Disable expensive avoidance for NPCs
+		CMC->bCanWalkOffLedges = true; // Simpler movement
+		CMC->MaxSimulationIterations = 1; // Reduce physics iterations
+	}
 }
 
 void APACS_NPCCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	// Update optimizations every tick (but tick is only 10Hz)
-	UpdateDistanceBasedOptimizations();
+	// REMOVED per-tick optimization updates - this was killing performance!
+	// Optimizations are now handled by SignificanceManager and AnimationBudgetAllocator
 
-	// Check for movement completion and disable movement tick when not moving
-	CheckMovementCompletion(DeltaTime);
+	// Server-side movement completion check
+	if (HasAuthority())
+	{
+		CheckMovementCompletion(DeltaTime);
+	}
 }
 
 void APACS_NPCCharacter::CheckMovementCompletion(float DeltaTime)
 {
-	// Only check movement on server authority
+	// Deprecated - movement completion now handled by OnAIMoveCompleted callback
+	// This function kept for compatibility but will be removed
+}
+
+void APACS_NPCCharacter::OnAIMoveCompleted()
+{
+	// Epic pattern: Server authority check
 	if (!HasAuthority())
 	{
 		return;
 	}
 
-	// If we're supposed to be moving, check if we've actually stopped
-	if (bIsMoving)
+	// Disable CMC tick when movement completes
+	if (UCharacterMovementComponent* CMC = GetCharacterMovement())
 	{
-		float CurrentVelocitySquared = GetVelocity().SizeSquared();
-		float CurrentTime = GetWorld()->GetTimeSeconds();
-
-		// If velocity is very low (essentially stopped), update last movement time
-		if (CurrentVelocitySquared < 25.0f) // 5 units per second threshold
-		{
-			// If this is the first time we've detected low velocity, record the time
-			if (LastMovementTime == 0.0f || (CurrentTime - LastMovementTime) < MovementTimeoutDuration)
-			{
-				LastMovementTime = CurrentTime;
-			}
-			// If we've been stationary long enough, disable movement
-			else if ((CurrentTime - LastMovementTime) >= MovementTimeoutDuration)
-			{
-				bIsMoving = false;
-				if (GetCharacterMovement())
-				{
-					GetCharacterMovement()->SetComponentTickEnabled(false);
-				}
-
-				// FIXED: Stop AI movement and unpossess controller to prevent perpetual movement
-				if (AController* CurrentController = GetController())
-				{
-					// Stop any active movement
-					if (AAIController* AIController = Cast<AAIController>(CurrentController))
-					{
-						AIController->StopMovement();
-					}
-
-					// Unpossess the controller to prevent autonomous behavior
-					CurrentController->UnPossess();
-				}
-
-				UE_LOG(LogTemp, Verbose, TEXT("[NPC MOVE] %s stopped moving, disabled movement and unpossessed controller"), *GetName());
-			}
-		}
-		else
-		{
-			// Reset timer if we're still moving
-			LastMovementTime = CurrentTime;
-		}
+		CMC->SetComponentTickEnabled(false);
 	}
+
+	// Clear movement state
+	bIsMoving = false;
+	LastMovementTime = 0.0f;
+
+	// Return to dormancy when movement completes and NPC is idle
+	if (!CurrentSelector)
+	{
+		SetNetDormancy(DORM_Initial);
+	}
+
+	UE_LOG(LogTemp, Verbose, TEXT("[NPC MOVE] %s completed movement, dormancy: %s"),
+		*GetName(),
+		CurrentSelector ? TEXT("Active (selected)") : TEXT("Dormant"));
 }
 
 void APACS_NPCCharacter::UpdateDistanceBasedOptimizations()
 {
-	// Get local player location for distance check
-	APlayerController* LocalPC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
-	if (!LocalPC || !LocalPC->GetPawn())
+	// Client-only visual optimizations - server handles via RepGraph
+#if !UE_SERVER
+	if (IsRunningDedicatedServer())
 	{
 		return;
 	}
 
-	float DistanceToPlayer = FVector::Dist(GetActorLocation(), LocalPC->GetPawn()->GetActorLocation());
-
-	// Configure mesh animation updates based on distance
+	// CRITICAL: Aggressive optimization settings to fix RHI/Render thread bottleneck
 	if (USkeletalMeshComponent* MeshComp = GetMesh())
 	{
-		if (DistanceToPlayer > 5000.0f) // 50 meters
+		// Enable Update Rate Optimizations (URO)
+		MeshComp->bEnableUpdateRateOptimizations = true;
+
+		// Only tick pose when rendered
+		MeshComp->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::OnlyTickPoseWhenRendered;
+
+		// Enable component use of fixed skel bounds to avoid bounds calculation
+		MeshComp->bComponentUseFixedSkelBounds = true;
+
+		// Disable ALL expensive features
+		MeshComp->bDisableClothSimulation = true;
+
+		// CRITICAL: Disable MESH collision but keep capsule collision for movement
+		// The mesh doesn't need collision, only the capsule component does
+		MeshComp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+		// Ensure the capsule component still has collision for movement
+		if (UCapsuleComponent* CapsuleComp = GetCapsuleComponent())
 		{
-			// Far: Minimal updates
-			MeshComp->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::OnlyTickPoseWhenRendered;
-			MeshComp->bEnableUpdateRateOptimizations = true;
-
-			// Set very low tick rate for distant characters
-			SetActorTickInterval(1.0f); // Once per second
-
-			// Disable movement component for stationary distant NPCs
-			if (GetCharacterMovement())
-			{
-				GetCharacterMovement()->SetComponentTickEnabled(false);
-			}
-
-			// Reduce network update frequency
-			SetNetUpdateFrequency(2.0f);
-
-			// Completely disable mesh ticking if very far
-			if (DistanceToPlayer > 10000.0f)
-			{
-				MeshComp->bNoSkeletonUpdate = true;
-				MeshComp->SetComponentTickEnabled(false);
-			}
+			// Keep capsule collision for movement system
+			CapsuleComp->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+			CapsuleComp->SetCollisionResponseToAllChannels(ECR_Block);
+			CapsuleComp->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
 		}
-		else if (DistanceToPlayer > 2000.0f) // 20 meters
-		{
-			// Medium: Reduced updates
-			MeshComp->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::OnlyTickPoseWhenRendered;
-			MeshComp->bEnableUpdateRateOptimizations = true;
-			MeshComp->bNoSkeletonUpdate = false;
-			MeshComp->SetComponentTickEnabled(true);
 
-			// Medium tick rate
-			SetActorTickInterval(0.2f); // 5 times per second
+		// Reduce capsule shadows overhead
+		MeshComp->bCastDynamicShadow = false;
+		MeshComp->CastShadow = false;
 
-			// Keep movement disabled unless moving
-			if (GetCharacterMovement() && GetVelocity().SizeSquared() < 10.0f)
-			{
-				GetCharacterMovement()->SetComponentTickEnabled(false);
-			}
+		// Use lowest LOD by default
+		MeshComp->SetForcedLOD(1);
 
-			// Medium network frequency
-			SetNetUpdateFrequency(5.0f);
-		}
-		else
-		{
-			// Close: Normal updates but still optimized
-			MeshComp->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::OnlyTickPoseWhenRendered;
-			MeshComp->bEnableUpdateRateOptimizations = true;
-			MeshComp->bNoSkeletonUpdate = false;
-			MeshComp->SetComponentTickEnabled(true);
+		// Disable morphs/blend shapes
+		MeshComp->bDisableMorphTarget = true;
 
-			// Normal tick rate
-			SetActorTickInterval(0.1f); // 10 times per second
+		// Reduce skeletal mesh evaluation rate
+		MeshComp->bNoSkeletonUpdate = false; // Keep skeleton updates but optimize them
+		MeshComp->bUpdateJointsFromAnimation = false; // Don't update physics from animation
 
-			// Enable movement only when actually moving
-			if (GetCharacterMovement())
-			{
-				bool bHasVelocity = GetVelocity().SizeSquared() > 10.0f;
-				GetCharacterMovement()->SetComponentTickEnabled(bHasVelocity);
-			}
+		// Disable unnecessary bone updates
+		MeshComp->KinematicBonesUpdateType = EKinematicBonesUpdateToPhysics::SkipAllBones;
 
-			// Normal network frequency
-			SetNetUpdateFrequency(10.0f);
-		}
+		// Lower render priority
+		MeshComp->TranslucencySortPriority = -100;
+
+		UE_LOG(LogTemp, Verbose, TEXT("PACS_NPCCharacter: Applied aggressive optimizations to %s"), *GetName());
 	}
+#endif
 }
 
 void APACS_NPCCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -319,6 +324,10 @@ void APACS_NPCCharacter::OnRep_VisualConfig()
 
 void APACS_NPCCharacter::ApplyVisuals_Client()
 {
+	// Skip all visual loading on dedicated server
+#if UE_SERVER
+	return;
+#else
 	if (IsRunningDedicatedServer() || !GetMesh())
 	{
 		return;
@@ -400,6 +409,7 @@ void APACS_NPCCharacter::ApplyVisuals_Client()
 
 		bVisualsApplied = true;
 	}));
+#endif // !UE_SERVER
 }
 
 
@@ -422,6 +432,8 @@ void APACS_NPCCharacter::BuildVisualConfigFromAsset_Server()
 
 void APACS_NPCCharacter::ApplyCollisionFromMesh()
 {
+	// Client-only collision visualization
+#if !UE_SERVER
 	if (!GetMesh() || !GetMesh()->GetSkeletalMeshAsset() || !CollisionBox)
 	{
 		return;
@@ -450,6 +462,7 @@ void APACS_NPCCharacter::ApplyCollisionFromMesh()
 		// Decal size uses the same uniform extent for all dimensions to match collision box
 		CollisionDecal->DecalSize = FVector(UniformExtent, UniformExtent, UniformExtent);
 	}
+#endif // !UE_SERVER
 }
 
 void APACS_NPCCharacter::ApplyGlobalSelectionSettings()
@@ -489,6 +502,8 @@ void APACS_NPCCharacter::OnRep_CurrentSelector()
 
 void APACS_NPCCharacter::UpdateVisualState()
 {
+	// Client-only visual updates
+#if !UE_SERVER
 	if (!CachedDecalMaterial)
 	{
 		return;
@@ -521,6 +536,7 @@ void APACS_NPCCharacter::UpdateVisualState()
 		CachedDecalMaterial->SetVectorParameterValue(FName("Colour"), VisualConfig.AvailableColour);
 		break;
 	}
+#endif // !UE_SERVER
 }
 
 APACS_NPCCharacter::EVisualPriority APACS_NPCCharacter::GetCurrentVisualPriority() const
@@ -555,47 +571,87 @@ APACS_NPCCharacter::EVisualPriority APACS_NPCCharacter::GetCurrentVisualPriority
 
 void APACS_NPCCharacter::ServerMoveToLocation_Implementation(FVector TargetLocation)
 {
-	// Server authority check
+	// Epic pattern: Server authority check at start of mutating method
 	if (!HasAuthority())
 	{
 		return;
 	}
 
-	// Basic validation - check if target location is reasonable
+	// Validate target location
 	FVector CurrentLocation = GetActorLocation();
 	float Distance = FVector::Dist(CurrentLocation, TargetLocation);
 
-	// Reasonable distance check (prevent teleporting across map)
+	// Reasonable distance check
 	if (Distance > 10000.0f) // 100 meters max
 	{
 		UE_LOG(LogTemp, Warning, TEXT("[NPC MOVE] Target location too far: %f units"), Distance);
 		return;
 	}
 
-	// Simple AI controller possession
-	if (!GetController())
+	// Validate navigation path exists
+	if (UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld()))
 	{
-		// Use our simple AI controller that properly stops movement
-		APACS_SimpleNPCAIController* NewAI = GetWorld()->SpawnActor<APACS_SimpleNPCAIController>(APACS_SimpleNPCAIController::StaticClass());
-		if (NewAI)
+		FNavLocation ProjectedLocation;
+		if (!NavSys->ProjectPointToNavigation(TargetLocation, ProjectedLocation))
 		{
-			NewAI->Possess(this);
-			UE_LOG(LogTemp, Verbose, TEXT("[NPC MOVE] Spawned simple AI controller for %s"), *GetName());
+			UE_LOG(LogTemp, Warning, TEXT("[NPC MOVE] Target location not on navmesh"));
+			return;
+		}
+		TargetLocation = ProjectedLocation.Location;
+	}
+
+	// Event-driven CMC tick enable
+	if (UCharacterMovementComponent* CMC = GetCharacterMovement())
+	{
+		CMC->SetComponentTickEnabled(true);
+	}
+
+	// Ensure AI controller exists and is possessed
+	AAIController* AIController = Cast<AAIController>(GetController());
+	if (!AIController)
+	{
+		// Spawn and possess AI controller
+		AIController = GetWorld()->SpawnActor<APACS_SimpleNPCAIController>(APACS_SimpleNPCAIController::StaticClass());
+		if (AIController)
+		{
+			AIController->Possess(this);
 		}
 		else
 		{
-			UE_LOG(LogTemp, Warning, TEXT("[NPC MOVE] Failed to spawn AI controller for %s"), *GetName());
+			UE_LOG(LogTemp, Warning, TEXT("[NPC MOVE] Failed to spawn AI controller"));
 			return;
 		}
 	}
 
-	// Simple movement using Epic's SimpleMoveToLocation
-	UAIBlueprintHelperLibrary::SimpleMoveToLocation(GetController(), TargetLocation);
+	// Use proper MoveTo with completion callback instead of SimpleMoveToLocation
+	FAIMoveRequest MoveRequest;
+	MoveRequest.SetGoalLocation(TargetLocation);
+	MoveRequest.SetAcceptanceRadius(75.0f);
 
-	// Track movement state
-	bIsMoving = true;
-	LastMovementTime = GetWorld()->GetTimeSeconds();
+	// Request movement and bind completion delegate
+	FPathFollowingRequestResult RequestResult = AIController->MoveTo(MoveRequest);
+	if (RequestResult.Code == EPathFollowingRequestResult::RequestSuccessful)
+	{
+		// TODO: Bind movement completion when Epic pattern is researched
 
-	UE_LOG(LogTemp, Verbose, TEXT("[NPC MOVE] %s moving to location %s (Distance: %f)"),
-		*GetName(), *TargetLocation.ToString(), Distance);
+		// Wake from dormancy when starting movement
+		FlushNetDormancy();
+
+		// Track movement state
+		bIsMoving = true;
+		LastMovementTime = GetWorld()->GetTimeSeconds();
+
+		UE_LOG(LogTemp, Verbose, TEXT("[NPC MOVE] %s started move to %s (Distance: %f)"),
+			*GetName(), *TargetLocation.ToString(), Distance);
+	}
+	else
+	{
+		// Movement request failed, disable CMC tick
+		if (UCharacterMovementComponent* CMC = GetCharacterMovement())
+		{
+			CMC->SetComponentTickEnabled(false);
+		}
+
+		UE_LOG(LogTemp, Warning, TEXT("[NPC MOVE] Movement request failed for %s"), *GetName());
+	}
 }

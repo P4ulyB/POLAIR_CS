@@ -10,6 +10,7 @@ class UBoxComponent;
 class UDecalComponent;
 class APlayerState;
 struct FStreamableHandle;
+struct FAIRequestID;
 
 UCLASS(BlueprintType, Blueprintable)
 class POLAIR_CS_API APACS_NPCCharacter : public ACharacter
@@ -86,6 +87,9 @@ public:
 	// Performance optimization
 	virtual void Tick(float DeltaTime) override;
 	void UpdateDistanceBasedOptimizations();
+
+	// Movement completion callback
+	void OnAIMoveCompleted();
 
 protected:
 	UFUNCTION()

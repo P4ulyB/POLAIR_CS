@@ -1,6 +1,7 @@
 #include "Components/PACS_HoverProbeComponent.h"
 #include "Core/PACS_PlayerController.h"
 #include "Actors/NPC/PACS_NPCCharacter.h"
+#include "Interfaces/PACS_SelectableCharacterInterface.h"
 #include "Components/PACS_InputHandlerComponent.h"
 #include "Core/PACS_CollisionChannels.h"
 #include "Engine/World.h"
@@ -127,23 +128,28 @@ void UPACS_HoverProbeComponent::ProbeOnce()
 		}
 	}
 
-	if (APACS_NPCCharacter* NewNPC = ResolveNPCFrom(Hit))
+	// Convert hit to selectable interface
+	IPACS_SelectableCharacterInterface* NewNPCInterface = nullptr;
+	AActor* NewNPCActor = ResolveSelectableFrom(Hit, NewNPCInterface);
+
+	if (NewNPCInterface && NewNPCActor)
 	{
-		if (NewNPC != CurrentNPC.Get())
+		if (NewNPCActor != CurrentNPCActor.Get())
 		{
 			// Clear previous hover with proper cleanup
-			if (CurrentNPC.IsValid())
+			if (CurrentNPCInterface && CurrentNPCActor.IsValid())
 			{
 				UnbindNPCDelegates();
-				CurrentNPC->SetLocalHover(false);
+				CurrentNPCInterface->SetLocalHover(false);
 			}
 
 			// Set new hover with delegate binding
-			CurrentNPC = NewNPC;
-			if (CurrentNPC.IsValid())
+			CurrentNPCActor = NewNPCActor;
+			CurrentNPCInterface = NewNPCInterface;
+			if (CurrentNPCActor.IsValid())
 			{
-				CurrentNPC->SetLocalHover(true); // purely local, no RPC
-				CurrentNPC->OnDestroyed.AddDynamic(this, &UPACS_HoverProbeComponent::OnNPCDestroyed);
+				CurrentNPCInterface->SetLocalHover(true); // purely local, no RPC
+				CurrentNPCActor->OnDestroyed.AddDynamic(this, &UPACS_HoverProbeComponent::OnNPCDestroyed);
 			}
 		}
 		return;
@@ -152,45 +158,50 @@ void UPACS_HoverProbeComponent::ProbeOnce()
 	ClearHover();
 }
 
-APACS_NPCCharacter* UPACS_HoverProbeComponent::ResolveNPCFrom(const FHitResult& Hit) const
+AActor* UPACS_HoverProbeComponent::ResolveSelectableFrom(const FHitResult& Hit, IPACS_SelectableCharacterInterface*& OutInterface) const
 {
 	if (AActor* HitActor = Hit.GetActor())
 	{
-		// Direct NPC hit
-		if (APACS_NPCCharacter* NPC = Cast<APACS_NPCCharacter>(HitActor))
+		// Direct selectable hit - works for both heavyweight and lightweight NPCs
+		if (IPACS_SelectableCharacterInterface* Selectable = Cast<IPACS_SelectableCharacterInterface>(HitActor))
 		{
-			return NPC;
+			OutInterface = Selectable;
+			return HitActor;
 		}
 
 		// Child component hit - check owner
 		if (AActor* Owner = HitActor->GetOwner())
 		{
-			if (APACS_NPCCharacter* NPC = Cast<APACS_NPCCharacter>(Owner))
+			if (IPACS_SelectableCharacterInterface* Selectable = Cast<IPACS_SelectableCharacterInterface>(Owner))
 			{
-				return NPC;
+				OutInterface = Selectable;
+				return Owner;
 			}
 		}
 	}
+	OutInterface = nullptr;
 	return nullptr;
 }
 
 
 void UPACS_HoverProbeComponent::ClearHover()
 {
-	if (CurrentNPC.IsValid())
+	if (CurrentNPCInterface && CurrentNPCActor.IsValid())
 	{
 		UnbindNPCDelegates();
-		CurrentNPC->SetLocalHover(false);
+		CurrentNPCInterface->SetLocalHover(false);
 	}
-	CurrentNPC = nullptr;
+	CurrentNPCActor = nullptr;
+	CurrentNPCInterface = nullptr;
 }
 
 void UPACS_HoverProbeComponent::OnNPCDestroyed(AActor* DestroyedActor)
 {
 	// Automatic cleanup when NPC is destroyed mid-hover
-	if (CurrentNPC.Get() == DestroyedActor)
+	if (CurrentNPCActor.Get() == DestroyedActor)
 	{
-		CurrentNPC = nullptr; // Don't call SetLocalHover on destroyed actor
+		CurrentNPCActor = nullptr; // Don't call SetLocalHover on destroyed actor
+		CurrentNPCInterface = nullptr;
 	}
 }
 
@@ -210,9 +221,9 @@ void UPACS_HoverProbeComponent::OnInputContextChanged()
 
 void UPACS_HoverProbeComponent::UnbindNPCDelegates()
 {
-	if (CurrentNPC.IsValid())
+	if (CurrentNPCActor.IsValid())
 	{
-		CurrentNPC->OnDestroyed.RemoveDynamic(this, &UPACS_HoverProbeComponent::OnNPCDestroyed);
+		CurrentNPCActor->OnDestroyed.RemoveDynamic(this, &UPACS_HoverProbeComponent::OnNPCDestroyed);
 	}
 }
 

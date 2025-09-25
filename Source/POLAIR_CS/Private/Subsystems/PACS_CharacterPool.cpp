@@ -2,7 +2,10 @@
 
 #include "Subsystems/PACS_CharacterPool.h"
 #include "Actors/NPC/PACS_NPCCharacter.h"
+#include "Actors/NPC/PACS_NPC_Humanoid.h"
 #include "Data/Configs/PACS_NPCConfig.h"
+#include "Data/Configs/PACS_NPC_v2_Config.h"
+#include "Interfaces/PACS_SelectableCharacterInterface.h"
 #include "Engine/World.h"
 #include "Engine/Engine.h"
 #include "Engine/Blueprint.h"
@@ -47,6 +50,23 @@ void UPACS_CharacterPool::Initialize(FSubsystemCollectionBase& Collection)
             case EPACSCharacterType::Paramedic:
                 ClassPath = TEXT("/Game/Blueprints/NPCs/BP_NPC_Paramedic.BP_NPC_Paramedic_C");
                 Config.CharacterClass = TSoftClassPtr<APACS_NPCCharacter>(FSoftObjectPath(ClassPath));
+                break;
+            // Lightweight NPCs - using actual Blueprint names
+            case EPACSCharacterType::LightweightCivilian:
+                ClassPath = TEXT("/Game/Blueprints/NPCs/Lightweight/BP_NPC_LightweightCivilian.BP_NPC_LightweightCivilian_C");
+                Config.LightweightCharacterClass = TSoftClassPtr<APACS_NPC_Humanoid>(FSoftObjectPath(ClassPath));
+                break;
+            case EPACSCharacterType::LightweightPolice:
+                ClassPath = TEXT("/Game/Blueprints/NPCs/Lightweight/BP_NPC_LightweightPolice.BP_NPC_LightweightPolice_C");
+                Config.LightweightCharacterClass = TSoftClassPtr<APACS_NPC_Humanoid>(FSoftObjectPath(ClassPath));
+                break;
+            case EPACSCharacterType::LightweightFirefighter:
+                ClassPath = TEXT("/Game/Blueprints/NPCs/Lightweight/BP_NPC_LightweightFireFighter.BP_NPC_LightweightFireFighter_C");
+                Config.LightweightCharacterClass = TSoftClassPtr<APACS_NPC_Humanoid>(FSoftObjectPath(ClassPath));
+                break;
+            case EPACSCharacterType::LightweightParamedic:
+                ClassPath = TEXT("/Game/Blueprints/NPCs/Lightweight/BP_NPC_LightweightParamedic.BP_NPC_LightweightParamedic_C");
+                Config.LightweightCharacterClass = TSoftClassPtr<APACS_NPC_Humanoid>(FSoftObjectPath(ClassPath));
                 break;
             default:
                 break;
@@ -596,4 +616,221 @@ void UPACS_CharacterPool::ConfigureCharacterAssets(APACS_NPCCharacter* Character
 
     // Mark character as fully configured to skip ApplyVisuals_Client
     Character->SetVisualsApplied(true);
+}
+
+// Lightweight character methods implementation
+
+APACS_NPC_Humanoid* UPACS_CharacterPool::AcquireLightweightCharacter(EPACSCharacterType CharacterType, UWorld* WorldContext)
+{
+    // Only handle lightweight types
+    if (CharacterType < EPACSCharacterType::LightweightCivilian)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("PACS_CharacterPool: Non-lightweight type passed to AcquireLightweightCharacter"));
+        return nullptr;
+    }
+
+    TArray<FPACSPooledCharacter>* Pool = CharacterPools.Find(CharacterType);
+    if (!Pool)
+    {
+        UE_LOG(LogTemp, Error, TEXT("PACS_CharacterPool: No pool found for lightweight type %s"),
+            *UEnum::GetValueAsString(CharacterType));
+        return nullptr;
+    }
+
+    // Look for available character in pool
+    for (FPACSPooledCharacter& PooledChar : *Pool)
+    {
+        if (!PooledChar.bInUse && PooledChar.LightweightCharacter && IsValid(PooledChar.LightweightCharacter))
+        {
+            PooledChar.bInUse = true;
+            ResetLightweightCharacterState(PooledChar.LightweightCharacter);
+            TotalCharactersReused++;
+
+            UE_LOG(LogTemp, Log, TEXT("PACS_CharacterPool: Reused lightweight character from pool (Type: %s)"),
+                *UEnum::GetValueAsString(CharacterType));
+
+            return PooledChar.LightweightCharacter;
+        }
+    }
+
+    // No available character, spawn new one if under max
+    FPACSCharacterPoolConfig* Config = PoolConfigurations.Find(CharacterType);
+    if (!Config || Pool->Num() >= Config->MaxPoolSize)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("PACS_CharacterPool: Pool at max capacity for lightweight type %s"),
+            *UEnum::GetValueAsString(CharacterType));
+        return nullptr;
+    }
+
+    // Spawn new lightweight character
+    APACS_NPC_Humanoid* NewChar = SpawnLightweightCharacter(CharacterType, WorldContext);
+    if (!NewChar)
+    {
+        return nullptr;
+    }
+
+    // Add to pool
+    FPACSPooledCharacter PooledChar;
+    PooledChar.LightweightCharacter = NewChar;
+    PooledChar.bInUse = true;
+    PooledChar.CharacterType = CharacterType;
+    Pool->Add(PooledChar);
+
+    TotalCharactersCreated++;
+
+    UE_LOG(LogTemp, Log, TEXT("PACS_CharacterPool: Created new lightweight character (Type: %s, Total: %d)"),
+        *UEnum::GetValueAsString(CharacterType), Pool->Num());
+
+    return NewChar;
+}
+
+void UPACS_CharacterPool::ReleaseLightweightCharacter(APACS_NPC_Humanoid* Character)
+{
+    if (!Character || !IsValid(Character))
+    {
+        return;
+    }
+
+    // Find character in all pools
+    for (auto& PoolPair : CharacterPools)
+    {
+        for (FPACSPooledCharacter& PooledChar : PoolPair.Value)
+        {
+            if (PooledChar.LightweightCharacter == Character)
+            {
+                PooledChar.bInUse = false;
+
+                // Hide and move to storage location
+                Character->SetActorHiddenInGame(true);
+                Character->SetActorEnableCollision(false);
+                Character->SetActorLocation(FVector(0, 0, -10000));
+
+                UE_LOG(LogTemp, Log, TEXT("PACS_CharacterPool: Released lightweight character back to pool (Type: %s)"),
+                    *UEnum::GetValueAsString(PooledChar.CharacterType));
+
+                return;
+            }
+        }
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("PACS_CharacterPool: Lightweight character not found in pool, destroying"));
+    Character->Destroy();
+}
+
+APACS_NPC_Humanoid* UPACS_CharacterPool::SpawnLightweightCharacter(EPACSCharacterType CharacterType, UWorld* WorldContext)
+{
+    if (!WorldContext)
+    {
+        return nullptr;
+    }
+
+    FPACSCharacterPoolConfig* Config = PoolConfigurations.Find(CharacterType);
+    if (!Config)
+    {
+        UE_LOG(LogTemp, Error, TEXT("PACS_CharacterPool: No configuration for lightweight type %s"),
+            *UEnum::GetValueAsString(CharacterType));
+        return nullptr;
+    }
+
+    // Load lightweight character class
+    UClass* CharClass = nullptr;
+    if (!Config->LightweightCharacterClass.IsNull())
+    {
+        CharClass = Config->LightweightCharacterClass.LoadSynchronous();
+    }
+
+    // If no Blueprint class configured, use the C++ class directly
+    if (!CharClass)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("PACS_CharacterPool: No Blueprint class for %s, using base C++ class"),
+            *UEnum::GetValueAsString(CharacterType));
+        CharClass = APACS_NPC_Humanoid::StaticClass();
+    }
+
+    if (!CharClass)
+    {
+        UE_LOG(LogTemp, Error, TEXT("PACS_CharacterPool: Failed to get any class for lightweight type %s"),
+            *UEnum::GetValueAsString(CharacterType));
+        return nullptr;
+    }
+
+    // Spawn lightweight character
+    FActorSpawnParameters SpawnParams;
+    SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+    APACS_NPC_Humanoid* NewChar = WorldContext->SpawnActor<APACS_NPC_Humanoid>(CharClass, FVector::ZeroVector, FRotator::ZeroRotator, SpawnParams);
+
+    if (!NewChar)
+    {
+        UE_LOG(LogTemp, Error, TEXT("PACS_CharacterPool: Failed to spawn lightweight character for type %s"),
+            *UEnum::GetValueAsString(CharacterType));
+        return nullptr;
+    }
+
+    // Configure with assets
+    ConfigureLightweightCharacterAssets(NewChar, CharacterType);
+
+    return NewChar;
+}
+
+void UPACS_CharacterPool::ResetLightweightCharacterState(APACS_NPC_Humanoid* Character)
+{
+    if (!Character || !IsValid(Character))
+    {
+        return;
+    }
+
+    // Reset basic state
+    Character->SetActorHiddenInGame(false);
+    Character->SetActorEnableCollision(true);
+
+    // Clear selection state through interface
+    if (IPACS_SelectableCharacterInterface* Selectable = Cast<IPACS_SelectableCharacterInterface>(Character))
+    {
+        Selectable->SetCurrentSelector(nullptr);
+        Selectable->SetLocalHover(false);
+    }
+}
+
+void UPACS_CharacterPool::ConfigureLightweightCharacterAssets(APACS_NPC_Humanoid* Character, EPACSCharacterType CharacterType)
+{
+    if (!Character || !IsValid(Character))
+    {
+        return;
+    }
+
+    // Get lightweight config
+    UPACS_NPC_v2_Config** ConfigPtr = LightweightNPCConfigurations.Find(CharacterType);
+    if (!ConfigPtr || !*ConfigPtr)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("PACS_CharacterPool: No lightweight config for type %s"),
+            *UEnum::GetValueAsString(CharacterType));
+        return;
+    }
+
+    // Configuration would be applied through the character's NPCConfig property
+    // This is typically set in the Blueprint class defaults
+}
+
+// Helper methods for FPACSPooledCharacter
+APawn* FPACSPooledCharacter::GetPawn() const
+{
+    if (Character && IsValid(Character))
+    {
+        return Character;
+    }
+    if (LightweightCharacter && IsValid(LightweightCharacter))
+    {
+        return LightweightCharacter;
+    }
+    return nullptr;
+}
+
+IPACS_SelectableCharacterInterface* FPACSPooledCharacter::GetSelectableInterface() const
+{
+    if (APawn* Pawn = GetPawn())
+    {
+        return Cast<IPACS_SelectableCharacterInterface>(Pawn);
+    }
+    return nullptr;
 }

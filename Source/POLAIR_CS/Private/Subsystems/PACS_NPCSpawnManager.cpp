@@ -4,6 +4,7 @@
 #include "Subsystems/PACS_CharacterPool.h"
 #include "Actors/PACS_NPCSpawnPoint.h"
 #include "Actors/NPC/PACS_NPCCharacter.h"
+#include "Actors/NPC/PACS_NPC_Humanoid.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFramework/GameModeBase.h"
@@ -86,7 +87,7 @@ void UPACS_NPCSpawnManager::DespawnAllNPCs()
         return;
     }
 
-    // Return all spawned NPCs to pool
+    // Return all spawned heavyweight NPCs to pool
     for (APACS_NPCCharacter* NPC : SpawnedNPCs)
     {
         if (IsValid(NPC))
@@ -95,9 +96,20 @@ void UPACS_NPCSpawnManager::DespawnAllNPCs()
         }
     }
 
+    // Return all spawned lightweight NPCs to pool
+    for (APACS_NPC_Humanoid* LightweightNPC : SpawnedLightweightNPCs)
+    {
+        if (IsValid(LightweightNPC))
+        {
+            CharacterPool->ReleaseLightweightCharacter(LightweightNPC);
+        }
+    }
+
     // Clear tracking arrays
     SpawnedNPCs.Empty();
+    SpawnedLightweightNPCs.Empty();
     SpawnPointMapping.Empty();
+    LightweightSpawnPointMapping.Empty();
 
     // Clear spawn point references
     for (TActorIterator<APACS_NPCSpawnPoint> It(GetWorld()); It; ++It)
@@ -149,33 +161,57 @@ bool UPACS_NPCSpawnManager::SpawnNPCAtPoint(APACS_NPCSpawnPoint* SpawnPoint)
         return false;
     }
 
-    // Acquire character from pool (convert enum types)
-    EPACSCharacterType PoolCharType = static_cast<EPACSCharacterType>(SpawnPoint->CharacterType);
+    // Convert to lightweight type for better performance
+    // Map old types to new lightweight types
+    EPACSCharacterType PoolCharType;
+    switch (static_cast<EPACSCharacterType>(SpawnPoint->CharacterType))
+    {
+        case EPACSCharacterType::Civilian:
+            PoolCharType = EPACSCharacterType::LightweightCivilian;
+            break;
+        case EPACSCharacterType::Police:
+            PoolCharType = EPACSCharacterType::LightweightPolice;
+            break;
+        case EPACSCharacterType::Firefighter:
+            PoolCharType = EPACSCharacterType::LightweightFirefighter;
+            break;
+        case EPACSCharacterType::Paramedic:
+            PoolCharType = EPACSCharacterType::LightweightParamedic;
+            break;
+        default:
+            PoolCharType = EPACSCharacterType::LightweightCivilian;
+            break;
+    }
 
-    APACS_NPCCharacter* NPC = CharacterPool->AcquireCharacter(
+    // Acquire lightweight character from pool
+    APACS_NPC_Humanoid* LightweightNPC = CharacterPool->AcquireLightweightCharacter(
         PoolCharType,
         GetWorld()
     );
 
-    if (!NPC)
+    if (!LightweightNPC)
     {
-        UE_LOG(LogTemp, Warning, TEXT("PACS_NPCSpawnManager: Failed to acquire character from pool for type %s"),
+        UE_LOG(LogTemp, Warning, TEXT("PACS_NPCSpawnManager: Failed to acquire lightweight character from pool for type %s"),
             *UEnum::GetValueAsString(PoolCharType));
         return false;
     }
 
-    // Position the NPC at spawn point
+    // Position the lightweight NPC at spawn point
     FVector SpawnLocation = SpawnPoint->GetActorLocation();
     FRotator SpawnRotation = SpawnPoint->SpawnRotation.IsNearlyZero() ?
         SpawnPoint->GetActorRotation() : SpawnPoint->SpawnRotation;
 
-    NPC->SetActorLocation(SpawnLocation);
-    NPC->SetActorRotation(SpawnRotation);
+    LightweightNPC->SetActorLocation(SpawnLocation);
+    LightweightNPC->SetActorRotation(SpawnRotation);
 
-    // Track the spawned NPC
-    SpawnedNPCs.Add(NPC);
-    SpawnPointMapping.Add(SpawnPoint, NPC);
-    SpawnPoint->SetSpawnedCharacter(NPC);
+    // Track the spawned lightweight NPC
+    SpawnedLightweightNPCs.Add(LightweightNPC);
+    LightweightSpawnPointMapping.Add(SpawnPoint, LightweightNPC);
+
+    // Note: SpawnPoint expects APACS_NPCCharacter, but we're using lightweight now
+    // This will need to be updated to use the interface instead
+    // For now, we'll skip setting it on the spawn point
+    // SpawnPoint->SetSpawnedCharacter(NPC);
 
     return true;
 }

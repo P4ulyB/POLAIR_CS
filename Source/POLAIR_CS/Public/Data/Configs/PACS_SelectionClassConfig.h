@@ -7,6 +7,7 @@
 #include "PACS_SelectionClassConfig.generated.h"
 
 class APACS_NPCCharacter;
+class AActor;
 
 /**
  * Configuration for a single character class selection system
@@ -21,10 +22,11 @@ public:
 	FPACS_SelectionClassConfig();
 
 	// Target character class for this configuration
-	// Epic pattern: Use specific derived type for UI filtering (from ChildActorComponent)
+	// Now supports any Actor that implements IPACS_SelectableCharacterInterface
+	// This includes both APACS_NPCCharacter and APACS_NPC_Humanoid
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Class",
 		meta = (DisplayName = "Target Character Class", AllowAbstract = false))
-	TSoftClassPtr<APACS_NPCCharacter> TargetClass;
+	TSoftClassPtr<AActor> TargetClass;
 
 	// Selection material instance (soft reference for async loading)
 	// Epic pattern: TSoftObjectPtr for material references to prevent auto-loading

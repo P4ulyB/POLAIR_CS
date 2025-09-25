@@ -9,6 +9,7 @@
 
 class APACS_NPCSpawnPoint;
 class APACS_NPCCharacter;
+class APACS_NPC_Humanoid;
 
 /**
  * Simple spawn manager that populates spawn points with pooled characters
@@ -41,7 +42,7 @@ public:
      * Get total number of NPCs spawned
      */
     UFUNCTION(BlueprintCallable, Category = "PACS|Spawn")
-    int32 GetSpawnedNPCCount() const { return SpawnedNPCs.Num(); }
+    int32 GetSpawnedNPCCount() const { return SpawnedNPCs.Num() + SpawnedLightweightNPCs.Num(); }
 
     /**
      * Find all spawn points in the level
@@ -64,7 +65,15 @@ private:
     UPROPERTY()
     TArray<APACS_NPCCharacter*> SpawnedNPCs;
 
+    // Track all spawned lightweight NPCs for cleanup
+    UPROPERTY()
+    TArray<APACS_NPC_Humanoid*> SpawnedLightweightNPCs;
+
     // Track spawn points that have NPCs
     UPROPERTY()
     TMap<APACS_NPCSpawnPoint*, APACS_NPCCharacter*> SpawnPointMapping;
+
+    // Track spawn points that have lightweight NPCs
+    UPROPERTY()
+    TMap<APACS_NPCSpawnPoint*, APACS_NPC_Humanoid*> LightweightSpawnPointMapping;
 };

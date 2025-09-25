@@ -25,7 +25,9 @@ public class POLAIR_CS : ModuleRules
 			"NetCore",
 			"DeveloperSettings", // Required for PACS Selection System settings
 			"AIModule", // Required for AIController and UAIBlueprintHelperLibrary
-			"NavigationSystem" // Required for AI pathfinding
+			"NavigationSystem", // Required for AI pathfinding
+			"ReplicationGraph", // Required for PACS_ReplicationGraph optimization
+			"SignificanceManager" // Required for PACS_SignificanceManager
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] {
@@ -35,7 +37,8 @@ public class POLAIR_CS : ModuleRules
 			"XRBase", // Required for UHeadMountedDisplayFunctionLibrary
 			"Settings", // Required for ISettingsModule registration
 			"RenderCore", // Required for threading globals (GIsThreadedRendering, etc.)
-			"RHI" // Required for RHI diagnostics
+			"RHI", // Required for RHI diagnostics
+			"AnimationBudgetAllocator" // Required for animation optimization
 		});
 
 		if (Target.Configuration != UnrealTargetConfiguration.Shipping)

@@ -1,6 +1,7 @@
 #include "Core/PACSGameMode.h"
 #include "Core/PACS_PlayerController.h"
 #include "Core/PACS_PlayerState.h"
+#include "Core/PACS_OptimizationSubsystem.h"
 #include "Subsystems/PACSServerKeepaliveSubsystem.h"
 #include "GenericPlatform/GenericPlatformHttp.h"
 #include "GameFramework/PlayerState.h"
@@ -30,6 +31,16 @@ void APACSGameMode::BeginPlay()
 {
     Super::BeginPlay();
 
+    // Initialize Animation Budget Allocator for clients
+    // This needs to happen early for all players
+    if (UGameInstance* GI = GetGameInstance())
+    {
+        if (UPACS_OptimizationSubsystem* OptSubsystem = GI->GetSubsystem<UPACS_OptimizationSubsystem>())
+        {
+            OptSubsystem->EnableAnimationBudgetAllocator(GetWorld());
+        }
+    }
+
     // Only spawn NPCs on server
     if (!HasAuthority())
     {
@@ -42,11 +53,11 @@ void APACSGameMode::BeginPlay()
     {
         CharacterPool->PreloadCharacterAssets();
 
-        // Warm up pools for immediate use
-        CharacterPool->WarmUpPool(EPACSCharacterType::Civilian, 30);
-        CharacterPool->WarmUpPool(EPACSCharacterType::Police, 10);
-        CharacterPool->WarmUpPool(EPACSCharacterType::Firefighter, 5);
-        CharacterPool->WarmUpPool(EPACSCharacterType::Paramedic, 5);
+        // Warm up lightweight pools for immediate use (much better performance)
+        CharacterPool->WarmUpPool(EPACSCharacterType::LightweightCivilian, 30);
+        CharacterPool->WarmUpPool(EPACSCharacterType::LightweightPolice, 10);
+        CharacterPool->WarmUpPool(EPACSCharacterType::LightweightFirefighter, 5);
+        CharacterPool->WarmUpPool(EPACSCharacterType::LightweightParamedic, 5);
 
         UE_LOG(LogTemp, Log, TEXT("PACS GameMode: Character pool initialized and warmed up"));
     }

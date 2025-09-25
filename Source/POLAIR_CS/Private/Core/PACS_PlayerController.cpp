@@ -7,6 +7,7 @@
 #include "Actors/Pawn/PACS_CandidateHelicopterCharacter.h"
 #include "Subsystems/PACSLaunchArgSubsystem.h"
 #include "Actors/NPC/PACS_NPCCharacter.h"
+#include "Interfaces/PACS_SelectableCharacterInterface.h"
 #include "EngineUtils.h"
 #include "Components/DecalComponent.h"
 
@@ -439,14 +440,18 @@ EPACS_InputHandleResult APACS_PlayerController::HandleInputAction(FName ActionNa
                 HitResult.GetActor() ? *HitResult.GetActor()->GetName() : TEXT("None"),
                 *HitResult.Location.ToString());
 
-            if (APACS_NPCCharacter* NPC = Cast<APACS_NPCCharacter>(HitResult.GetActor()))
+            // Check for interface instead of specific class to support both NPC types
+            if (IPACS_SelectableCharacterInterface* Selectable = Cast<IPACS_SelectableCharacterInterface>(HitResult.GetActor()))
             {
-                UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] Clicked on NPC: %s (Currently selected by: %s)"),
-                    *NPC->GetName(),
-                    NPC->CurrentSelector ? *NPC->CurrentSelector->GetPlayerName() : TEXT("Nobody"));
+                AActor* NPCActor = HitResult.GetActor();
+                APlayerState* CurrentSelector = Selectable->GetCurrentSelector();
+
+                UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] Clicked on selectable NPC: %s (Currently selected by: %s)"),
+                    *NPCActor->GetName(),
+                    CurrentSelector ? *CurrentSelector->GetPlayerName() : TEXT("Nobody"));
 
                 // Request selection of the NPC
-                ServerRequestSelect(NPC);
+                ServerRequestSelect(NPCActor);
             }
             else
             {
@@ -571,9 +576,10 @@ void APACS_PlayerController::ServerRequestSelect_Implementation(AActor* TargetAc
     }
 
     APACS_PlayerState* PS = GetPlayerState<APACS_PlayerState>();
-    APACS_NPCCharacter* TargetNPC = Cast<APACS_NPCCharacter>(TargetActor);
+    // Use interface to support both heavyweight and lightweight NPCs
+    IPACS_SelectableCharacterInterface* TargetNPC = Cast<IPACS_SelectableCharacterInterface>(TargetActor);
 
-    UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] ServerRequestSelect - Player: %s, Target: %s, NPC Cast: %s"),
+    UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] ServerRequestSelect - Player: %s, Target: %s, Interface Cast: %s"),
         PS ? *PS->GetPlayerName() : TEXT("NULL"),
         *TargetActor->GetName(),
         TargetNPC ? TEXT("SUCCESS") : TEXT("FAILED"));
@@ -588,27 +594,52 @@ void APACS_PlayerController::ServerRequestSelect_Implementation(AActor* TargetAc
     if (APACS_NPCCharacter* PreviousNPC = PS->GetSelectedNPC())
     {
         UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] Releasing previous selection: %s"), *PreviousNPC->GetName());
-        PreviousNPC->CurrentSelector = nullptr;
-        PreviousNPC->ForceNetUpdate();
+
+        // Use interface if the old NPC implements it
+        if (IPACS_SelectableCharacterInterface* PrevSelectable = Cast<IPACS_SelectableCharacterInterface>(PreviousNPC))
+        {
+            PrevSelectable->SetCurrentSelector(nullptr);
+        }
+
+        // Epic pattern: Return to dormancy when deselected
+        PreviousNPC->SetNetDormancy(DORM_Initial);
         PS->SetSelectedNPC(nullptr);
     }
 
     // If target is available (not selected by anyone), claim it
-    if (!TargetNPC->CurrentSelector)
+    APlayerState* CurrentSelector = TargetNPC->GetCurrentSelector();
+    if (!CurrentSelector)
     {
         UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] SUCCESS: %s selected %s"),
-            *PS->GetPlayerName(), *TargetNPC->GetName());
+            *PS->GetPlayerName(), *TargetActor->GetName());
 
-        TargetNPC->CurrentSelector = PS;
-        TargetNPC->ForceNetUpdate();
-        PS->SetSelectedNPC(TargetNPC);
+        // Epic pattern: Wake from dormancy when selected
+        if (APawn* TargetPawn = Cast<APawn>(TargetActor))
+        {
+            TargetPawn->FlushNetDormancy();
+        }
+
+        // Set selection through interface
+        TargetNPC->SetCurrentSelector(PS);
+
+        // Update player state (need to handle both NPC types)
+        if (APACS_NPCCharacter* HeavyweightNPC = Cast<APACS_NPCCharacter>(TargetActor))
+        {
+            PS->SetSelectedNPC(HeavyweightNPC);
+        }
+        else
+        {
+            // For lightweight NPCs, we can't store in PlayerState yet (needs update)
+            // For now, just log that we selected it
+            UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] Selected lightweight NPC - PlayerState tracking needs update"));
+        }
     }
     else
     {
         // Already owned by someone else
         UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] BLOCKED: %s tried to select %s but it's already selected by %s"),
-            *PS->GetPlayerName(), *TargetNPC->GetName(),
-            *TargetNPC->CurrentSelector->GetPlayerName());
+            *PS->GetPlayerName(), *TargetActor->GetName(),
+            *CurrentSelector->GetPlayerName());
     }
 }
 
@@ -637,7 +668,8 @@ void APACS_PlayerController::ServerRequestDeselect_Implementation()
             *PS->GetPlayerName(), *NPC->GetName());
 
         NPC->CurrentSelector = nullptr;
-        NPC->ForceNetUpdate();
+        // Epic pattern: Return to dormancy when deselected
+        NPC->SetNetDormancy(DORM_Initial);
         PS->SetSelectedNPC(nullptr);
     }
     else
