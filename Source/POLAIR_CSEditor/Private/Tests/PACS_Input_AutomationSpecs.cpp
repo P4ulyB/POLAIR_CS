@@ -4,8 +4,8 @@
 #include "InputAction.h"
 #include "InputMappingContext.h"
 
-#include "PACS_InputMappingConfig.h"
-#include "PACS_InputTypes.h" // EPACS_* types, FPACS_InputReceiverEntry, PACS_InputLimits, etc.
+#include "Data/Configs/PACS_InputMappingConfig.h"
+#include "Data/PACS_InputTypes.h" // EPACS_* types, FPACS_InputReceiverEntry, PACS_InputLimits, etc.
 
 // ------- Spec 1: Config validity & identifier lookup -------
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPACS_InputConfigValiditySpec,

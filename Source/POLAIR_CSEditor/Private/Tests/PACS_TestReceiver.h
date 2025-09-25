@@ -2,7 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "UObject/Object.h"
-#include "PACS_InputTypes.h"
+#include "Data/PACS_InputTypes.h"
 #include "PACS_TestReceiver.generated.h"
 
 UCLASS()

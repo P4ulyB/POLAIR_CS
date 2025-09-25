@@ -8,9 +8,9 @@
 #include "EnhancedInputSubsystems.h"
 
 #include "PACS_TestReceiver.h"
-#include "PACS_InputHandlerComponent.h"
-#include "PACS_InputMappingConfig.h"
-#include "PACS_PlayerController.h"
+#include "Components/PACS_InputHandlerComponent.h"
+#include "Data/Configs/PACS_InputMappingConfig.h"
+#include "Core/PACS_PlayerController.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPACS_InputHandlerIntegrationTest,
     "PACS.Input.InputHandler.Integration",

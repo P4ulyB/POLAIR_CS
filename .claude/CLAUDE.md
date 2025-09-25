@@ -1,5 +1,7 @@
 # POLAIR_CS Training Simulation - Claude Code Configuration
 
+## CRITICAL: - This project is created for a dedicated server multiplayer environment. All code created, ammended and reviewed must be considered under the scope of this projects intended dedicated server environment.
+
 ## Quick Navigation (Source of Truth)
 - **Current Status:** `docs/project_progress.md`
 - **Project Metadata:** `docs/project_state.json`
@@ -8,7 +10,7 @@
 - **Error Patterns:** `docs/error_logging/error_patterns.json`
 - **MCP Status:** Connected - UE5 Semantic Analysis Server
 - **UnrealInsights.exe** - C:\Devops\UESource\Engine\Binaries\Win64
-- **Unreal Build Tool** - C:\Devops\UESource\Engine\Binaries\Win64
+- **Unreal Build Tool** - C:\\Devops\\UESource\\Engine\\Build\\BatchFiles\\Build.bat
 
 ## Configuration
 - **max_messages**: 40  # Limit conversation history to reduce token usage

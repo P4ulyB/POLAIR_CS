@@ -11,9 +11,9 @@
 #include "Tests/AutomationEditorCommon.h"
 
 // Project includes
-#include "PACSGameMode.h"
-#include "PACS_PlayerController.h"
-#include "PACS_PlayerState.h"
+#include "Core/PACSGameMode.h"
+#include "Core/PACS_PlayerController.h"
+#include "Core/PACS_PlayerState.h"
 #include "Tests/PACS_HMDSpawning_TestHelpers.h"
 
 // Test 1: Basic HMD User Gets Candidate Pawn

@@ -1,7 +1,7 @@
 #include "Tests/PACS_Heli_PerfSpec.h"
 #include "Tests/PACS_Heli_TestHelpers.h"
-#include "PACS/Heli/PACS_CandidateHelicopterCharacter.h"
-#include "PACS/Heli/PACS_HeliMovementComponent.h"
+#include "Actors/Pawn/PACS_CandidateHelicopterCharacter.h"
+#include "Components/PACS_HeliMovementComponent.h"
 #include "Engine/World.h"
 #include "HAL/PlatformTime.h"
 

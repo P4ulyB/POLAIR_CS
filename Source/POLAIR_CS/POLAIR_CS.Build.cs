@@ -33,7 +33,9 @@ public class POLAIR_CS : ModuleRules
 			"PlayFabCpp",
 			"PlayFabCommon",
 			"XRBase", // Required for UHeadMountedDisplayFunctionLibrary
-			"Settings" // Required for ISettingsModule registration
+			"Settings", // Required for ISettingsModule registration
+			"RenderCore", // Required for threading globals (GIsThreadedRendering, etc.)
+			"RHI" // Required for RHI diagnostics
 		});
 
 		if (Target.Configuration != UnrealTargetConfiguration.Shipping)

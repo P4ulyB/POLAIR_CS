@@ -3,7 +3,7 @@
 #include "Engine/StaticMeshActor.h"
 #include "Components/BoxComponent.h"
 #include "GameFramework/Actor.h"
-#include "PACS/Heli/PACS_CandidateHelicopterCharacter.h"
+#include "Actors/Pawn/PACS_CandidateHelicopterCharacter.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/Engine.h"
 

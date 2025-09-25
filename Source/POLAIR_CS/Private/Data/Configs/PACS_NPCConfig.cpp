@@ -1,6 +1,6 @@
 #include "Data/Configs/PACS_NPCConfig.h"
 #include "Data/PACS_NPCVisualConfig.h"
-#include "Settings/PACS_SelectionSystemSettings.h"
+#include "Data/Settings/PACS_SelectionSystemSettings.h"
 
 #if WITH_EDITOR
 #include "Engine/Blueprint.h"

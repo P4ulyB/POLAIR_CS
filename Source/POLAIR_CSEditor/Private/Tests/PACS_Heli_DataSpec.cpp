@@ -1,5 +1,5 @@
 #include "Tests/PACS_Heli_DataSpec.h"
-#include "PACS/Heli/PACS_CandidateHelicopterData.h"
+#include "Data/Configs/PACS_CandidateHelicopterData.h"
 #include "UObject/SoftObjectPtr.h"
 
 bool FPACS_Heli_DataSpec::RunTest(const FString& Parameters)
