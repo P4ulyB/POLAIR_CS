@@ -1,9 +1,9 @@
 #include "Actors/NPC/PACS_NPC_Base.h"
 #include "Components/BoxComponent.h"
-#include "Components/DecalComponent.h"
+#include "Components/PACS_SelectionPlaneComponent.h"
 #include "GameFramework/PlayerState.h"
-#include "Materials/Material.h"
 #include "Net/UnrealNetwork.h"
+#include "Engine/World.h"
 #include "UObject/ConstructorHelpers.h"
 
 APACS_NPC_Base::APACS_NPC_Base()
@@ -15,10 +15,10 @@ APACS_NPC_Base::APACS_NPC_Base()
 	RootComponent = BoxCollision;
 	SetupDefaultCollision();
 
-	// Create selection decal
-	SelectionDecal = CreateDefaultSubobject<UDecalComponent>(TEXT("SelectionDecal"));
-	SelectionDecal->SetupAttachment(RootComponent);
-	SetupDefaultDecal();
+	// Create selection plane component (manages state and client-side visuals)
+	// The component itself handles creating visual elements ONLY on non-VR clients
+	SelectionPlaneComponent = CreateDefaultSubobject<UPACS_SelectionPlaneComponent>(TEXT("SelectionPlaneComponent"));
+	SelectionPlaneComponent->SetIsReplicated(true);
 
 	// Replication settings for multiplayer
 	bReplicates = true;
@@ -31,10 +31,11 @@ void APACS_NPC_Base::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// Hide selection decal by default
-	if (SelectionDecal)
+	// Initialize selection plane component
+	if (SelectionPlaneComponent)
 	{
-		SelectionDecal->SetVisibility(false);
+		SelectionPlaneComponent->InitializeSelectionPlane();
+		SelectionPlaneComponent->SetSelectionPlaneVisible(false);
 	}
 }
 
@@ -52,11 +53,23 @@ void APACS_NPC_Base::EndPlay(const EEndPlayReason::Type EndPlayReason)
 void APACS_NPC_Base::OnAcquiredFromPool_Implementation()
 {
 	PrepareForUse();
+
+	// Notify selection component
+	if (SelectionPlaneComponent)
+	{
+		SelectionPlaneComponent->OnAcquiredFromPool();
+	}
 }
 
 void APACS_NPC_Base::OnReturnedToPool_Implementation()
 {
 	ResetForPool();
+
+	// Notify selection component
+	if (SelectionPlaneComponent)
+	{
+		SelectionPlaneComponent->OnReturnedToPool();
+	}
 }
 
 void APACS_NPC_Base::SetSelected(bool bNewSelected, APlayerState* Selector)
@@ -71,6 +84,12 @@ void APACS_NPC_Base::SetSelected(bool bNewSelected, APlayerState* Selector)
 
 	UpdateSelectionVisuals();
 
+	// Update selection plane component
+	if (SelectionPlaneComponent)
+	{
+		SelectionPlaneComponent->SetSelectionState(bIsSelected ? ESelectionVisualState::Selected : ESelectionVisualState::Available);
+	}
+
 	// Log for debugging
 	UE_LOG(LogTemp, Log, TEXT("PACS_NPC_Base: %s %s by %s"),
 		*GetName(),
@@ -80,9 +99,9 @@ void APACS_NPC_Base::SetSelected(bool bNewSelected, APlayerState* Selector)
 
 void APACS_NPC_Base::UpdateSelectionVisuals()
 {
-	if (SelectionDecal)
+	if (SelectionPlaneComponent)
 	{
-		SelectionDecal->SetVisibility(bIsSelected);
+		SelectionPlaneComponent->SetSelectionPlaneVisible(bIsSelected);
 	}
 }
 
@@ -92,10 +111,10 @@ void APACS_NPC_Base::ResetForPool()
 	bIsSelected = false;
 	CurrentSelector = nullptr;
 
-	// Hide decal
-	if (SelectionDecal)
+	// Hide selection plane
+	if (SelectionPlaneComponent)
 	{
-		SelectionDecal->SetVisibility(false);
+		SelectionPlaneComponent->SetSelectionPlaneVisible(false);
 	}
 
 	// Reset transform
@@ -117,40 +136,13 @@ void APACS_NPC_Base::PrepareForUse()
 		BoxCollision->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 	}
 
-	// Ensure decal is hidden initially
-	if (SelectionDecal)
+	// Ensure selection plane is hidden initially
+	if (SelectionPlaneComponent)
 	{
-		SelectionDecal->SetVisibility(false);
+		SelectionPlaneComponent->SetSelectionPlaneVisible(false);
 	}
 }
 
-void APACS_NPC_Base::SetupDefaultDecal()
-{
-	if (!SelectionDecal)
-	{
-		return;
-	}
-
-	// Set default decal size (can be overridden in Blueprint)
-	SelectionDecal->DecalSize = FVector(128.0f, 128.0f, 256.0f);
-
-	// Rotate to project downward
-	SelectionDecal->SetRelativeRotation(FRotator(-90.0f, 0.0f, 0.0f));
-
-	// Position at bottom of collision box
-	SelectionDecal->SetRelativeLocation(FVector(0.0f, 0.0f, -100.0f));
-
-	// Try to load default selection material
-	static ConstructorHelpers::FObjectFinder<UMaterial> DecalMaterialAsset(
-		TEXT("/Engine/EngineMaterials/DefaultDecalMaterial"));
-	if (DecalMaterialAsset.Succeeded())
-	{
-		SelectionDecal->SetDecalMaterial(DecalMaterialAsset.Object);
-	}
-
-	// Start hidden
-	SelectionDecal->SetVisibility(false);
-}
 
 void APACS_NPC_Base::SetupDefaultCollision()
 {

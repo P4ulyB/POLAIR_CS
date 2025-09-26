@@ -6,12 +6,13 @@
 #include "PACS_NPC_Base_Char.generated.h"
 
 class UBoxComponent;
-class UDecalComponent;
+class UPACS_SelectionPlaneComponent;
 
 /**
  * Base Character class for humanoid NPCs in POLAIR_CS
  * Extends ACharacter with pooling support and selection system
- * Includes standard components: DecalComponent and BoxCollision
+ * Selection visuals are client-side only, excluded from VR/HMD clients
+ * Uses CustomPrimitiveData for per-actor visual customization
  */
 UCLASS(Abstract)
 class POLAIR_CS_API APACS_NPC_Base_Char : public ACharacter, public IPACS_Poolable
@@ -35,8 +36,10 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UBoxComponent> BoxCollision;
 
+	// Selection plane component for visual indicators (manages state and client-side visuals)
+	// This component handles creating visual elements ONLY on non-VR clients
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UDecalComponent> SelectionDecal;
+	TObjectPtr<UPACS_SelectionPlaneComponent> SelectionPlaneComponent;
 
 protected:
 	// Selection state
@@ -82,6 +85,5 @@ protected:
 
 private:
 	// Default component setup
-	void SetupDefaultDecal();
 	void SetupDefaultCollision();
 };

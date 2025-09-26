@@ -1,11 +1,9 @@
 #include "Actors/NPC/PACS_NPC_Base_Veh.h"
 #include "Components/BoxComponent.h"
-#include "Components/DecalComponent.h"
+#include "Components/PACS_SelectionPlaneComponent.h"
 #include "ChaosWheeledVehicleMovementComponent.h"
 #include "GameFramework/PlayerState.h"
-#include "Materials/Material.h"
 #include "Net/UnrealNetwork.h"
-#include "UObject/ConstructorHelpers.h"
 
 APACS_NPC_Base_Veh::APACS_NPC_Base_Veh()
 {
@@ -16,10 +14,10 @@ APACS_NPC_Base_Veh::APACS_NPC_Base_Veh()
 	BoxCollision->SetupAttachment(RootComponent);
 	SetupDefaultCollision();
 
-	// Create selection decal
-	SelectionDecal = CreateDefaultSubobject<UDecalComponent>(TEXT("SelectionDecal"));
-	SelectionDecal->SetupAttachment(RootComponent);
-	SetupDefaultDecal();
+	// Create selection plane component (manages state and client-side visuals)
+	// The component itself handles creating visual elements ONLY on non-VR clients
+	SelectionPlaneComponent = CreateDefaultSubobject<UPACS_SelectionPlaneComponent>(TEXT("SelectionPlaneComponent"));
+	SelectionPlaneComponent->SetIsReplicated(true);
 
 	// Replication settings for multiplayer
 	bReplicates = true;
@@ -38,10 +36,11 @@ void APACS_NPC_Base_Veh::BeginPlay()
 		bEngineStartedByDefault = true; // Vehicles typically start with engine on
 	}
 
-	// Hide selection decal by default
-	if (SelectionDecal)
+	// Initialize selection plane component
+	if (SelectionPlaneComponent)
 	{
-		SelectionDecal->SetVisibility(false);
+		SelectionPlaneComponent->InitializeSelectionPlane();
+		SelectionPlaneComponent->SetSelectionPlaneVisible(false);
 	}
 }
 
@@ -62,11 +61,23 @@ void APACS_NPC_Base_Veh::EndPlay(const EEndPlayReason::Type EndPlayReason)
 void APACS_NPC_Base_Veh::OnAcquiredFromPool_Implementation()
 {
 	PrepareForUse();
+
+	// Notify selection component
+	if (SelectionPlaneComponent)
+	{
+		SelectionPlaneComponent->OnAcquiredFromPool();
+	}
 }
 
 void APACS_NPC_Base_Veh::OnReturnedToPool_Implementation()
 {
 	ResetForPool();
+
+	// Notify selection component
+	if (SelectionPlaneComponent)
+	{
+		SelectionPlaneComponent->OnReturnedToPool();
+	}
 }
 
 void APACS_NPC_Base_Veh::SetSelected(bool bNewSelected, APlayerState* Selector)
@@ -80,6 +91,12 @@ void APACS_NPC_Base_Veh::SetSelected(bool bNewSelected, APlayerState* Selector)
 	CurrentSelector = bNewSelected ? Selector : nullptr;
 
 	UpdateSelectionVisuals();
+
+	// Update selection plane component
+	if (SelectionPlaneComponent)
+	{
+		SelectionPlaneComponent->SetSelectionState(bIsSelected ? ESelectionVisualState::Selected : ESelectionVisualState::Available);
+	}
 
 	UE_LOG(LogTemp, Log, TEXT("PACS_NPC_Base_Veh: %s %s by %s"),
 		*GetName(),
@@ -141,9 +158,9 @@ void APACS_NPC_Base_Veh::SetHandbrake(bool bEngaged)
 
 void APACS_NPC_Base_Veh::UpdateSelectionVisuals()
 {
-	if (SelectionDecal)
+	if (SelectionPlaneComponent)
 	{
-		SelectionDecal->SetVisibility(bIsSelected);
+		SelectionPlaneComponent->SetSelectionPlaneVisible(bIsSelected);
 	}
 }
 
@@ -153,10 +170,10 @@ void APACS_NPC_Base_Veh::ResetForPool()
 	bIsSelected = false;
 	CurrentSelector = nullptr;
 
-	// Hide decal
-	if (SelectionDecal)
+	// Hide selection plane
+	if (SelectionPlaneComponent)
 	{
-		SelectionDecal->SetVisibility(false);
+		SelectionPlaneComponent->SetSelectionPlaneVisible(false);
 	}
 
 	// Stop vehicle
@@ -194,10 +211,10 @@ void APACS_NPC_Base_Veh::PrepareForUse()
 		VehicleMovement->SetHandbrakeInput(false);
 	}
 
-	// Ensure decal is hidden initially
-	if (SelectionDecal)
+	// Ensure selection plane is hidden initially
+	if (SelectionPlaneComponent)
 	{
-		SelectionDecal->SetVisibility(false);
+		SelectionPlaneComponent->SetSelectionPlaneVisible(false);
 	}
 }
 
@@ -239,34 +256,6 @@ void APACS_NPC_Base_Veh::ResetVehiclePhysics()
 		// Reset vehicle to rest
 		VehicleMovement->StopMovementImmediately();
 	}
-}
-
-void APACS_NPC_Base_Veh::SetupDefaultDecal()
-{
-	if (!SelectionDecal)
-	{
-		return;
-	}
-
-	// Set larger decal size for vehicles
-	SelectionDecal->DecalSize = FVector(256.0f, 256.0f, 256.0f);
-
-	// Rotate to project downward
-	SelectionDecal->SetRelativeRotation(FRotator(-90.0f, 0.0f, 0.0f));
-
-	// Position at bottom of vehicle
-	SelectionDecal->SetRelativeLocation(FVector(0.0f, 0.0f, -150.0f));
-
-	// Try to load default selection material
-	static ConstructorHelpers::FObjectFinder<UMaterial> DecalMaterialAsset(
-		TEXT("/Engine/EngineMaterials/DefaultDecalMaterial"));
-	if (DecalMaterialAsset.Succeeded())
-	{
-		SelectionDecal->SetDecalMaterial(DecalMaterialAsset.Object);
-	}
-
-	// Start hidden
-	SelectionDecal->SetVisibility(false);
 }
 
 void APACS_NPC_Base_Veh::SetupDefaultCollision()

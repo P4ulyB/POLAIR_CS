@@ -1,0 +1,302 @@
+There have been some design changes discussed - 
+
+Regarding the collision box - the collision box may no longer even needed. The reason i placed a collision box in the first place was to register mouse hover / click events.
+If i instead use a static mesh and set a plane to it - then set the material as my 'highlight' material, it appears exactly the same as a decal component. so we can remove the decal componet all together and leverage a more CPD friendly environment. 
+
+The LLM disagrees with you on some points.
+
+1. Interface Removal (IPACS_PrimaryVisualHost)
+
+Claim: "Unnecessary, over-engineered."
+
+Counterpoint: Wrong abstraction boundary.
+
+GetComponentByClass() is only viable if:
+
+You know the component class type (Skeletal vs Static)
+
+The actor isn’t swapping meshes (e.g. vehicle-to-human proxy)
+
+There’s a consistent layout
+
+A unified interface like GetPrimaryVisual() is a clean, forward-compatible escape hatch. It lets future special cases (e.g., VR mesh proxies, merged LOD actors) slot in cleanly.
+
+2. Subsystem Elimination
+
+Claim: "Over-engineered. Just use SpawnOrchestrator."
+
+Counterpoint: Subsystem is the right place to cache shared soft refs (materials, mesh classes).
+
+SpawnOrchestrator handles actors — not data-driven mesh/material references.
+
+You want:
+
+One cache location
+
+Cross-NPC access
+
+Soft-ref resolution only on client
+
+This is standard Epic practice: GISS/WorldSS for shared pools, loaders, and lazy caching.
+
+That said: If SpawnOrchestrator already holds these references, a subsystem is unnecessary — but only if.
+
+3. CPD Packing is Overkill
+
+Partially agree. Packing colours into Vector4[0..2] arrays is optimisation too early if you're only doing four states.
+
+BUT:
+
+If you plan to support 10+ states or override brightness curves, packing might still make sense.
+
+You’re not forced into either: both patterns coexist.
+
+Here is a revised design plan.
+
+0) Goals / Non-Goals
+
+Goals
+
+Client-side ground projection under NPCs (hover/selected/available/unavailable).
+
+Zero per-actor MIDs; Custom Primitive Data (CPD) only.
+
+No visuals for HMD clients; they must remain oblivious.
+
+Server-authoritative selection; hover is client-local.
+
+No tick; event-driven + optional low-Hz timers; works with pooling + significance.
+
+Minimal replication: IDs, not floats.
+
+Non-Goals
+
+True deferred decals.
+
+Server doing any visual work or loading visual assets.
+
+1) resolved disagreements
+
+CPD vs MPC/MIDs: CPD wins. Per-actor, GPU-friendly, no global stomping.
+
+Decals vs Mesh: Mesh plane projector wins (decal look without decal cost; VR-safe; CPD-compatible).
+
+Interface vs “GetComponentByClass”: keep a tiny IPACS_PrimaryVisualHost (one function) for forward-compatibility across Base/Base_Char/Base_Veh.
+
+Subsystem: optional. If the existing Spawn/Orchestrator already caches soft refs, don’t add a new one. Otherwise, a light GI subsystem is allowed to cache parent materials/meshes (client-only guards).
+
+Replicate floats vs indices: indices win. Replicate state/profile IDs; clients look up colour/brightness locally.
+
+Collision box: remove. Use the plane’s custom trace channel for hover/click pickup.
+
+2) Networking Contract (server-authoritative, lean)
+
+Replicate only IDs:
+
+VisualProfileId : uint16 — COND_InitialOnly
+
+VisualState : uint8 (0..3) — COND_None, REPNOTIFY_OnChanged
+
+Hovered — not replicated (purely client-local)
+
+Optional:
+
+VariantId : uint8 (palette variants)
+
+ScalarQ : uint8 quantised (0..127) if the server must author a continuous intensity; client computes Scalar = ScalarQ/127.f.
+
+Server validates selection; clients render visuals.
+
+3) Material Contract (CPD layout)
+
+Single unlit/masked parent material M_PACS_GroundProjector (shared by all).
+
+CPD indices (reserve):
+
+CPD[0] → StateIndex (0..3)
+
+CPD[1] → Colour.R
+
+CPD[2] → Colour.G
+
+CPD[3] → Colour.B
+
+CPD[4] → Colour.A (usually 1)
+
+CPD[5] → Brightness
+
+CPD[6] → Optional Radius (for size/fade)
+
+CPD[7] → Optional FadeAlpha/Strength
+
+Keep it simple (direct floats). Packing can come later if you outgrow CPD.
+
+Shading: Unlit + Masked (soft circular mask + dithered edge). Avoid Translucent unless necessary.
+
+5) Components & Interfaces
+5.1 IPACS_PrimaryVisualHost
+UINTERFACE()
+class UPACS_PrimaryVisualHost : public UInterface { GENERATED_BODY() };
+
+class IPACS_PrimaryVisualHost
+{
+    GENERATED_BODY()
+public:
+    virtual UMeshComponent* GetPrimaryVisual() const = 0; // skeletal or static
+};
+
+
+Implemented by PACS_NPC_Base, _Base_Char, _Base_Veh.
+
+5.2 UPACS_GroundProjectorComponent (client-only)
+
+No tick.
+
+Owns a UStaticMeshComponent* PlaneSMC with:
+
+Mobility=Movable, Collision=QueryOnly, custom channel ECC_SelectionTrace=Block, everything else Ignore.
+
+No shadow/DFL/decals/collision overlaps.
+
+Unlit/masked material M_PACS_GroundProjector (no MID).
+
+API
+
+void ApplyProfile(uint16 InProfileId);                 // client, on spawn/pool or OnRep(ProfileId)
+void ApplyVisualState(uint8 StateIdx);                 // client, on hover/local, or OnRep(VisualState)
+void UpdatePlacement();                                // one downward trace + align + 1–2 cm Z lift
+void SetProjectorVisible(bool bVisible);               // significance gating
+
+
+Guards
+
+if (IsRunningDedicatedServer()) return; // everywhere inside
+if (UHeadMountedDisplayFunctionLibrary::IsHeadMountedDisplayEnabled()) return; // skip HMD clients
+
+
+Placement (event-driven):
+
+Call on: mesh set, pool acquire, teleport/landed, or throttle at 2–4 Hz while moving.
+
+Align to hit normal; clamp max tilt if desired; small Z offset to avoid z-fighting.
+
+5.3 Client Input (hover/click)
+
+Mouse ray: GetHitResultUnderCursorByChannel(ECC_SelectionTrace) to hit the plane.
+
+Optional dual-trace for occlusion correctness:
+
+Compare plane-hit distance vs a Visibility trace; accept if plane ≤ blocker + ε.
+
+On click: ServerRequestSelect(TargetNPC).
+Server validates against the NPC (capsule/LOS/rules) — never against the plane.
+
+6) Pooling Lifecycle (strict)
+
+OnAcquiredFromPool (client):
+
+Spawn/attach plane SMC if absent; ApplyProfile(ProfileId), ApplyVisualState(CurrentState), UpdatePlacement().
+
+OnReturnedToPool:
+
+Hide plane; clear any timers; (optional) reset CPD to defaults.
+
+No ticking. No per-frame material work.
+
+7) Significance & Perf Hooks
+
+If insignificant: SetProjectorVisible(false) and skip hover traces for that NPC.
+
+If significant: ensure CPD is current.
+
+Optional: set MaxDrawDistance on PlaneSMC per significance tier.
+
+Integrate with any MemoryTracker/NetworkMonitor you already have:
+
+Log projector count and CPD updates on client (debug only).
+
+Record selection RPC rate/size on server (debug only).
+
+8) VR/HMD Handling
+
+Gate creation of projection plane on non-VR clients on HMD clients (early-out guard).
+
+#include "HeadMountedDisplayFunctionLibrary.h"
+
+void APACS_NPC_Base::BeginPlay()
+{
+    Super::BeginPlay();
+
+    if (GetNetMode() != NM_Client) return; // DS & server do nothing
+    if (UHeadMountedDisplayFunctionLibrary::IsHeadMountedDisplayEnabled())
+    {
+        // VR client: do not create or attach the plane at all
+        return;
+    }
+
+    // Desktop client: create/attach and set CPD
+    if (!SelectionPlane)
+    {
+        SelectionPlane = NewObject<UStaticMeshComponent>(this, TEXT("SelectionPlane"));
+        SelectionPlane->SetupAttachment(RootComponent);
+        SelectionPlane->RegisterComponent();
+        // set mesh, collision channel, material, etc...
+    }
+}
+That’s enough: the VR client never has the component, so it can’t render.
+
+2) If the plane might already exist (e.g., placed in BP)
+Hard-disable it on VR clients at startup:
+
+cpp
+Copy code
+if (GetNetMode() == NM_Client &&
+    UHeadMountedDisplayFunctionLibrary::IsHeadMountedDisplayEnabled() &&
+    SelectionPlane)
+{
+    SelectionPlane->DestroyComponent();        // or SelectionPlane->SetHiddenInGame(true);
+}
+3) Runtime VR toggle (optional)
+If your client can switch into VR after joining, add a small check (on a delegate/timer) and destroy/hide existing planes when VR becomes enabled.
+
+cpp
+Copy code
+const bool bIsVR = UHeadMountedDisplayFunctionLibrary::IsHeadMountedDisplayEnabled();
+if (bIsVR && SelectionPlane) { SelectionPlane->DestroyComponent(); }
+4) Also gate any selection traces
+Don’t run the SelectionTrace mouse ray on VR clients:
+
+cpp
+Copy code
+if (UHeadMountedDisplayFunctionLibrary::IsHeadMountedDisplayEnabled())
+{
+    return; // skip hover/click logic entirely on HMD client
+}
+Why this works
+The plane is never spawned on the HMD client, so nothing to render or hide.
+
+It remains client-only (not replicated), so each client decides independently.
+
+No reliance on OwnerNoSee/visibility hacks that don’t apply here.
+
+10) Implementation Order (low risk)
+
+Collision channel: add ECC_SelectionTrace (Project Settings → Collision) and update defaults.
+
+Material: implement M_PACS_GroundProjector reading CPD[0..5]; masked + dither edge.
+
+Interface: add IPACS_PrimaryVisualHost and implement in Base/Base_Char/Base_Veh.
+
+Component: implement UPACS_GroundProjectorComponent (client-only guards, no tick, CPD writes, placement).
+
+Networking: add VisualProfileId (initial-only), VisualState (on change). Keep Hovered local.
+
+Input: route hover/click to plane channel; optional dual-trace occlusion.
+
+Pooling & significance: wire acquire/return hooks; hide on insignificance.
+
+VR guard: skip on HMD clients.
+
+12) Optional Future Upgrade
+
+Replace per-NPC SMC with a single UInstancedStaticMeshComponent (client-side) + Per-Instance Custom Data to drive colours/brightness/state for thousands of NPCs.

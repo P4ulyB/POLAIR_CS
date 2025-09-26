@@ -6,12 +6,13 @@
 #include "PACS_NPC_Base.generated.h"
 
 class UBoxComponent;
-class UDecalComponent;
+class UPACS_SelectionPlaneComponent;
 
 /**
  * Base class for all NPC actors in POLAIR_CS
  * Implements poolable interface for object pooling system
- * Includes standard components: DecalComponent and BoxCollision
+ * Selection visuals are client-side only, excluded from VR/HMD clients
+ * Uses CustomPrimitiveData for per-actor visual customization
  */
 UCLASS(Abstract)
 class POLAIR_CS_API APACS_NPC_Base : public AActor, public IPACS_Poolable
@@ -35,8 +36,10 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UBoxComponent> BoxCollision;
 
+	// Selection plane component for visual indicators (manages state and CPD)
+	// This component handles client-side visual creation and server-side state
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UDecalComponent> SelectionDecal;
+	TObjectPtr<UPACS_SelectionPlaneComponent> SelectionPlaneComponent;
 
 protected:
 	// Selection state
@@ -45,6 +48,7 @@ protected:
 
 	UPROPERTY(BlueprintReadOnly, Category = "Selection")
 	TWeakObjectPtr<class APlayerState> CurrentSelector;
+
 
 public:
 	// Selection interface
@@ -66,7 +70,6 @@ protected:
 	virtual void PrepareForUse();
 
 private:
-	// Default decal settings
-	void SetupDefaultDecal();
+	// Setup default collision
 	void SetupDefaultCollision();
 };

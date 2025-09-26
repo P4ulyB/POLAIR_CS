@@ -1,14 +1,12 @@
 #include "Actors/NPC/PACS_NPC_Base_Char.h"
 #include "Components/BoxComponent.h"
-#include "Components/DecalComponent.h"
+#include "Components/PACS_SelectionPlaneComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerState.h"
 #include "AIController.h"
 #include "Navigation/PathFollowingComponent.h"
-#include "Materials/Material.h"
 #include "Net/UnrealNetwork.h"
-#include "UObject/ConstructorHelpers.h"
 
 APACS_NPC_Base_Char::APACS_NPC_Base_Char()
 {
@@ -19,10 +17,10 @@ APACS_NPC_Base_Char::APACS_NPC_Base_Char()
 	BoxCollision->SetupAttachment(RootComponent);
 	SetupDefaultCollision();
 
-	// Create selection decal
-	SelectionDecal = CreateDefaultSubobject<UDecalComponent>(TEXT("SelectionDecal"));
-	SelectionDecal->SetupAttachment(RootComponent);
-	SetupDefaultDecal();
+	// Create selection plane component (manages state and client-side visuals)
+	// The component itself handles creating visual elements ONLY on non-VR clients
+	SelectionPlaneComponent = CreateDefaultSubobject<UPACS_SelectionPlaneComponent>(TEXT("SelectionPlaneComponent"));
+	SelectionPlaneComponent->SetIsReplicated(true);
 
 	// Configure character movement for NPCs
 	if (GetCharacterMovement())
@@ -55,10 +53,11 @@ void APACS_NPC_Base_Char::BeginPlay()
 		DefaultMaxWalkSpeed = GetCharacterMovement()->MaxWalkSpeed;
 	}
 
-	// Hide selection decal by default
-	if (SelectionDecal)
+	// Initialize selection plane component
+	if (SelectionPlaneComponent)
 	{
-		SelectionDecal->SetVisibility(false);
+		SelectionPlaneComponent->InitializeSelectionPlane();
+		SelectionPlaneComponent->SetSelectionPlaneVisible(false);
 	}
 }
 
@@ -79,11 +78,23 @@ void APACS_NPC_Base_Char::EndPlay(const EEndPlayReason::Type EndPlayReason)
 void APACS_NPC_Base_Char::OnAcquiredFromPool_Implementation()
 {
 	PrepareForUse();
+
+	// Notify selection component
+	if (SelectionPlaneComponent)
+	{
+		SelectionPlaneComponent->OnAcquiredFromPool();
+	}
 }
 
 void APACS_NPC_Base_Char::OnReturnedToPool_Implementation()
 {
 	ResetForPool();
+
+	// Notify selection component
+	if (SelectionPlaneComponent)
+	{
+		SelectionPlaneComponent->OnReturnedToPool();
+	}
 }
 
 void APACS_NPC_Base_Char::SetSelected(bool bNewSelected, APlayerState* Selector)
@@ -97,6 +108,12 @@ void APACS_NPC_Base_Char::SetSelected(bool bNewSelected, APlayerState* Selector)
 	CurrentSelector = bNewSelected ? Selector : nullptr;
 
 	UpdateSelectionVisuals();
+
+	// Update selection plane component
+	if (SelectionPlaneComponent)
+	{
+		SelectionPlaneComponent->SetSelectionState(bIsSelected ? ESelectionVisualState::Selected : ESelectionVisualState::Available);
+	}
 
 	UE_LOG(LogTemp, Log, TEXT("PACS_NPC_Base_Char: %s %s by %s"),
 		*GetName(),
@@ -143,9 +160,9 @@ void APACS_NPC_Base_Char::StopMovement()
 
 void APACS_NPC_Base_Char::UpdateSelectionVisuals()
 {
-	if (SelectionDecal)
+	if (SelectionPlaneComponent)
 	{
-		SelectionDecal->SetVisibility(bIsSelected);
+		SelectionPlaneComponent->SetSelectionPlaneVisible(bIsSelected);
 	}
 }
 
@@ -155,10 +172,10 @@ void APACS_NPC_Base_Char::ResetForPool()
 	bIsSelected = false;
 	CurrentSelector = nullptr;
 
-	// Hide decal
-	if (SelectionDecal)
+	// Hide selection plane
+	if (SelectionPlaneComponent)
 	{
-		SelectionDecal->SetVisibility(false);
+		SelectionPlaneComponent->SetSelectionPlaneVisible(false);
 	}
 
 	// Stop all movement
@@ -199,10 +216,10 @@ void APACS_NPC_Base_Char::PrepareForUse()
 		GetCharacterMovement()->SetMovementMode(MOVE_Walking);
 	}
 
-	// Ensure decal is hidden initially
-	if (SelectionDecal)
+	// Ensure selection plane is hidden initially
+	if (SelectionPlaneComponent)
 	{
-		SelectionDecal->SetVisibility(false);
+		SelectionPlaneComponent->SetSelectionPlaneVisible(false);
 	}
 }
 
@@ -234,35 +251,6 @@ void APACS_NPC_Base_Char::ResetCharacterAnimation()
 		// Reset animation state
 		GetMesh()->GetAnimInstance()->ResetDynamics(ETeleportType::ResetPhysics);
 	}
-}
-
-void APACS_NPC_Base_Char::SetupDefaultDecal()
-{
-	if (!SelectionDecal)
-	{
-		return;
-	}
-
-	// Set default decal size for characters
-	SelectionDecal->DecalSize = FVector(128.0f, 128.0f, 256.0f);
-
-	// Rotate to project downward
-	SelectionDecal->SetRelativeRotation(FRotator(-90.0f, 0.0f, 0.0f));
-
-	// Position at character's feet
-	float CapsuleHalfHeight = GetCapsuleComponent() ? GetCapsuleComponent()->GetScaledCapsuleHalfHeight() : 88.0f;
-	SelectionDecal->SetRelativeLocation(FVector(0.0f, 0.0f, -CapsuleHalfHeight));
-
-	// Try to load default selection material
-	static ConstructorHelpers::FObjectFinder<UMaterial> DecalMaterialAsset(
-		TEXT("/Engine/EngineMaterials/DefaultDecalMaterial"));
-	if (DecalMaterialAsset.Succeeded())
-	{
-		SelectionDecal->SetDecalMaterial(DecalMaterialAsset.Object);
-	}
-
-	// Start hidden
-	SelectionDecal->SetVisibility(false);
 }
 
 void APACS_NPC_Base_Char::SetupDefaultCollision()
