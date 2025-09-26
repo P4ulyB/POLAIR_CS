@@ -5,8 +5,6 @@
 #include "Engine/EngineTypes.h"
 #include "PACS_HoverProbeComponent.generated.h"
 
-class APACS_NPCCharacter;
-class IPACS_SelectableCharacterInterface;
 class APACS_PlayerController;
 class UInputMappingContext;
 
@@ -54,9 +52,7 @@ protected:
 
 private:
 	TWeakObjectPtr<APACS_PlayerController> OwnerPC;
-	// Using interface to support both heavyweight and lightweight NPCs
-	TWeakObjectPtr<AActor> CurrentNPCActor;
-	IPACS_SelectableCharacterInterface* CurrentNPCInterface = nullptr;
+	TWeakObjectPtr<AActor> CurrentHoverActor;
 
 	// Input context monitoring for automatic cleanup
 	FDelegateHandle InputContextHandle;
@@ -77,9 +73,8 @@ private:
 	bool IsInputContextActive() const;
 	UInputMappingContext* GetCurrentActiveContext() const;
 
-	// Resolve selectable NPC from a hit result (box may be child of NPC)
-	// Returns both the actor and interface for the NPC
-	AActor* ResolveSelectableFrom(const FHitResult& Hit, IPACS_SelectableCharacterInterface*& OutInterface) const;
+	// Resolve selectable actor from a hit result
+	AActor* ResolveSelectableActor(const FHitResult& HitResult) const;
 
 	// Safe cleanup helpers
 	void UnbindNPCDelegates();

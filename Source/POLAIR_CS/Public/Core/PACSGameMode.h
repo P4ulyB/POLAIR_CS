@@ -5,7 +5,6 @@
 #include "PACS_PlayerState.h"
 #include "PACSGameMode.generated.h"
 
-class UPACS_SpawnConfiguration;
 
 UCLASS()
 class POLAIR_CS_API APACSGameMode : public AGameModeBase
@@ -29,12 +28,6 @@ public:
     UFUNCTION()
     void OnHMDTimeout(APlayerController* PlayerController);
 
-    /**
-     * Get the spawn configuration
-     */
-    UFUNCTION(BlueprintCallable, Category = "PACS|NPC Spawning")
-    UPACS_SpawnConfiguration* GetSpawnConfiguration() const;
-
 protected:
     // Pawn classes for different user types
     UPROPERTY(EditDefaultsOnly, Category = "PACS|Spawning")
@@ -42,10 +35,6 @@ protected:
 
     UPROPERTY(EditDefaultsOnly, Category = "PACS|Spawning")
     TSubclassOf<APawn> AssessorPawnClass;
-
-    // NPC Spawn Configuration - single source of truth
-    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "PACS|NPC Spawning", meta = (DisplayName = "NPC Spawn Configuration"))
-    TSoftObjectPtr<UPACS_SpawnConfiguration> NPCSpawnConfiguration;
 
     // Override to provide custom pawn selection logic
     virtual UClass* GetDefaultPawnClassForController_Implementation(AController* InController) override;

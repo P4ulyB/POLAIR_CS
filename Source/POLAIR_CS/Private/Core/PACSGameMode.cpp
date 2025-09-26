@@ -1,9 +1,7 @@
 #include "Core/PACSGameMode.h"
 #include "Core/PACS_PlayerController.h"
 #include "Core/PACS_PlayerState.h"
-#include "Core/PACS_OptimizationSubsystem.h"
 #include "Subsystems/PACSServerKeepaliveSubsystem.h"
-#include "Data/PACS_SpawnConfiguration.h"
 #include "GenericPlatform/GenericPlatformHttp.h"
 #include "GameFramework/PlayerState.h"
 #include "GameFramework/PlayerController.h"
@@ -12,9 +10,6 @@
 #include "Misc/Parse.h"
 #include "Actors/Pawn/PACS_CandidateHelicopterCharacter.h"
 #include "Actors/Pawn/PACS_AssessorPawn.h"
-#include "Actors/NPC/PACS_NPCCharacter.h"
-#include "Subsystems/PACS_CharacterPool.h"
-#include "Subsystems/PACS_NPCSpawnManager.h"
 #include "TimerManager.h"
 //#include "PACS/Heli/PACS_OrbitMessages.h" // only if saved offsets are passed
 
@@ -34,13 +29,7 @@ void APACSGameMode::BeginPlay()
 
     // Initialize Animation Budget Allocator for clients
     // This needs to happen early for all players
-    if (UGameInstance* GI = GetGameInstance())
-    {
-        if (UPACS_OptimizationSubsystem* OptSubsystem = GI->GetSubsystem<UPACS_OptimizationSubsystem>())
-        {
-            OptSubsystem->EnableAnimationBudgetAllocator(GetWorld());
-        }
-    }
+    // Optimization subsystem removed - will be reimplemented later
 
     // Only spawn NPCs on server
     if (!HasAuthority())
@@ -48,45 +37,8 @@ void APACSGameMode::BeginPlay()
         return;
     }
 
-    // Load spawn configuration
-    UPACS_SpawnConfiguration* SpawnConfig = GetSpawnConfiguration();
-    if (!SpawnConfig)
-    {
-        UE_LOG(LogTemp, Error, TEXT("PACS GameMode: No spawn configuration available, NPCs will not spawn"));
-        return;
-    }
-
-    // Initialize character pool with data asset configuration
-    if (UPACS_CharacterPool* CharacterPool = GetGameInstance() ?
-        GetGameInstance()->GetSubsystem<UPACS_CharacterPool>() : nullptr)
-    {
-        // Configure pool from data asset
-        CharacterPool->ConfigureFromDataAsset(SpawnConfig);
-
-        // Preload all configured assets
-        CharacterPool->PreloadCharacterAssets();
-
-        // Warm up pools based on data asset configuration
-        for (const FPACS_CharacterPoolEntry& Entry : SpawnConfig->CharacterPoolEntries)
-        {
-            if (Entry.bEnabled && Entry.InitialPoolSize > 0)
-            {
-                CharacterPool->WarmUpPool(Entry.PoolType, Entry.InitialPoolSize);
-            }
-        }
-
-        UE_LOG(LogTemp, Log, TEXT("PACS GameMode: Character pool configured from data asset and warmed up"));
-    }
-
-    // Spawn all NPCs at spawn points
-    if (UPACS_NPCSpawnManager* SpawnManager = GetWorld() ?
-        GetWorld()->GetSubsystem<UPACS_NPCSpawnManager>() : nullptr)
-    {
-        SpawnManager->SpawnAllNPCs();
-
-        int32 SpawnedCount = SpawnManager->GetSpawnedNPCCount();
-        UE_LOG(LogTemp, Log, TEXT("PACS GameMode: Spawned %d NPCs from pool"), SpawnedCount);
-    }
+    // NPC spawning removed - will be reimplemented later
+    UE_LOG(LogTemp, Log, TEXT("PACS GameMode: NPC spawning system removed, clean slate for new implementation"));
 }
 
 void APACSGameMode::PreLogin(const FString& Options, const FString& Address, 
@@ -178,15 +130,13 @@ void APACSGameMode::Logout(AController* Exiting)
         return;
     }
 
-    // Clean up any NPC selections before logout
+    // Clean up any selections before logout
     if (APACS_PlayerState* PS = Exiting ? Exiting->GetPlayerState<APACS_PlayerState>() : nullptr)
     {
-        if (APACS_NPCCharacter* SelectedNPC = PS->GetSelectedNPC())
+        if (AActor* SelectedActor = PS->GetSelectedActor())
         {
-            // Clear the selection to make NPC available again
-            SelectedNPC->CurrentSelector = nullptr;
-            SelectedNPC->ForceNetUpdate();
-            PS->SetSelectedNPC(nullptr);
+            // Clear the selection to make actor available again
+            PS->SetSelectedActor(nullptr);
 
             UE_LOG(LogTemp, Log, TEXT("PACS GameMode: Cleared selection for disconnecting player %s"),
                 *PS->GetPlayerName());
@@ -346,27 +296,4 @@ void APACSGameMode::OnHMDTimeout(APlayerController* PlayerController)
     }
 }
 
-UPACS_SpawnConfiguration* APACSGameMode::GetSpawnConfiguration() const
-{
-    // Server authority check - only GameMode has authority
-    if (!HasAuthority())
-    {
-        UE_LOG(LogTemp, Warning, TEXT("APACSGameMode::GetSpawnConfiguration called on client - returning nullptr"));
-        return nullptr;
-    }
-
-    // Return the spawn configuration
-    if (NPCSpawnConfiguration.IsValid())
-    {
-        if (UPACS_SpawnConfiguration* Config = NPCSpawnConfiguration.LoadSynchronous())
-        {
-            UE_LOG(LogTemp, Verbose, TEXT("APACSGameMode: Using NPC spawn configuration"));
-            return Config;
-        }
-    }
-
-    // No configuration available
-    UE_LOG(LogTemp, Error, TEXT("APACSGameMode: No spawn configuration available - NPCs will not spawn correctly"));
-    return nullptr;
-}
 

@@ -5,7 +5,6 @@
 #include "GameFramework/PlayerState.h"
 #include "GameFramework/Info.h"
 #include "Engine/LevelScriptActor.h"
-#include "Actors/NPC/PACS_NPCCharacter.h"
 #include "Net/UnrealNetwork.h"
 
 
@@ -52,11 +51,8 @@ void UPACS_ReplicationGraph::InitClassReplicationInfo()
 	NPCInfo.SetCullDistanceSquared(NPCNetCullDistance * NPCNetCullDistance);
 	NPCInfo.ReplicationPeriodFrame = 2;
 
-	// Store the class info (Epic pattern varies by engine version)
-	// GlobalActorReplicationInfoMap.SetClassInfo(APACS_NPCCharacter::StaticClass(), NPCInfo);
-
+	// NPC class registration removed - will be reimplemented later
 	// Track spatialized classes
-	SpatializedClasses.Add(APACS_NPCCharacter::StaticClass());
 	SpatializedClasses.Add(APawn::StaticClass());
 
 	// Track always relevant classes

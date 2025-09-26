@@ -1,6 +1,6 @@
 # POLAIR_CS Training Simulation - Claude Code Configuration
 
-## CRITICAL: - This project is created for a dedicated server multiplayer environment. All code created, ammended and reviewed must be considered under the scope of this projects intended dedicated server environment.
+## CRITICAL: - please read the claude.md file located at root/.claude - remember that this project is designed to work in a multiplayer dedicated server environment, so any subsequent designs according to instruction should take this into account..
 
 ## Quick Navigation (Source of Truth)
 - **Current Status:** `docs/project_progress.md`

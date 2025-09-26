@@ -22,10 +22,6 @@ enum class EPACS_CollisionChannel : uint8
 	// Selection system collision channel - Query Only for hover detection and selection
 	// Maps to ECC_GameTraceChannel1 as configured in DefaultEngine.ini
 	Selection = ECC_GameTraceChannel1 UMETA(DisplayName="Selection"),
-
-	// SelectionObject collision channel - Object type for selectable objects
-	// Maps to ECC_GameTraceChannel2 as configured in DefaultEngine.ini
-	SelectionObject = ECC_GameTraceChannel2 UMETA(DisplayName="SelectionObject")
 };
 
 /**
@@ -37,8 +33,4 @@ namespace PACS_CollisionProfiles
 	// Profile for objects that only respond to Selection channel queries
 	// Ignores all other collision, uses QueryOnly collision enabled
 	static const FName SelectionProfile(TEXT("SelectionProfile"));
-
-	// Profile for selectable objects using SelectionObject channel
-	// Query-only collision with SelectionObject object type
-	static const FName SelectionObjectProfile(TEXT("SelectionObjectProfile"));
 }

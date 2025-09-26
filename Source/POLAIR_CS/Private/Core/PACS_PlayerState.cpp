@@ -7,43 +7,44 @@ APACS_PlayerState::APACS_PlayerState()
     HMDState = EHMDState::Unknown;
 }
 
+#pragma region Lifecycle
 void APACS_PlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
     Super::GetLifetimeReplicatedProps(OutLifetimeProps);
-    
+
     // Replicate HMD state to all clients
     DOREPLIFETIME(APACS_PlayerState, HMDState);
 }
+#pragma endregion
 
+#pragma region VR/HMD Management
 void APACS_PlayerState::OnRep_HMDState()
 {
     // Handle HMD state changes - update UI, notify systems, etc.
     // Called on clients when HMD state replicates
     UE_LOG(LogTemp, Log, TEXT("PACS PlayerState: HMD state changed to %d"), static_cast<int32>(HMDState));
 
-    // Update NPC decal visibility based on VR state
-    if (APACS_PlayerController* PC = Cast<APACS_PlayerController>(GetOwner()))
-    {
-        bool bIsVRClient = (HMDState == EHMDState::HasHMD);
-        PC->UpdateNPCDecalVisibility(bIsVRClient);
-    }
+    // VR state change handled - could trigger other systems here
 }
+#pragma endregion
 
-void APACS_PlayerState::SetSelectedNPC(APACS_NPCCharacter* InNPC)
+#pragma region Selection System
+void APACS_PlayerState::SetSelectedActor(AActor* InActor)
 {
-    APACS_NPCCharacter* PreviousNPC = SelectedNPC_ServerOnly.Get();
-    SelectedNPC_ServerOnly = MakeWeakObjectPtr(InNPC);
+    AActor* PreviousActor = SelectedActor_ServerOnly.Get();
+    SelectedActor_ServerOnly = MakeWeakObjectPtr(InActor);
 
-    UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] PlayerState::SetSelectedNPC - Player: %s, Previous: %s, New: %s"),
+    UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] PlayerState::SetSelectedActor - Player: %s, Previous: %s, New: %s"),
         *GetPlayerName(),
-        PreviousNPC ? *PreviousNPC->GetName() : TEXT("None"),
-        InNPC ? *InNPC->GetName() : TEXT("None"));
+        PreviousActor ? *PreviousActor->GetName() : TEXT("None"),
+        InActor ? *InActor->GetName() : TEXT("None"));
 }
 
 void APACS_PlayerState::LogCurrentSelection() const
 {
-    APACS_NPCCharacter* CurrentNPC = SelectedNPC_ServerOnly.Get();
+    AActor* CurrentActor = SelectedActor_ServerOnly.Get();
     UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] PlayerState::LogCurrentSelection - Player: %s, Selected: %s"),
         *GetPlayerName(),
-        CurrentNPC ? *CurrentNPC->GetName() : TEXT("None"));
+        CurrentActor ? *CurrentActor->GetName() : TEXT("None"));
 }
+#pragma endregion

@@ -6,8 +6,6 @@
 #include "Engine/Engine.h"
 #include "Actors/Pawn/PACS_CandidateHelicopterCharacter.h"
 #include "Subsystems/PACSLaunchArgSubsystem.h"
-#include "Actors/NPC/PACS_NPCCharacter.h"
-#include "Interfaces/PACS_SelectableCharacterInterface.h"
 #include "EngineUtils.h"
 #include "Components/DecalComponent.h"
 
@@ -21,17 +19,13 @@ APACS_PlayerController::APACS_PlayerController()
 {
     InputHandler = CreateDefaultSubobject<UPACS_InputHandlerComponent>(TEXT("InputHandler"));
     EdgeScrollComponent = CreateDefaultSubobject<UPACS_EdgeScrollComponent>(TEXT("EdgeScrollComponent"));
-    // HoverProbe is client-only and will be created in BeginPlay for the local controller
-    // Don't create it in constructor for dedicated server multiplayer
-    PrimaryActorTick.bCanEverTick = true;
 
+    PrimaryActorTick.bCanEverTick = true;
 }
 
 void APACS_PlayerController::PostInitializeComponents()
 {
     Super::PostInitializeComponents();
-    // HoverProbe creation moved to BeginPlay with IsLocalController() check
-    // Client-only components should not be created with HasAuthority()
 }
 
 void APACS_PlayerController::BeginPlay()
@@ -39,8 +33,6 @@ void APACS_PlayerController::BeginPlay()
     Super::BeginPlay();
     ValidateInputSystem();
 
-    // Create HoverProbe component on the owning client only (not server)
-    // This fixes hover detection in dedicated server multiplayer
     if (IsLocalController() && !HoverProbe)
     {
         UE_LOG(LogTemp, Log, TEXT("Creating HoverProbe component for local controller"));
@@ -56,10 +48,10 @@ void APACS_PlayerController::BeginPlay()
         }
     }
 
-    // TEST: Register PlayerController as input receiver for debugging
+    // Register PlayerController as input receiver for debugging
     if (InputHandler && IsLocalController())
     {
-        InputHandler->RegisterReceiver(this, PACS_InputPriority::UI); // higher
+        InputHandler->RegisterReceiver(this, PACS_InputPriority::UI);
         UE_LOG(LogPACSInput, Log, TEXT("PC registered as UI receiver"));
     }
 
@@ -69,7 +61,6 @@ void APACS_PlayerController::BeginPlay()
         OnPutOnHandle   = FCoreDelegates::VRHeadsetPutOnHead.AddUObject(this, &ThisClass::HandleHMDPutOn);
         OnRemovedHandle = FCoreDelegates::VRHeadsetRemovedFromHead.AddUObject(this, &ThisClass::HandleHMDRemoved);
         OnRecenterHandle= FCoreDelegates::VRHeadsetRecenter.AddUObject(this, &ThisClass::HandleHMDRecenter);
-
     }
 
     // Client sends PlayFab player name to server
@@ -424,14 +415,6 @@ EPACS_InputHandleResult APACS_PlayerController::HandleInputAction(FName ActionNa
             return EPACS_InputHandleResult::HandledConsume;
         }
 
-        // Get current selection for debug logging
-        APACS_PlayerState* PS = GetPlayerState<APACS_PlayerState>();
-        APACS_NPCCharacter* CurrentSelection = PS ? PS->GetSelectedNPC() : nullptr;
-
-        UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] Player %s clicked - Current selection: %s"),
-            PS ? *PS->GetPlayerName() : TEXT("Unknown"),
-            CurrentSelection ? *CurrentSelection->GetName() : TEXT("None"));
-
         // Perform line trace to get the actor under cursor
         FHitResult HitResult;
         if (GetHitResultUnderCursor(SelectionTraceChannel, false, HitResult))
@@ -440,27 +423,8 @@ EPACS_InputHandleResult APACS_PlayerController::HandleInputAction(FName ActionNa
                 HitResult.GetActor() ? *HitResult.GetActor()->GetName() : TEXT("None"),
                 *HitResult.Location.ToString());
 
-            // Check for interface instead of specific class to support both NPC types
-            if (IPACS_SelectableCharacterInterface* Selectable = Cast<IPACS_SelectableCharacterInterface>(HitResult.GetActor()))
-            {
-                AActor* NPCActor = HitResult.GetActor();
-                APlayerState* CurrentSelector = Selectable->GetCurrentSelector();
-
-                UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] Clicked on selectable NPC: %s (Currently selected by: %s)"),
-                    *NPCActor->GetName(),
-                    CurrentSelector ? *CurrentSelector->GetPlayerName() : TEXT("Nobody"));
-
-                // Request selection of the NPC
-                ServerRequestSelect(NPCActor);
-            }
-            else
-            {
-                UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] Clicked on non-NPC actor: %s - deselecting"),
-                    HitResult.GetActor() ? *HitResult.GetActor()->GetName() : TEXT("Unknown"));
-
-                // Clicked empty space - deselect
-                ServerRequestDeselect();
-            }
+            // Request selection of the actor
+            ServerRequestSelect(HitResult.GetActor());
         }
         else
         {
@@ -473,67 +437,18 @@ EPACS_InputHandleResult APACS_PlayerController::HandleInputAction(FName ActionNa
     }
     else if (ActionName == TEXT("RightClick"))
     {
-        // Right-click: Move selected NPC to cursor location (never deselect)
-        APACS_PlayerState* PS = GetPlayerState<APACS_PlayerState>();
-        APACS_NPCCharacter* SelectedNPC = nullptr;
-
-        if (HasAuthority())
+        // Right-click: Context action on selected target
+        FHitResult HitResult;
+        if (GetHitResultUnderCursor(MovementTraceChannel, false, HitResult))
         {
-            // Server: Use server-only selection tracking
-            SelectedNPC = PS ? PS->GetSelectedNPC() : nullptr;
-        }
-        else
-        {
-            // Client: Find NPC that has us as CurrentSelector (replicated data)
-            if (PS && GetWorld())
-            {
-                for (TActorIterator<APACS_NPCCharacter> ActorItr(GetWorld()); ActorItr; ++ActorItr)
-                {
-                    if (APACS_NPCCharacter* NPC = *ActorItr)
-                    {
-                        if (NPC->CurrentSelector == PS)
-                        {
-                            SelectedNPC = NPC;
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-
-        UE_LOG(LogTemp, Warning, TEXT("[NPC MOVE DEBUG] Right-click - PlayerState: %s, SelectedNPC: %s, HasAuthority: %s"),
-            PS ? *PS->GetPlayerName() : TEXT("NULL"),
-            SelectedNPC ? *SelectedNPC->GetName() : TEXT("NULL"),
-            HasAuthority() ? TEXT("TRUE") : TEXT("FALSE"));
-
-        if (SelectedNPC)
-        {
-            // We have a selected NPC - perform line trace to get move target location
-            FHitResult HitResult;
-            if (GetHitResultUnderCursor(MovementTraceChannel, false, HitResult))
-            {
-                FVector TargetLocation = HitResult.Location;
-
-                UE_LOG(LogTemp, Log, TEXT("[NPC MOVE] Right-click move: %s to location %s"),
-                    *SelectedNPC->GetName(), *TargetLocation.ToString());
-
-                // Send move command via PlayerController RPC (we own this connection)
-                ServerRequestNPCMove(SelectedNPC, TargetLocation);
-            }
-            else
-            {
-                UE_LOG(LogTemp, Warning, TEXT("[NPC MOVE] Right-click failed - no hit result"));
-            }
-        }
-        else
-        {
-            UE_LOG(LogTemp, Log, TEXT("[NPC MOVE] Right-click ignored - no NPC selected"));
+            FVector TargetLocation = HitResult.Location;
+            UE_LOG(LogTemp, Log, TEXT("[RIGHT CLICK] Location: %s"), *TargetLocation.ToString());
         }
         return EPACS_InputHandleResult::HandledConsume;
     }
     else if (ActionName == TEXT("Deselect"))
     {
-        // Explicit deselection command (separate from right-click)
+        // Explicit deselection command
         ServerRequestDeselect();
         return EPACS_InputHandleResult::HandledConsume;
     }
@@ -576,71 +491,22 @@ void APACS_PlayerController::ServerRequestSelect_Implementation(AActor* TargetAc
     }
 
     APACS_PlayerState* PS = GetPlayerState<APACS_PlayerState>();
-    // Use interface to support both heavyweight and lightweight NPCs
-    IPACS_SelectableCharacterInterface* TargetNPC = Cast<IPACS_SelectableCharacterInterface>(TargetActor);
 
-    UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] ServerRequestSelect - Player: %s, Target: %s, Interface Cast: %s"),
+    UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] ServerRequestSelect - Player: %s, Target: %s"),
         PS ? *PS->GetPlayerName() : TEXT("NULL"),
-        *TargetActor->GetName(),
-        TargetNPC ? TEXT("SUCCESS") : TEXT("FAILED"));
+        *TargetActor->GetName());
 
-    if (!PS || !TargetNPC)
+    if (!PS)
     {
-        UE_LOG(LogTemp, Error, TEXT("[SELECTION DEBUG] ServerRequestSelect failed - PlayerState or NPC cast failed"));
+        UE_LOG(LogTemp, Error, TEXT("[SELECTION DEBUG] ServerRequestSelect failed - PlayerState null"));
         return;
     }
 
-    // Release previous selection if any
-    if (APACS_NPCCharacter* PreviousNPC = PS->GetSelectedNPC())
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] Releasing previous selection: %s"), *PreviousNPC->GetName());
+    // Store selected actor in PlayerState (will be refactored later with proper selection system)
+    PS->SetSelectedActor(TargetActor);
 
-        // Use interface if the old NPC implements it
-        if (IPACS_SelectableCharacterInterface* PrevSelectable = Cast<IPACS_SelectableCharacterInterface>(PreviousNPC))
-        {
-            PrevSelectable->SetCurrentSelector(nullptr);
-        }
-
-        // Epic pattern: Return to dormancy when deselected
-        PreviousNPC->SetNetDormancy(DORM_Initial);
-        PS->SetSelectedNPC(nullptr);
-    }
-
-    // If target is available (not selected by anyone), claim it
-    APlayerState* CurrentSelector = TargetNPC->GetCurrentSelector();
-    if (!CurrentSelector)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] SUCCESS: %s selected %s"),
-            *PS->GetPlayerName(), *TargetActor->GetName());
-
-        // Epic pattern: Wake from dormancy when selected
-        if (APawn* TargetPawn = Cast<APawn>(TargetActor))
-        {
-            TargetPawn->FlushNetDormancy();
-        }
-
-        // Set selection through interface
-        TargetNPC->SetCurrentSelector(PS);
-
-        // Update player state (need to handle both NPC types)
-        if (APACS_NPCCharacter* HeavyweightNPC = Cast<APACS_NPCCharacter>(TargetActor))
-        {
-            PS->SetSelectedNPC(HeavyweightNPC);
-        }
-        else
-        {
-            // For lightweight NPCs, we can't store in PlayerState yet (needs update)
-            // For now, just log that we selected it
-            UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] Selected lightweight NPC - PlayerState tracking needs update"));
-        }
-    }
-    else
-    {
-        // Already owned by someone else
-        UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] BLOCKED: %s tried to select %s but it's already selected by %s"),
-            *PS->GetPlayerName(), *TargetActor->GetName(),
-            *CurrentSelector->GetPlayerName());
-    }
+    UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] SUCCESS: %s selected %s"),
+        *PS->GetPlayerName(), *TargetActor->GetName());
 }
 
 void APACS_PlayerController::ServerRequestDeselect_Implementation()
@@ -661,98 +527,9 @@ void APACS_PlayerController::ServerRequestDeselect_Implementation()
 
     UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] ServerRequestDeselect - Player: %s"), *PS->GetPlayerName());
 
-    // Release current selection
-    if (APACS_NPCCharacter* NPC = PS->GetSelectedNPC())
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] SUCCESS: %s deselected %s"),
-            *PS->GetPlayerName(), *NPC->GetName());
+    // Clear selected actor
+    PS->SetSelectedActor(nullptr);
 
-        NPC->CurrentSelector = nullptr;
-        // Epic pattern: Return to dormancy when deselected
-        NPC->SetNetDormancy(DORM_Initial);
-        PS->SetSelectedNPC(nullptr);
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] %s tried to deselect but had no selection"),
-            *PS->GetPlayerName());
-    }
+    UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] SUCCESS: %s deselected"),
+        *PS->GetPlayerName());
 }
-
-void APACS_PlayerController::ServerRequestNPCMove_Implementation(APACS_NPCCharacter* TargetNPC, FVector TargetLocation)
-{
-    // Server authority check
-    if (!HasAuthority())
-    {
-        UE_LOG(LogTemp, Error, TEXT("[NPC MOVE] ServerRequestNPCMove failed - No authority"));
-        return;
-    }
-
-    // Validate parameters
-    if (!IsValid(TargetNPC))
-    {
-        UE_LOG(LogTemp, Error, TEXT("[NPC MOVE] ServerRequestNPCMove failed - Invalid target NPC"));
-        return;
-    }
-
-    // Verify this player actually has the NPC selected
-    APACS_PlayerState* PS = GetPlayerState<APACS_PlayerState>();
-    if (!PS || PS->GetSelectedNPC() != TargetNPC)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[NPC MOVE] ServerRequestNPCMove rejected - Player %s doesn't have NPC %s selected"),
-            PS ? *PS->GetPlayerName() : TEXT("NULL"), *TargetNPC->GetName());
-        return;
-    }
-
-    // Additional check: Verify NPC thinks this player is the selector
-    if (TargetNPC->CurrentSelector != PS)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[NPC MOVE] ServerRequestNPCMove rejected - NPC %s selector mismatch"),
-            *TargetNPC->GetName());
-        return;
-    }
-
-    UE_LOG(LogTemp, Log, TEXT("[NPC MOVE] ServerRequestNPCMove validated - %s moving %s to %s"),
-        *PS->GetPlayerName(), *TargetNPC->GetName(), *TargetLocation.ToString());
-
-    // Call the NPC's movement function directly on server
-    TargetNPC->ServerMoveToLocation_Implementation(TargetLocation);
-}
-
-void APACS_PlayerController::UpdateNPCDecalVisibility(bool bIsVRClient)
-{
-    // Only update on local client - this is a client-side rendering decision
-    if (!IsLocalController())
-    {
-        return;
-    }
-
-    UWorld* World = GetWorld();
-    if (!World)
-    {
-        return;
-    }
-
-    int32 UpdatedDecals = 0;
-
-    // Iterate through all NPCs and update their decal visibility
-    for (TActorIterator<APACS_NPCCharacter> ActorItr(World); ActorItr; ++ActorItr)
-    {
-        if (APACS_NPCCharacter* NPC = *ActorItr)
-        {
-            // Get the collision decal component
-            if (UDecalComponent* CollisionDecal = NPC->GetCollisionDecal())
-            {
-                // Hide decals from VR clients, show to assessor clients
-                bool bShouldBeVisible = !bIsVRClient;
-                CollisionDecal->SetVisibility(bShouldBeVisible);
-                UpdatedDecals++;
-            }
-        }
-    }
-
-    UE_LOG(LogTemp, Log, TEXT("PACS PlayerController: Updated %d NPC decals for %s client"),
-        UpdatedDecals, bIsVRClient ? TEXT("VR") : TEXT("Assessor"));
-}
-
-
