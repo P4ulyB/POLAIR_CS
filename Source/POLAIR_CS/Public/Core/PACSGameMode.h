@@ -30,10 +30,10 @@ public:
     void OnHMDTimeout(APlayerController* PlayerController);
 
     /**
-     * Get the effective spawn configuration (with level override support)
+     * Get the spawn configuration
      */
     UFUNCTION(BlueprintCallable, Category = "PACS|NPC Spawning")
-    UPACS_SpawnConfiguration* GetEffectiveSpawnConfiguration() const;
+    UPACS_SpawnConfiguration* GetSpawnConfiguration() const;
 
 protected:
     // Pawn classes for different user types
@@ -43,13 +43,9 @@ protected:
     UPROPERTY(EditDefaultsOnly, Category = "PACS|Spawning")
     TSubclassOf<APawn> AssessorPawnClass;
 
-    // NPC Spawn Configuration
+    // NPC Spawn Configuration - single source of truth
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "PACS|NPC Spawning", meta = (DisplayName = "NPC Spawn Configuration"))
     TSoftObjectPtr<UPACS_SpawnConfiguration> NPCSpawnConfiguration;
-
-    // Optional per-level override
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "PACS|NPC Spawning", meta = (DisplayName = "Level Spawn Config Override"))
-    TSoftObjectPtr<UPACS_SpawnConfiguration> LevelSpawnConfigOverride;
 
     // Override to provide custom pawn selection logic
     virtual UClass* GetDefaultPawnClassForController_Implementation(AController* InController) override;

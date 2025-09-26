@@ -42,9 +42,12 @@ protected:
     UDecalComponent* SelectionDecal;
 
     // Configuration
-protected:
+public:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Configuration")
     UPACS_NPC_v2_Config* NPCConfig;
+
+    // Allow pool to set cached material
+    UMaterialInstanceDynamic* CachedDecalMaterial;
 
     // Replicated Properties
 protected:
@@ -101,4 +104,6 @@ private:
     // Internal Methods
     void LoadAssetsFromConfig();
     void UpdateAnimation();
+    void UpdateVisualState();
+    void ApplyDecalState(float Brightness, const FLinearColor& Color);
 };

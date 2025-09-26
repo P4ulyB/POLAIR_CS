@@ -281,7 +281,7 @@ void UPACS_NPCSpawnManager::LoadSpawnConfiguration()
     // Get configuration from GameMode
     if (APACSGameMode* GameMode = Cast<APACSGameMode>(World->GetAuthGameMode()))
     {
-        SpawnConfiguration = GameMode->GetEffectiveSpawnConfiguration();
+        SpawnConfiguration = GameMode->GetSpawnConfiguration();
         if (SpawnConfiguration)
         {
             UE_LOG(LogTemp, Log, TEXT("PACS_NPCSpawnManager: Loaded spawn configuration from GameMode"));
@@ -322,26 +322,9 @@ EPACSCharacterType UPACS_NPCSpawnManager::GetCharacterTypeForSpawnPoint(APACS_NP
         return EPACSCharacterType::LightweightCivilian;
     }
 
-    // Use configuration mapping if available
-    if (SpawnConfiguration)
-    {
-        return SpawnConfiguration->GetPoolTypeForLegacyType(SpawnPoint->CharacterType);
-    }
-
-    // Fallback to hard-coded lightweight mapping
-    switch (SpawnPoint->CharacterType)
-    {
-        case EPACSCharacterType::Civilian:
-            return EPACSCharacterType::LightweightCivilian;
-        case EPACSCharacterType::Police:
-            return EPACSCharacterType::LightweightPolice;
-        case EPACSCharacterType::Firefighter:
-            return EPACSCharacterType::LightweightFirefighter;
-        case EPACSCharacterType::Paramedic:
-            return EPACSCharacterType::LightweightParamedic;
-        default:
-            return EPACSCharacterType::LightweightCivilian;
-    }
+    // For now, directly use the spawn point's character type
+    // The data asset configuration will determine which blueprint to use
+    return SpawnPoint->CharacterType;
 }
 
 void UPACS_NPCSpawnManager::SpawnAllNPCsAsync()

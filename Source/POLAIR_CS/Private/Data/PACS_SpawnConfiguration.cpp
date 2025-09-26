@@ -4,57 +4,57 @@
 
 UPACS_SpawnConfiguration::UPACS_SpawnConfiguration()
 {
-	// Initialize with default mappings
+	// Initialize with default entries if needed
 	InitializeDefaultMappings();
 }
 
 void UPACS_SpawnConfiguration::InitializeDefaultMappings()
 {
-	// Clear existing mappings
-	CharacterTypeMappings.Empty();
+	// Clear existing entries
+	CharacterPoolEntries.Empty();
 
-	// Create default lightweight mappings
-	FPACS_CharacterTypeMapping Civilian;
-	Civilian.LegacyType = EPACSCharacterType::Civilian;
-	Civilian.PoolType = EPACSCharacterType::LightweightCivilian;
-	Civilian.bEnabled = true;
-	CharacterTypeMappings.Add(Civilian);
+	// Note: Default entries are left empty as blueprints should be configured in the editor
+	// The data asset will be populated with actual blueprint references in the editor
 
-	FPACS_CharacterTypeMapping Police;
-	Police.LegacyType = EPACSCharacterType::Police;
-	Police.PoolType = EPACSCharacterType::LightweightPolice;
-	Police.bEnabled = true;
-	CharacterTypeMappings.Add(Police);
-
-	FPACS_CharacterTypeMapping Firefighter;
-	Firefighter.LegacyType = EPACSCharacterType::Firefighter;
-	Firefighter.PoolType = EPACSCharacterType::LightweightFirefighter;
-	Firefighter.bEnabled = true;
-	CharacterTypeMappings.Add(Firefighter);
-
-	FPACS_CharacterTypeMapping Paramedic;
-	Paramedic.LegacyType = EPACSCharacterType::Paramedic;
-	Paramedic.PoolType = EPACSCharacterType::LightweightParamedic;
-	Paramedic.bEnabled = true;
-	CharacterTypeMappings.Add(Paramedic);
+	UE_LOG(LogTemp, Log, TEXT("PACS_SpawnConfiguration: Ready for blueprint configuration in editor"));
 }
 
-EPACSCharacterType UPACS_SpawnConfiguration::GetPoolTypeForLegacyType(EPACSCharacterType LegacyType) const
+TSoftClassPtr<APawn> UPACS_SpawnConfiguration::GetCharacterBlueprintForType(EPACSCharacterType PoolType) const
 {
-	// Find mapping for the legacy type
-	for (const FPACS_CharacterTypeMapping& Mapping : CharacterTypeMappings)
+	// Find the pool entry for this type
+	for (const FPACS_CharacterPoolEntry& Entry : CharacterPoolEntries)
 	{
-		if (Mapping.LegacyType == LegacyType && Mapping.bEnabled)
+		if (Entry.PoolType == PoolType && Entry.bEnabled)
 		{
-			return Mapping.PoolType;
+			return Entry.CharacterBlueprint;
 		}
 	}
 
-	// Fallback to lightweight civilian if no mapping found
-	UE_LOG(LogTemp, Warning, TEXT("PACS_SpawnConfiguration: No mapping found for legacy type %s, defaulting to LightweightCivilian"),
-		*UEnum::GetValueAsString(LegacyType));
+	// Return empty if no blueprint found
+	UE_LOG(LogTemp, Warning, TEXT("PACS_SpawnConfiguration: No blueprint found for pool type %s"),
+		*UEnum::GetValueAsString(PoolType));
 
-	return EPACSCharacterType::LightweightCivilian;
+	return TSoftClassPtr<APawn>();
+}
+
+bool UPACS_SpawnConfiguration::GetPoolSettingsForType(EPACSCharacterType PoolType,
+	int32& OutInitialPoolSize, int32& OutMaxPoolSize) const
+{
+	// Find the pool entry for this type
+	for (const FPACS_CharacterPoolEntry& Entry : CharacterPoolEntries)
+	{
+		if (Entry.PoolType == PoolType && Entry.bEnabled)
+		{
+			OutInitialPoolSize = Entry.InitialPoolSize;
+			OutMaxPoolSize = Entry.MaxPoolSize;
+			return true;
+		}
+	}
+
+	// Not found - set defaults
+	OutInitialPoolSize = 10;
+	OutMaxPoolSize = 50;
+	return false;
 }
 
 bool UPACS_SpawnConfiguration::IsSpawningAllowed(EPACSCharacterType CharacterType, int32 CurrentCount) const
@@ -71,13 +71,30 @@ bool UPACS_SpawnConfiguration::IsSpawningAllowed(EPACSCharacterType CharacterTyp
 		return false;
 	}
 
-	return true;
+	// Check if this character type has an enabled pool entry
+	bool bHasEnabledEntry = false;
+	for (const FPACS_CharacterPoolEntry& Entry : CharacterPoolEntries)
+	{
+		if (Entry.PoolType == CharacterType && Entry.bEnabled)
+		{
+			bHasEnabledEntry = true;
+			break;
+		}
+	}
+
+	return bHasEnabledEntry;
 }
 
 int32 UPACS_SpawnConfiguration::GetMaxNPCsForType(EPACSCharacterType CharacterType) const
 {
-	// For now, use global per-type limit
-	// TODO: Add per-type specific limits in future iterations
+	// Check if there's a specific pool entry with its own limit
+	int32 InitialSize, MaxSize;
+	if (GetPoolSettingsForType(CharacterType, InitialSize, MaxSize))
+	{
+		return MaxSize;
+	}
+
+	// Fall back to global per-type limit
 	return MaxNPCsPerType;
 }
 
@@ -104,26 +121,51 @@ bool UPACS_SpawnConfiguration::ValidateConfiguration(FString& OutErrorMessage) c
 		return false;
 	}
 
-	// Validate character type mappings
-	if (CharacterTypeMappings.Num() == 0)
+	// Validate character pool entries
+	if (CharacterPoolEntries.Num() == 0)
 	{
-		OutErrorMessage = TEXT("At least one character type mapping must be defined");
-		return false;
+		OutErrorMessage = TEXT("At least one character pool entry should be defined");
+		// This is a warning, not an error - configuration can be done in editor
+		UE_LOG(LogTemp, Warning, TEXT("%s"), *OutErrorMessage);
+		return true; // Allow empty configuration to be filled in editor
 	}
 
-	// Check for duplicate legacy types
-	TSet<EPACSCharacterType> SeenLegacyTypes;
-	for (const FPACS_CharacterTypeMapping& Mapping : CharacterTypeMappings)
+	// Check for duplicate pool types
+	TSet<EPACSCharacterType> SeenPoolTypes;
+	for (const FPACS_CharacterPoolEntry& Entry : CharacterPoolEntries)
 	{
-		if (Mapping.bEnabled)
+		if (Entry.bEnabled)
 		{
-			if (SeenLegacyTypes.Contains(Mapping.LegacyType))
+			if (SeenPoolTypes.Contains(Entry.PoolType))
 			{
-				OutErrorMessage = FString::Printf(TEXT("Duplicate mapping found for legacy type: %s"),
-					*UEnum::GetValueAsString(Mapping.LegacyType));
+				OutErrorMessage = FString::Printf(TEXT("Duplicate pool entry found for type: %s"),
+					*UEnum::GetValueAsString(Entry.PoolType));
 				return false;
 			}
-			SeenLegacyTypes.Add(Mapping.LegacyType);
+			SeenPoolTypes.Add(Entry.PoolType);
+
+			// Validate blueprint reference
+			if (Entry.CharacterBlueprint.IsNull())
+			{
+				OutErrorMessage = FString::Printf(TEXT("Pool entry for type %s has no blueprint assigned"),
+					*UEnum::GetValueAsString(Entry.PoolType));
+				return false;
+			}
+
+			// Validate pool sizes
+			if (Entry.InitialPoolSize <= 0)
+			{
+				OutErrorMessage = FString::Printf(TEXT("Pool entry for type %s has invalid initial size"),
+					*UEnum::GetValueAsString(Entry.PoolType));
+				return false;
+			}
+
+			if (Entry.MaxPoolSize < Entry.InitialPoolSize)
+			{
+				OutErrorMessage = FString::Printf(TEXT("Pool entry for type %s has max size less than initial size"),
+					*UEnum::GetValueAsString(Entry.PoolType));
+				return false;
+			}
 		}
 	}
 
@@ -170,14 +212,11 @@ void UPACS_SpawnConfiguration::PostEditChangeProperty(FPropertyChangedEvent& Pro
 			UE_LOG(LogTemp, Warning, TEXT("PACS_SpawnConfiguration validation failed: %s"), *ErrorMessage);
 		}
 
-		// If character type mappings are cleared, reinitialize defaults
-		if (PropertyName == GET_MEMBER_NAME_CHECKED(UPACS_SpawnConfiguration, CharacterTypeMappings))
+		// Log pool entry changes for debugging
+		if (PropertyName == GET_MEMBER_NAME_CHECKED(UPACS_SpawnConfiguration, CharacterPoolEntries))
 		{
-			if (CharacterTypeMappings.Num() == 0)
-			{
-				InitializeDefaultMappings();
-				UE_LOG(LogTemp, Log, TEXT("PACS_SpawnConfiguration: Reinitialized default character type mappings"));
-			}
+			UE_LOG(LogTemp, Log, TEXT("PACS_SpawnConfiguration: Character pool entries updated (%d entries)"),
+				CharacterPoolEntries.Num());
 		}
 	}
 }

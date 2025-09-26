@@ -5,6 +5,7 @@
 #include "Actors/NPC/PACS_NPC_Humanoid.h"
 #include "Data/Configs/PACS_NPCConfig.h"
 #include "Data/Configs/PACS_NPC_v2_Config.h"
+#include "Data/PACS_SpawnConfiguration.h"
 #include "Interfaces/PACS_SelectableCharacterInterface.h"
 #include "Engine/World.h"
 #include "Engine/Engine.h"
@@ -21,62 +22,66 @@ void UPACS_CharacterPool::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
 
-    // Initialize pool configurations with default values
-    for (uint8 i = 0; i < (uint8)EPACSCharacterType::MAX; ++i)
+    // Note: Pool configurations will be set up via ConfigureFromDataAsset
+    // Initialize empty pools for now
+    UE_LOG(LogTemp, Log, TEXT("PACS_CharacterPool: Initialized, awaiting data asset configuration"));
+}
+
+void UPACS_CharacterPool::ConfigureFromDataAsset(UPACS_SpawnConfiguration* SpawnConfig)
+{
+    if (!SpawnConfig)
     {
-        EPACSCharacterType CharType = (EPACSCharacterType)i;
-        FPACSCharacterPoolConfig Config;
-        Config.InitialPoolSize = 10;
-        Config.MaxPoolSize = 50;
+        UE_LOG(LogTemp, Error, TEXT("PACS_CharacterPool: ConfigureFromDataAsset called with null config"));
+        return;
+    }
 
-        FString ClassPath;
+    // Clear existing configurations
+    PoolConfigurations.Empty();
+    CharacterPools.Empty();
+    LightweightNPCConfigurations.Empty();
 
-        // Set default character class paths based on type
-        // Note: /Game/ maps to the Content folder in Unreal
-        switch (CharType)
+    // Build pool configurations from data asset
+    for (const FPACS_CharacterPoolEntry& Entry : SpawnConfig->CharacterPoolEntries)
+    {
+        if (!Entry.bEnabled || Entry.CharacterBlueprint.IsNull())
         {
-            case EPACSCharacterType::Civilian:
-                ClassPath = TEXT("/Game/Blueprints/NPCs/BP_NPC_Civilian.BP_NPC_Civilian_C");
-                Config.CharacterClass = TSoftClassPtr<APACS_NPCCharacter>(FSoftObjectPath(ClassPath));
-                break;
-            case EPACSCharacterType::Police:
-                ClassPath = TEXT("/Game/Blueprints/NPCs/BP_NPC_Police.BP_NPC_Police_C");
-                Config.CharacterClass = TSoftClassPtr<APACS_NPCCharacter>(FSoftObjectPath(ClassPath));
-                break;
-            case EPACSCharacterType::Firefighter:
-                ClassPath = TEXT("/Game/Blueprints/NPCs/BP_NPC_FireFighter.BP_NPC_FireFighter_C");
-                Config.CharacterClass = TSoftClassPtr<APACS_NPCCharacter>(FSoftObjectPath(ClassPath));
-                break;
-            case EPACSCharacterType::Paramedic:
-                ClassPath = TEXT("/Game/Blueprints/NPCs/BP_NPC_Paramedic.BP_NPC_Paramedic_C");
-                Config.CharacterClass = TSoftClassPtr<APACS_NPCCharacter>(FSoftObjectPath(ClassPath));
-                break;
-            // Lightweight NPCs - using actual Blueprint names
-            case EPACSCharacterType::LightweightCivilian:
-                ClassPath = TEXT("/Game/Blueprints/NPCs/Lightweight/BP_NPC_LightweightCivilian.BP_NPC_LightweightCivilian_C");
-                Config.LightweightCharacterClass = TSoftClassPtr<APACS_NPC_Humanoid>(FSoftObjectPath(ClassPath));
-                break;
-            case EPACSCharacterType::LightweightPolice:
-                ClassPath = TEXT("/Game/Blueprints/NPCs/Lightweight/BP_NPC_LightweightPolice.BP_NPC_LightweightPolice_C");
-                Config.LightweightCharacterClass = TSoftClassPtr<APACS_NPC_Humanoid>(FSoftObjectPath(ClassPath));
-                break;
-            case EPACSCharacterType::LightweightFirefighter:
-                ClassPath = TEXT("/Game/Blueprints/NPCs/Lightweight/BP_NPC_LightweightFireFighter.BP_NPC_LightweightFireFighter_C");
-                Config.LightweightCharacterClass = TSoftClassPtr<APACS_NPC_Humanoid>(FSoftObjectPath(ClassPath));
-                break;
-            case EPACSCharacterType::LightweightParamedic:
-                ClassPath = TEXT("/Game/Blueprints/NPCs/Lightweight/BP_NPC_LightweightParamedic.BP_NPC_LightweightParamedic_C");
-                Config.LightweightCharacterClass = TSoftClassPtr<APACS_NPC_Humanoid>(FSoftObjectPath(ClassPath));
-                break;
-            default:
-                break;
+            continue;
         }
 
-        UE_LOG(LogTemp, Warning, TEXT("[POOL DEBUG] Initialize - Setting up %s with path: %s"),
-            *UEnum::GetValueAsString(CharType), *ClassPath);
+        EPACSCharacterType PoolType = Entry.PoolType;
 
-        PoolConfigurations.Add(CharType, Config);
-        CharacterPools.Add(CharType, TArray<FPACSPooledCharacter>());
+        FPACSCharacterPoolConfig Config;
+        Config.InitialPoolSize = Entry.InitialPoolSize;
+        Config.MaxPoolSize = Entry.MaxPoolSize;
+
+        // Determine if this is a heavyweight or lightweight character
+        // by checking the pool type enum value
+        if (PoolType >= EPACSCharacterType::LightweightCivilian)
+        {
+            // Lightweight character
+            Config.LightweightCharacterClass = TSoftClassPtr<APACS_NPC_Humanoid>(Entry.CharacterBlueprint.ToSoftObjectPath());
+
+            // Store the NPC config asset if provided
+            if (!Entry.NPCConfigAsset.IsNull())
+            {
+                if (UPACS_NPC_v2_Config* NPCConfig = Cast<UPACS_NPC_v2_Config>(Entry.NPCConfigAsset.LoadSynchronous()))
+                {
+                    LightweightNPCConfigurations.Add(PoolType, NPCConfig);
+                }
+            }
+        }
+        else
+        {
+            // Heavyweight character
+            Config.CharacterClass = TSoftClassPtr<APACS_NPCCharacter>(Entry.CharacterBlueprint.ToSoftObjectPath());
+        }
+
+        UE_LOG(LogTemp, Log, TEXT("[POOL DEBUG] ConfigureFromDataAsset - Setting up %s with blueprint: %s"),
+            *UEnum::GetValueAsString(PoolType),
+            *Entry.CharacterBlueprint.ToString());
+
+        PoolConfigurations.Add(PoolType, Config);
+        CharacterPools.Add(PoolType, TArray<FPACSPooledCharacter>());
     }
 
     // Pre-allocate pool arrays to avoid reallocation
@@ -85,7 +90,8 @@ void UPACS_CharacterPool::Initialize(FSubsystemCollectionBase& Collection)
         Pool.Value.Reserve(PoolConfigurations[Pool.Key].MaxPoolSize);
     }
 
-    UE_LOG(LogTemp, Log, TEXT("PACS_CharacterPool: Initialized with %d character types"), PoolConfigurations.Num());
+    UE_LOG(LogTemp, Log, TEXT("PACS_CharacterPool: Configured with %d character types from data asset"),
+        PoolConfigurations.Num());
 }
 
 void UPACS_CharacterPool::Deinitialize()
@@ -117,22 +123,36 @@ void UPACS_CharacterPool::PreloadCharacterAssets()
         return;
     }
 
+    if (PoolConfigurations.Num() == 0)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("PACS_CharacterPool: PreloadCharacterAssets called without pool configuration. Call ConfigureFromDataAsset first."));
+        return;
+    }
+
     const float StartTime = FPlatformTime::Seconds();
 
-    // Collect ALL assets to load - including from NPCConfig assets
+    // Collect ALL assets to load from configured blueprints
     TArray<FSoftObjectPath> AssetsToLoad;
     TMap<EPACSCharacterType, TArray<FSoftObjectPath>> AssetPathsByType;
 
-    // First, load the character blueprint classes to get NPCConfig references
+    // Load the character blueprint classes (both heavyweight and lightweight)
     for (const auto& ConfigPair : PoolConfigurations)
     {
         EPACSCharacterType CharType = ConfigPair.Key;
         const FPACSCharacterPoolConfig& Config = ConfigPair.Value;
 
+        // Check for heavyweight character class
         FSoftObjectPath ClassPath = Config.CharacterClass.ToSoftObjectPath();
         if (!ClassPath.IsNull() && !ClassPath.ToString().IsEmpty())
         {
             AssetsToLoad.Add(ClassPath);
+        }
+
+        // Check for lightweight character class
+        FSoftObjectPath LightweightClassPath = Config.LightweightCharacterClass.ToSoftObjectPath();
+        if (!LightweightClassPath.IsNull() && !LightweightClassPath.ToString().IsEmpty())
+        {
+            AssetsToLoad.Add(LightweightClassPath);
         }
     }
 
@@ -250,7 +270,41 @@ void UPACS_CharacterPool::PreloadCharacterAssets()
 
 void UPACS_CharacterPool::CreateSharedMaterialInstances()
 {
-    // Create shared material instances to reduce memory footprint
+    // Create shared material instances for lightweight NPCs using NPC_v2_Config
+    for (const auto& ConfigPair : LightweightNPCConfigurations)
+    {
+        EPACSCharacterType CharType = ConfigPair.Key;
+        UPACS_NPC_v2_Config* NPCConfig = ConfigPair.Value;
+
+        if (!NPCConfig || NPCConfig->DecalMaterial.IsNull())
+        {
+            continue;
+        }
+
+        // Load the decal material
+        if (UMaterialInterface* DecalMat = Cast<UMaterialInterface>(NPCConfig->DecalMaterial.LoadSynchronous()))
+        {
+            FName InstanceName = FName(*FString::Printf(TEXT("SharedMat_%s_Decal"),
+                *UEnum::GetValueAsString(CharType)));
+
+            if (!SharedMaterialInstances.Contains(InstanceName))
+            {
+                if (UMaterialInstanceDynamic* MID = UMaterialInstanceDynamic::Create(DecalMat, this))
+                {
+                    // Set initial "Available" state from config
+                    MID->SetScalarParameterValue(TEXT("Brightness"), NPCConfig->AvailableBrightness);
+                    MID->SetVectorParameterValue(TEXT("Color"), NPCConfig->AvailableColor);
+
+                    SharedMaterialInstances.Add(InstanceName, MID);
+
+                    UE_LOG(LogTemp, Log, TEXT("PACS_CharacterPool: Created shared decal instance for %s"),
+                        *UEnum::GetValueAsString(CharType));
+                }
+            }
+        }
+    }
+
+    // Keep original material instance creation for heavyweight NPCs
     for (const auto& MatPair : LoadedMaterials)
     {
         EPACSCharacterType CharType = MatPair.Key;
@@ -808,8 +862,29 @@ void UPACS_CharacterPool::ConfigureLightweightCharacterAssets(APACS_NPC_Humanoid
         return;
     }
 
-    // Configuration would be applied through the character's NPCConfig property
-    // This is typically set in the Blueprint class defaults
+    UPACS_NPC_v2_Config* NPCConfig = *ConfigPtr;
+
+    // Apply shared material instance for decal
+    FName MaterialKey = FName(*FString::Printf(TEXT("SharedMat_%s_Decal"), *UEnum::GetValueAsString(CharacterType)));
+    if (UMaterialInstanceDynamic** SharedMatPtr = SharedMaterialInstances.Find(MaterialKey))
+    {
+        UMaterialInstanceDynamic* SharedMat = *SharedMatPtr;
+
+        // Apply to decal component
+        if (UDecalComponent* DecalComp = Character->GetSelectionDecal())
+        {
+            DecalComp->SetDecalMaterial(SharedMat);
+        }
+
+        // Cache the shared material on the character for visual state updates
+        Character->CachedDecalMaterial = SharedMat;
+    }
+
+    // Set the NPCConfig reference on the character
+    Character->NPCConfig = NPCConfig;
+
+    UE_LOG(LogTemp, Verbose, TEXT("PACS_CharacterPool: Configured lightweight character assets for type %s"),
+        *UEnum::GetValueAsString(CharacterType));
 }
 
 // Helper methods for FPACSPooledCharacter

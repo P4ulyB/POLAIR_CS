@@ -14,6 +14,7 @@
 #include "Navigation/PathFollowingComponent.h"
 #include "Net/UnrealNetwork.h"
 #include "Materials/MaterialInterface.h"
+#include "Materials/MaterialInstanceDynamic.h"
 
 APACS_NPC_Humanoid::APACS_NPC_Humanoid()
 {
@@ -62,6 +63,7 @@ APACS_NPC_Humanoid::APACS_NPC_Humanoid()
     bIsMoving = false;
     bIsLocallyHovered = false;
     ConfiguredWalkSpeed = 300.0f;
+    CachedDecalMaterial = nullptr;
 }
 
 void APACS_NPC_Humanoid::BeginPlay()
@@ -242,20 +244,69 @@ void APACS_NPC_Humanoid::SetCurrentSelector(APlayerState* Selector)
 void APACS_NPC_Humanoid::SetLocalHover(bool bHovered)
 {
     bIsLocallyHovered = bHovered;
-
-    // Update visual feedback
-    if (SelectionDecal)
-    {
-        // Show decal when hovered or selected
-        SelectionDecal->SetVisibility(bHovered || CurrentSelector != nullptr);
-    }
+    UpdateVisualState();
 }
 
 void APACS_NPC_Humanoid::OnRep_CurrentSelector()
 {
-    // Update selection visual on clients
-    if (SelectionDecal)
+    // Update visual state when selector changes
+    UpdateVisualState();
+}
+
+void APACS_NPC_Humanoid::UpdateVisualState()
+{
+    if (!SelectionDecal || !NPCConfig || !CachedDecalMaterial)
     {
-        SelectionDecal->SetVisibility(CurrentSelector != nullptr);
+        return;
     }
+
+    // Get local player state for comparison
+    APlayerState* LocalPlayerState = nullptr;
+    if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
+    {
+        LocalPlayerState = PC->GetPlayerState<APlayerState>();
+    }
+
+    // Determine visual state based on priority:
+    // 1. Local hover (highest priority)
+    // 2. Selected by local player
+    // 3. Selected by another player (unavailable)
+    // 4. Available (default)
+
+    if (bIsLocallyHovered)
+    {
+        // LOCAL ONLY - Hover state (highest priority)
+        ApplyDecalState(NPCConfig->HoveredBrightness, NPCConfig->HoveredColor);
+        SelectionDecal->SetVisibility(true);
+    }
+    else if (CurrentSelector == LocalPlayerState && CurrentSelector != nullptr)
+    {
+        // This client owns the selection - show Selected state
+        ApplyDecalState(NPCConfig->SelectedBrightness, NPCConfig->SelectedColor);
+        SelectionDecal->SetVisibility(true);
+    }
+    else if (CurrentSelector != nullptr)
+    {
+        // Another client owns this NPC - show Unavailable state
+        ApplyDecalState(NPCConfig->UnavailableBrightness, NPCConfig->UnavailableColor);
+        SelectionDecal->SetVisibility(true);
+    }
+    else
+    {
+        // No one has selected - show Available state
+        ApplyDecalState(NPCConfig->AvailableBrightness, NPCConfig->AvailableColor);
+        SelectionDecal->SetVisibility(false); // Hide decal when available
+    }
+}
+
+void APACS_NPC_Humanoid::ApplyDecalState(float Brightness, const FLinearColor& Color)
+{
+    if (!CachedDecalMaterial)
+    {
+        return;
+    }
+
+    // Update material parameters
+    CachedDecalMaterial->SetScalarParameterValue(TEXT("Brightness"), Brightness);
+    CachedDecalMaterial->SetVectorParameterValue(TEXT("Color"), Color);
 }

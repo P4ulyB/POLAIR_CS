@@ -107,6 +107,13 @@ public:
     virtual bool ShouldCreateSubsystem(UObject* Outer) const override { return true; }
 
     /**
+     * Configure pool from spawn configuration data asset
+     * Must be called before PreloadCharacterAssets
+     */
+    UFUNCTION(BlueprintCallable, Category = "PACS|CharacterPool")
+    void ConfigureFromDataAsset(class UPACS_SpawnConfiguration* SpawnConfig);
+
+    /**
      * Pre-load all character assets at level start
      * Eliminates 972ms WaitForTasks bottleneck identified in performance analysis
      */

@@ -8,25 +8,42 @@
 #include "PACS_SpawnConfiguration.generated.h"
 
 /**
- * Configuration for character type spawning mapping
- * Replaces hard-coded type conversion logic with data-driven approach
+ * Character pool configuration entry with blueprint reference
+ * Provides data-driven character type configuration
  */
 USTRUCT(BlueprintType)
-struct FPACS_CharacterTypeMapping
+struct FPACS_CharacterPoolEntry
 {
 	GENERATED_BODY()
 
-	// The legacy spawn point character type
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mapping")
-	EPACSCharacterType LegacyType = EPACSCharacterType::Civilian;
+	// Direct blueprint class reference - supports both heavyweight and lightweight NPCs
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character",
+		meta = (DisplayName = "Character Blueprint", AllowAbstract = "false"))
+	TSoftClassPtr<APawn> CharacterBlueprint;
 
-	// The pool character type to actually spawn
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mapping")
+	// Pool type assignment for this blueprint
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pool",
+		meta = (DisplayName = "Pool Type"))
 	EPACSCharacterType PoolType = EPACSCharacterType::LightweightCivilian;
 
-	// Whether this mapping is enabled
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mapping")
+	// Whether this pool entry is enabled globally
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pool",
+		meta = (DisplayName = "Enabled"))
 	bool bEnabled = true;
+
+	// Pool size configuration
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pool Size",
+		meta = (ClampMin = "1", ClampMax = "100", DisplayName = "Initial Pool Size"))
+	int32 InitialPoolSize = 10;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pool Size",
+		meta = (ClampMin = "1", ClampMax = "500", DisplayName = "Maximum Pool Size"))
+	int32 MaxPoolSize = 50;
+
+	// Optional: Associated NPCConfig or lightweight config asset
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character",
+		meta = (DisplayName = "NPC Configuration Asset"))
+	TSoftObjectPtr<UDataAsset> NPCConfigAsset;
 };
 
 /**
@@ -67,10 +84,10 @@ public:
 	UPACS_SpawnConfiguration();
 
 	/**
-	 * Character type mappings - replaces hard-coded conversion logic
+	 * Character pool entries - data-driven blueprint configuration
 	 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Types", meta = (DisplayName = "Type Mappings"))
-	TArray<FPACS_CharacterTypeMapping> CharacterTypeMappings;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Pools", meta = (DisplayName = "Character Pool Entries"))
+	TArray<FPACS_CharacterPoolEntry> CharacterPoolEntries;
 
 	/**
 	 * Global spawn limits
@@ -106,10 +123,19 @@ public:
 	bool bRequireServerAuthority = true;
 
 	/**
-	 * Get the pool character type for a given legacy type
+	 * Get the character blueprint for a given pool type
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Spawn Configuration")
-	EPACSCharacterType GetPoolTypeForLegacyType(EPACSCharacterType LegacyType) const;
+	TSoftClassPtr<APawn> GetCharacterBlueprintForType(EPACSCharacterType PoolType) const;
+
+	/**
+	 * Get pool configuration settings for a given type
+	 * Returns true if found, false otherwise
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Spawn Configuration", meta = (DisplayName = "Get Pool Settings"))
+	bool GetPoolSettingsForType(EPACSCharacterType PoolType,
+		UPARAM(ref) int32& OutInitialPoolSize,
+		UPARAM(ref) int32& OutMaxPoolSize) const;
 
 	/**
 	 * Check if spawning is allowed for a character type

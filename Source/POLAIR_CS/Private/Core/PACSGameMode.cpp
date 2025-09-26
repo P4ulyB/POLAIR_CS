@@ -48,19 +48,34 @@ void APACSGameMode::BeginPlay()
         return;
     }
 
-    // Initialize character pool and preload assets
+    // Load spawn configuration
+    UPACS_SpawnConfiguration* SpawnConfig = GetSpawnConfiguration();
+    if (!SpawnConfig)
+    {
+        UE_LOG(LogTemp, Error, TEXT("PACS GameMode: No spawn configuration available, NPCs will not spawn"));
+        return;
+    }
+
+    // Initialize character pool with data asset configuration
     if (UPACS_CharacterPool* CharacterPool = GetGameInstance() ?
         GetGameInstance()->GetSubsystem<UPACS_CharacterPool>() : nullptr)
     {
+        // Configure pool from data asset
+        CharacterPool->ConfigureFromDataAsset(SpawnConfig);
+
+        // Preload all configured assets
         CharacterPool->PreloadCharacterAssets();
 
-        // Warm up lightweight pools for immediate use (much better performance)
-        CharacterPool->WarmUpPool(EPACSCharacterType::LightweightCivilian, 30);
-        CharacterPool->WarmUpPool(EPACSCharacterType::LightweightPolice, 10);
-        CharacterPool->WarmUpPool(EPACSCharacterType::LightweightFirefighter, 5);
-        CharacterPool->WarmUpPool(EPACSCharacterType::LightweightParamedic, 5);
+        // Warm up pools based on data asset configuration
+        for (const FPACS_CharacterPoolEntry& Entry : SpawnConfig->CharacterPoolEntries)
+        {
+            if (Entry.bEnabled && Entry.InitialPoolSize > 0)
+            {
+                CharacterPool->WarmUpPool(Entry.PoolType, Entry.InitialPoolSize);
+            }
+        }
 
-        UE_LOG(LogTemp, Log, TEXT("PACS GameMode: Character pool initialized and warmed up"));
+        UE_LOG(LogTemp, Log, TEXT("PACS GameMode: Character pool configured from data asset and warmed up"));
     }
 
     // Spawn all NPCs at spawn points
@@ -331,32 +346,22 @@ void APACSGameMode::OnHMDTimeout(APlayerController* PlayerController)
     }
 }
 
-UPACS_SpawnConfiguration* APACSGameMode::GetEffectiveSpawnConfiguration() const
+UPACS_SpawnConfiguration* APACSGameMode::GetSpawnConfiguration() const
 {
     // Server authority check - only GameMode has authority
     if (!HasAuthority())
     {
-        UE_LOG(LogTemp, Warning, TEXT("APACSGameMode::GetEffectiveSpawnConfiguration called on client - returning nullptr"));
+        UE_LOG(LogTemp, Warning, TEXT("APACSGameMode::GetSpawnConfiguration called on client - returning nullptr"));
         return nullptr;
     }
 
-    // Check for level-specific override first
-    if (LevelSpawnConfigOverride.IsValid())
-    {
-        if (UPACS_SpawnConfiguration* OverrideConfig = LevelSpawnConfigOverride.LoadSynchronous())
-        {
-            UE_LOG(LogTemp, Log, TEXT("APACSGameMode: Using level spawn configuration override"));
-            return OverrideConfig;
-        }
-    }
-
-    // Fall back to default configuration
+    // Return the spawn configuration
     if (NPCSpawnConfiguration.IsValid())
     {
-        if (UPACS_SpawnConfiguration* DefaultConfig = NPCSpawnConfiguration.LoadSynchronous())
+        if (UPACS_SpawnConfiguration* Config = NPCSpawnConfiguration.LoadSynchronous())
         {
-            UE_LOG(LogTemp, Log, TEXT("APACSGameMode: Using default NPC spawn configuration"));
-            return DefaultConfig;
+            UE_LOG(LogTemp, Verbose, TEXT("APACSGameMode: Using NPC spawn configuration"));
+            return Config;
         }
     }
 
