@@ -8,8 +8,9 @@
 #include "PACS_NPCSpawnManager.generated.h"
 
 class APACS_NPCSpawnPoint;
-class APACS_NPCCharacter;
-class APACS_NPC_Humanoid;
+class IPACS_SelectableCharacterInterface;
+class UPACS_SpawnConfiguration;
+class APACSGameMode;
 
 /**
  * Simple spawn manager that populates spawn points with pooled characters
@@ -33,6 +34,12 @@ public:
     void SpawnAllNPCs();
 
     /**
+     * Spawn NPCs asynchronously to prevent server tick blocking
+     */
+    UFUNCTION(BlueprintCallable, Category = "PACS|Spawn")
+    void SpawnAllNPCsAsync();
+
+    /**
      * Clear all spawned NPCs and return them to pool
      */
     UFUNCTION(BlueprintCallable, Category = "PACS|Spawn")
@@ -42,7 +49,7 @@ public:
      * Get total number of NPCs spawned
      */
     UFUNCTION(BlueprintCallable, Category = "PACS|Spawn")
-    int32 GetSpawnedNPCCount() const { return SpawnedNPCs.Num() + SpawnedLightweightNPCs.Num(); }
+    int32 GetSpawnedNPCCount() const { return SpawnedCharacters.Num(); }
 
     /**
      * Find all spawn points in the level
@@ -52,28 +59,56 @@ public:
 
 protected:
     /**
-     * Spawn a single NPC at the given spawn point
+     * Spawn a single NPC at the given spawn point using configuration
      */
     bool SpawnNPCAtPoint(APACS_NPCSpawnPoint* SpawnPoint);
+
+    /**
+     * Load spawn configuration from GameMode
+     */
+    void LoadSpawnConfiguration();
+
+    /**
+     * Cache all spawn points in the level for performance
+     */
+    void CacheSpawnPoints();
+
+    /**
+     * Get character type to spawn based on configuration
+     */
+    EPACSCharacterType GetCharacterTypeForSpawnPoint(APACS_NPCSpawnPoint* SpawnPoint) const;
+
+    /**
+     * Async spawning helper - spawns batch of NPCs per tick
+     */
+    void SpawnNextBatch();
 
 private:
     // Reference to character pool subsystem
     UPROPERTY()
     UPACS_CharacterPool* CharacterPool = nullptr;
 
-    // Track all spawned NPCs for cleanup
+    // Reference to spawn configuration from GameMode
     UPROPERTY()
-    TArray<APACS_NPCCharacter*> SpawnedNPCs;
+    UPACS_SpawnConfiguration* SpawnConfiguration = nullptr;
 
-    // Track all spawned lightweight NPCs for cleanup
+    // Unified tracking system using interface
     UPROPERTY()
-    TArray<APACS_NPC_Humanoid*> SpawnedLightweightNPCs;
+    TArray<TScriptInterface<IPACS_SelectableCharacterInterface>> SpawnedCharacters;
 
-    // Track spawn points that have NPCs
+    // Unified spawn point mapping
     UPROPERTY()
-    TMap<APACS_NPCSpawnPoint*, APACS_NPCCharacter*> SpawnPointMapping;
+    TMap<APACS_NPCSpawnPoint*, TScriptInterface<IPACS_SelectableCharacterInterface>> SpawnPointMapping;
 
-    // Track spawn points that have lightweight NPCs
+    // Cached spawn points for performance
     UPROPERTY()
-    TMap<APACS_NPCSpawnPoint*, APACS_NPC_Humanoid*> LightweightSpawnPointMapping;
+    TArray<APACS_NPCSpawnPoint*> CachedSpawnPoints;
+
+    // Performance tracking
+    bool bSpawnPointsCached = false;
+    int32 CurrentSpawnIndex = 0;
+
+    // Async spawning state
+    bool bAsyncSpawningActive = false;
+    FTimerHandle AsyncSpawnTimerHandle;
 };

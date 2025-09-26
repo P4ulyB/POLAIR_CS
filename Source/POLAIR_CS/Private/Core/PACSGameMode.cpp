@@ -3,6 +3,7 @@
 #include "Core/PACS_PlayerState.h"
 #include "Core/PACS_OptimizationSubsystem.h"
 #include "Subsystems/PACSServerKeepaliveSubsystem.h"
+#include "Data/PACS_SpawnConfiguration.h"
 #include "GenericPlatform/GenericPlatformHttp.h"
 #include "GameFramework/PlayerState.h"
 #include "GameFramework/PlayerController.h"
@@ -328,5 +329,39 @@ void APACSGameMode::OnHMDTimeout(APlayerController* PlayerController)
             Candidate->ApplyOffsetsThenSeed(/*Offsets*/ nullptr);
         }
     }
+}
+
+UPACS_SpawnConfiguration* APACSGameMode::GetEffectiveSpawnConfiguration() const
+{
+    // Server authority check - only GameMode has authority
+    if (!HasAuthority())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("APACSGameMode::GetEffectiveSpawnConfiguration called on client - returning nullptr"));
+        return nullptr;
+    }
+
+    // Check for level-specific override first
+    if (LevelSpawnConfigOverride.IsValid())
+    {
+        if (UPACS_SpawnConfiguration* OverrideConfig = LevelSpawnConfigOverride.LoadSynchronous())
+        {
+            UE_LOG(LogTemp, Log, TEXT("APACSGameMode: Using level spawn configuration override"));
+            return OverrideConfig;
+        }
+    }
+
+    // Fall back to default configuration
+    if (NPCSpawnConfiguration.IsValid())
+    {
+        if (UPACS_SpawnConfiguration* DefaultConfig = NPCSpawnConfiguration.LoadSynchronous())
+        {
+            UE_LOG(LogTemp, Log, TEXT("APACSGameMode: Using default NPC spawn configuration"));
+            return DefaultConfig;
+        }
+    }
+
+    // No configuration available
+    UE_LOG(LogTemp, Error, TEXT("APACSGameMode: No spawn configuration available - NPCs will not spawn correctly"));
+    return nullptr;
 }
 

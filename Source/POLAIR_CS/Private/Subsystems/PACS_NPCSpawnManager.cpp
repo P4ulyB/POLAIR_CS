@@ -5,6 +5,9 @@
 #include "Actors/PACS_NPCSpawnPoint.h"
 #include "Actors/NPC/PACS_NPCCharacter.h"
 #include "Actors/NPC/PACS_NPC_Humanoid.h"
+#include "Data/PACS_SpawnConfiguration.h"
+#include "Core/PACSGameMode.h"
+#include "Interfaces/PACS_SelectableCharacterInterface.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFramework/GameModeBase.h"
@@ -12,6 +15,9 @@
 void UPACS_NPCSpawnManager::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
+
+    // Load spawn configuration from GameMode (server authority)
+    LoadSpawnConfiguration();
 
     UE_LOG(LogTemp, Log, TEXT("PACS_NPCSpawnManager: Initialized"));
 }
@@ -33,7 +39,7 @@ void UPACS_NPCSpawnManager::SpawnAllNPCs()
         return;
     }
 
-    // Only spawn on server
+    // Server authority check
     if (!World->GetAuthGameMode())
     {
         UE_LOG(LogTemp, Warning, TEXT("PACS_NPCSpawnManager: Not on server, skipping spawn"));
@@ -53,11 +59,20 @@ void UPACS_NPCSpawnManager::SpawnAllNPCs()
         return;
     }
 
+    // Load configuration if not already loaded
+    if (!SpawnConfiguration)
+    {
+        LoadSpawnConfiguration();
+    }
+
+    // Cache spawn points for performance
+    CacheSpawnPoints();
+
     // CRITICAL: Preload all character assets before spawning
     // This eliminates the WaitForTasks bottleneck
     CharacterPool->PreloadCharacterAssets();
 
-    // Find all spawn points in the level
+    // Get spawn points using cached system
     TArray<APACS_NPCSpawnPoint*> SpawnPoints = GetAllSpawnPoints();
 
     int32 SuccessCount = 0;
@@ -76,58 +91,92 @@ void UPACS_NPCSpawnManager::SpawnAllNPCs()
         }
     }
 
-    UE_LOG(LogTemp, Log, TEXT("PACS_NPCSpawnManager: Spawned %d NPCs successfully, %d failed"),
-        SuccessCount, FailCount);
+    UE_LOG(LogTemp, Log, TEXT("PACS_NPCSpawnManager: Spawned %d NPCs successfully, %d failed (Total active: %d)"),
+        SuccessCount, FailCount, SpawnedCharacters.Num());
 }
 
 void UPACS_NPCSpawnManager::DespawnAllNPCs()
 {
+    UWorld* World = GetWorld();
+    if (!World || !World->GetAuthGameMode())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("PACS_NPCSpawnManager: DespawnAllNPCs called on client - ignoring"));
+        return;
+    }
+
     if (!CharacterPool)
     {
         return;
     }
 
-    // Return all spawned heavyweight NPCs to pool
-    for (APACS_NPCCharacter* NPC : SpawnedNPCs)
+    // Return all spawned characters to pool using unified interface
+    for (auto& CharacterInterface : SpawnedCharacters)
     {
-        if (IsValid(NPC))
+        if (CharacterInterface.GetInterface())
         {
-            CharacterPool->ReleaseCharacter(NPC);
+            // Try to cast to heavyweight first
+            if (APawn* Pawn = Cast<APawn>(CharacterInterface.GetObject()))
+            {
+                if (APACS_NPCCharacter* HeavyweightNPC = Cast<APACS_NPCCharacter>(Pawn))
+                {
+                    CharacterPool->ReleaseCharacter(HeavyweightNPC);
+                }
+                else if (APACS_NPC_Humanoid* LightweightNPC = Cast<APACS_NPC_Humanoid>(Pawn))
+                {
+                    CharacterPool->ReleaseLightweightCharacter(LightweightNPC);
+                }
+            }
         }
     }
 
-    // Return all spawned lightweight NPCs to pool
-    for (APACS_NPC_Humanoid* LightweightNPC : SpawnedLightweightNPCs)
-    {
-        if (IsValid(LightweightNPC))
-        {
-            CharacterPool->ReleaseLightweightCharacter(LightweightNPC);
-        }
-    }
-
-    // Clear tracking arrays
-    SpawnedNPCs.Empty();
-    SpawnedLightweightNPCs.Empty();
+    // Clear unified tracking systems
+    SpawnedCharacters.Empty();
     SpawnPointMapping.Empty();
-    LightweightSpawnPointMapping.Empty();
 
-    // Clear spawn point references
-    for (TActorIterator<APACS_NPCSpawnPoint> It(GetWorld()); It; ++It)
+    // Clear spawn point references using cached points if available
+    if (bSpawnPointsCached)
     {
-        if (APACS_NPCSpawnPoint* SpawnPoint = *It)
+        for (APACS_NPCSpawnPoint* SpawnPoint : CachedSpawnPoints)
         {
-            SpawnPoint->SetSpawnedCharacter(nullptr);
+            if (IsValid(SpawnPoint))
+            {
+                SpawnPoint->SetSpawnedCharacter(TScriptInterface<IPACS_SelectableCharacterInterface>());
+            }
+        }
+    }
+    else
+    {
+        // Fallback to world iteration
+        for (TActorIterator<APACS_NPCSpawnPoint> It(GetWorld()); It; ++It)
+        {
+            if (APACS_NPCSpawnPoint* SpawnPoint = *It)
+            {
+                SpawnPoint->SetSpawnedCharacter(TScriptInterface<IPACS_SelectableCharacterInterface>());
+            }
         }
     }
 
-    UE_LOG(LogTemp, Log, TEXT("PACS_NPCSpawnManager: All NPCs returned to pool"));
+    UE_LOG(LogTemp, Log, TEXT("PACS_NPCSpawnManager: All %d NPCs returned to pool"), SpawnedCharacters.Num());
 }
 
 TArray<APACS_NPCSpawnPoint*> UPACS_NPCSpawnManager::GetAllSpawnPoints() const
 {
-    TArray<APACS_NPCSpawnPoint*> SpawnPoints;
+    // Use cached spawn points if available (performance optimization)
+    if (bSpawnPointsCached && CachedSpawnPoints.Num() > 0)
+    {
+        TArray<APACS_NPCSpawnPoint*> EnabledSpawnPoints;
+        for (APACS_NPCSpawnPoint* SpawnPoint : CachedSpawnPoints)
+        {
+            if (IsValid(SpawnPoint) && SpawnPoint->bEnabled)
+            {
+                EnabledSpawnPoints.Add(SpawnPoint);
+            }
+        }
+        return EnabledSpawnPoints;
+    }
 
-    // Find all spawn points in the world
+    // Fallback to world iteration if cache not available
+    TArray<APACS_NPCSpawnPoint*> SpawnPoints;
     for (TActorIterator<APACS_NPCSpawnPoint> It(GetWorld()); It; ++It)
     {
         if (APACS_NPCSpawnPoint* SpawnPoint = *It)
@@ -144,13 +193,20 @@ TArray<APACS_NPCSpawnPoint*> UPACS_NPCSpawnManager::GetAllSpawnPoints() const
 
 bool UPACS_NPCSpawnManager::SpawnNPCAtPoint(APACS_NPCSpawnPoint* SpawnPoint)
 {
+    UWorld* World = GetWorld();
+    if (!World || !World->GetAuthGameMode())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("PACS_NPCSpawnManager: SpawnNPCAtPoint called on client - ignoring"));
+        return false;
+    }
+
     if (!SpawnPoint || !SpawnPoint->bEnabled)
     {
         return false;
     }
 
     // Check if this point already has an NPC
-    if (SpawnPoint->GetSpawnedCharacter())
+    if (SpawnPoint->GetSpawnedCharacter().GetInterface())
     {
         return false;
     }
@@ -161,26 +217,18 @@ bool UPACS_NPCSpawnManager::SpawnNPCAtPoint(APACS_NPCSpawnPoint* SpawnPoint)
         return false;
     }
 
-    // Convert to lightweight type for better performance
-    // Map old types to new lightweight types
-    EPACSCharacterType PoolCharType;
-    switch (static_cast<EPACSCharacterType>(SpawnPoint->CharacterType))
+    // Get character type using configuration
+    EPACSCharacterType PoolCharType = GetCharacterTypeForSpawnPoint(SpawnPoint);
+
+    // Check spawn limits if configuration is available
+    if (SpawnConfiguration)
     {
-        case EPACSCharacterType::Civilian:
-            PoolCharType = EPACSCharacterType::LightweightCivilian;
-            break;
-        case EPACSCharacterType::Police:
-            PoolCharType = EPACSCharacterType::LightweightPolice;
-            break;
-        case EPACSCharacterType::Firefighter:
-            PoolCharType = EPACSCharacterType::LightweightFirefighter;
-            break;
-        case EPACSCharacterType::Paramedic:
-            PoolCharType = EPACSCharacterType::LightweightParamedic;
-            break;
-        default:
-            PoolCharType = EPACSCharacterType::LightweightCivilian;
-            break;
+        if (!SpawnConfiguration->IsSpawningAllowed(PoolCharType, SpawnedCharacters.Num()))
+        {
+            UE_LOG(LogTemp, Verbose, TEXT("PACS_NPCSpawnManager: Spawn limit reached for type %s"),
+                *UEnum::GetValueAsString(PoolCharType));
+            return false;
+        }
     }
 
     // Acquire lightweight character from pool
@@ -196,7 +244,7 @@ bool UPACS_NPCSpawnManager::SpawnNPCAtPoint(APACS_NPCSpawnPoint* SpawnPoint)
         return false;
     }
 
-    // Position the lightweight NPC at spawn point
+    // Position the NPC at spawn point
     FVector SpawnLocation = SpawnPoint->GetActorLocation();
     FRotator SpawnRotation = SpawnPoint->SpawnRotation.IsNearlyZero() ?
         SpawnPoint->GetActorRotation() : SpawnPoint->SpawnRotation;
@@ -204,14 +252,190 @@ bool UPACS_NPCSpawnManager::SpawnNPCAtPoint(APACS_NPCSpawnPoint* SpawnPoint)
     LightweightNPC->SetActorLocation(SpawnLocation);
     LightweightNPC->SetActorRotation(SpawnRotation);
 
-    // Track the spawned lightweight NPC
-    SpawnedLightweightNPCs.Add(LightweightNPC);
-    LightweightSpawnPointMapping.Add(SpawnPoint, LightweightNPC);
+    // Create interface reference
+    TScriptInterface<IPACS_SelectableCharacterInterface> CharacterInterface;
+    CharacterInterface.SetObject(LightweightNPC);
+    CharacterInterface.SetInterface(Cast<IPACS_SelectableCharacterInterface>(LightweightNPC));
 
-    // Note: SpawnPoint expects APACS_NPCCharacter, but we're using lightweight now
-    // This will need to be updated to use the interface instead
-    // For now, we'll skip setting it on the spawn point
-    // SpawnPoint->SetSpawnedCharacter(NPC);
+    // Track using unified interface system
+    SpawnedCharacters.Add(CharacterInterface);
+    SpawnPointMapping.Add(SpawnPoint, CharacterInterface);
+
+    // Set reference on spawn point
+    SpawnPoint->SetSpawnedCharacter(CharacterInterface);
+
+    UE_LOG(LogTemp, Verbose, TEXT("PACS_NPCSpawnManager: Spawned %s at %s"),
+        *UEnum::GetValueAsString(PoolCharType), *SpawnPoint->GetName());
 
     return true;
+}
+
+void UPACS_NPCSpawnManager::LoadSpawnConfiguration()
+{
+    UWorld* World = GetWorld();
+    if (!World || !World->GetAuthGameMode())
+    {
+        return;
+    }
+
+    // Get configuration from GameMode
+    if (APACSGameMode* GameMode = Cast<APACSGameMode>(World->GetAuthGameMode()))
+    {
+        SpawnConfiguration = GameMode->GetEffectiveSpawnConfiguration();
+        if (SpawnConfiguration)
+        {
+            UE_LOG(LogTemp, Log, TEXT("PACS_NPCSpawnManager: Loaded spawn configuration from GameMode"));
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("PACS_NPCSpawnManager: No spawn configuration available in GameMode"));
+        }
+    }
+}
+
+void UPACS_NPCSpawnManager::CacheSpawnPoints()
+{
+    if (bSpawnPointsCached)
+    {
+        return;
+    }
+
+    CachedSpawnPoints.Empty();
+
+    // Cache all spawn points for performance
+    for (TActorIterator<APACS_NPCSpawnPoint> It(GetWorld()); It; ++It)
+    {
+        if (APACS_NPCSpawnPoint* SpawnPoint = *It)
+        {
+            CachedSpawnPoints.Add(SpawnPoint);
+        }
+    }
+
+    bSpawnPointsCached = true;
+    UE_LOG(LogTemp, Log, TEXT("PACS_NPCSpawnManager: Cached %d spawn points"), CachedSpawnPoints.Num());
+}
+
+EPACSCharacterType UPACS_NPCSpawnManager::GetCharacterTypeForSpawnPoint(APACS_NPCSpawnPoint* SpawnPoint) const
+{
+    if (!SpawnPoint)
+    {
+        return EPACSCharacterType::LightweightCivilian;
+    }
+
+    // Use configuration mapping if available
+    if (SpawnConfiguration)
+    {
+        return SpawnConfiguration->GetPoolTypeForLegacyType(SpawnPoint->CharacterType);
+    }
+
+    // Fallback to hard-coded lightweight mapping
+    switch (SpawnPoint->CharacterType)
+    {
+        case EPACSCharacterType::Civilian:
+            return EPACSCharacterType::LightweightCivilian;
+        case EPACSCharacterType::Police:
+            return EPACSCharacterType::LightweightPolice;
+        case EPACSCharacterType::Firefighter:
+            return EPACSCharacterType::LightweightFirefighter;
+        case EPACSCharacterType::Paramedic:
+            return EPACSCharacterType::LightweightParamedic;
+        default:
+            return EPACSCharacterType::LightweightCivilian;
+    }
+}
+
+void UPACS_NPCSpawnManager::SpawnAllNPCsAsync()
+{
+    UWorld* World = GetWorld();
+    if (!World || !World->GetAuthGameMode())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("PACS_NPCSpawnManager: SpawnAllNPCsAsync called on client - ignoring"));
+        return;
+    }
+
+    if (bAsyncSpawningActive)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("PACS_NPCSpawnManager: Async spawning already in progress"));
+        return;
+    }
+
+    // Get character pool
+    if (!CharacterPool)
+    {
+        CharacterPool = World->GetGameInstance() ?
+            World->GetGameInstance()->GetSubsystem<UPACS_CharacterPool>() : nullptr;
+    }
+
+    if (!CharacterPool)
+    {
+        UE_LOG(LogTemp, Error, TEXT("PACS_NPCSpawnManager: Character pool not available for async spawning"));
+        return;
+    }
+
+    // Load configuration if not already loaded
+    if (!SpawnConfiguration)
+    {
+        LoadSpawnConfiguration();
+    }
+
+    // Cache spawn points for performance
+    CacheSpawnPoints();
+
+    // Preload character assets
+    CharacterPool->PreloadCharacterAssets();
+
+    // Reset spawn index and start async spawning
+    CurrentSpawnIndex = 0;
+    bAsyncSpawningActive = true;
+
+    float SpawnDelay = SpawnConfiguration ? SpawnConfiguration->SpawnDelayBetweenBatches : 0.1f;
+
+    World->GetTimerManager().SetTimer(
+        AsyncSpawnTimerHandle,
+        this,
+        &UPACS_NPCSpawnManager::SpawnNextBatch,
+        SpawnDelay,
+        true
+    );
+
+    UE_LOG(LogTemp, Log, TEXT("PACS_NPCSpawnManager: Started async spawning with %d spawn points"), CachedSpawnPoints.Num());
+}
+
+void UPACS_NPCSpawnManager::SpawnNextBatch()
+{
+    UWorld* World = GetWorld();
+    if (!World || !World->GetAuthGameMode() || !bAsyncSpawningActive)
+    {
+        return;
+    }
+
+    TArray<APACS_NPCSpawnPoint*> SpawnPoints = GetAllSpawnPoints();
+    if (CurrentSpawnIndex >= SpawnPoints.Num())
+    {
+        // All spawn points processed, stop async spawning
+        bAsyncSpawningActive = false;
+        GetWorld()->GetTimerManager().ClearTimer(AsyncSpawnTimerHandle);
+
+        UE_LOG(LogTemp, Log, TEXT("PACS_NPCSpawnManager: Async spawning completed. Total spawned: %d"), SpawnedCharacters.Num());
+        return;
+    }
+
+    int32 MaxSpawnsThisBatch = SpawnConfiguration ? SpawnConfiguration->MaxSpawnsPerTick : 5;
+    int32 SpawnsThisBatch = 0;
+    int32 SuccessCount = 0;
+
+    // Spawn batch of NPCs
+    while (CurrentSpawnIndex < SpawnPoints.Num() && SpawnsThisBatch < MaxSpawnsThisBatch)
+    {
+        if (SpawnNPCAtPoint(SpawnPoints[CurrentSpawnIndex]))
+        {
+            SuccessCount++;
+        }
+
+        CurrentSpawnIndex++;
+        SpawnsThisBatch++;
+    }
+
+    UE_LOG(LogTemp, Verbose, TEXT("PACS_NPCSpawnManager: Batch spawn - %d/%d successful (Progress: %d/%d)"),
+        SuccessCount, SpawnsThisBatch, CurrentSpawnIndex, SpawnPoints.Num());
 }

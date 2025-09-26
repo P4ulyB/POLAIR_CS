@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "Data/PACS_NPCVisualConfig.h"
+#include "Interfaces/PACS_SelectableCharacterInterface.h"
 #include "PACS_NPCCharacter.generated.h"
 
 class UPACS_NPCConfig;
@@ -13,7 +14,7 @@ struct FStreamableHandle;
 struct FAIRequestID;
 
 UCLASS(BlueprintType, Blueprintable)
-class POLAIR_CS_API APACS_NPCCharacter : public ACharacter
+class POLAIR_CS_API APACS_NPCCharacter : public ACharacter, public IPACS_SelectableCharacterInterface
 {
 	GENERATED_BODY()
 
@@ -48,19 +49,31 @@ public:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
-	// Local-only hover methods (no replication)
+	// Local-only hover methods (no replication) - interface implementation
+	virtual void SetLocalHover(bool bHovered) override;
+	virtual bool IsLocallyHovered() const override { return bIsLocallyHovered; }
+
+	// Blueprint accessible versions
 	UFUNCTION(BlueprintCallable, Category="Selection")
-	void SetLocalHover(bool bHovered);
+	void SetLocalHoverBP(bool bHovered) { SetLocalHover(bHovered); }
 
 	UFUNCTION(BlueprintCallable, Category="Selection")
-	bool IsLocallyHovered() const { return bIsLocallyHovered; }
+	bool IsLocallyHoveredBP() const { return IsLocallyHovered(); }
 
 	// Selection System Methods
 	UFUNCTION(BlueprintCallable, Category="Selection")
 	bool IsSelected() const { return CurrentSelector != nullptr; }
 
 	UFUNCTION(BlueprintCallable, Category="Selection")
-	bool IsSelectedBy(APlayerState* InPlayerState) const { return CurrentSelector == InPlayerState; }
+	bool IsSelectedBy(APlayerState* InPlayerState) const override { return CurrentSelector == InPlayerState; }
+
+	// IPACS_SelectableCharacterInterface Implementation
+	virtual APlayerState* GetCurrentSelector() const override { return CurrentSelector; }
+	virtual void SetCurrentSelector(APlayerState* Selector) override { CurrentSelector = Selector; }
+	virtual void MoveToLocation(const FVector& TargetLocation) override;
+	virtual bool IsMoving() const override { return bIsMoving; }
+	virtual UMeshComponent* GetMeshComponent() const override { return GetMesh(); }
+	virtual UDecalComponent* GetSelectionDecal() const override { return CollisionDecal; }
 
 	// Getter for collision decal component
 	UFUNCTION(BlueprintCallable, Category="NPC")

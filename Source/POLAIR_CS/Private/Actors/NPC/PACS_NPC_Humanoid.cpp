@@ -29,12 +29,6 @@ APACS_NPC_Humanoid::APACS_NPC_Humanoid()
     // Root component - box collision for better click detection
     CollisionBox = CreateDefaultSubobject<UBoxComponent>(TEXT("CollisionBox"));
     CollisionBox->SetBoxExtent(FVector(35.0f, 35.0f, 90.0f)); // Human-sized box
-    CollisionBox->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-    CollisionBox->SetCollisionResponseToAllChannels(ECR_Ignore);
-    CollisionBox->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
-    CollisionBox->SetCollisionResponseToChannel(ECC_WorldStatic, ECR_Block);
-    CollisionBox->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block); // Critical for click detection
-    CollisionBox->SetCollisionResponseToChannel(ECC_Camera, ECR_Block); // For hover detection
     RootComponent = CollisionBox;
 
     // Skeletal mesh - no collision, no physics

@@ -4,24 +4,11 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Subsystems/PACS_CharacterPool.h"
 #include "PACS_NPCSpawnPoint.generated.h"
 
 class UBillboardComponent;
-class APACS_NPCCharacter;
-
-/**
- * Character type identifier for spawn points
- * Duplicated here to avoid circular dependency with CharacterPool
- */
-UENUM(BlueprintType)
-enum class EPACSSpawnCharacterType : uint8
-{
-    Civilian = 0,
-    Police,
-    Firefighter,
-    Paramedic,
-    MAX UMETA(Hidden)
-};
+class IPACS_SelectableCharacterInterface;
 
 /**
  * Simple spawn point actor for NPCs
@@ -39,7 +26,7 @@ public:
      * Character type to spawn at this location
      */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawn")
-    EPACSSpawnCharacterType CharacterType = EPACSSpawnCharacterType::Civilian;
+    EPACSCharacterType CharacterType = EPACSCharacterType::Civilian;
 
     /**
      * Whether this spawn point is enabled
@@ -57,12 +44,17 @@ public:
      * Get the spawned character at this point (if any)
      */
     UFUNCTION(BlueprintCallable, Category = "Spawn")
-    APACS_NPCCharacter* GetSpawnedCharacter() const { return SpawnedCharacter; }
+    TScriptInterface<IPACS_SelectableCharacterInterface> GetSpawnedCharacter() const;
 
     /**
      * Set the spawned character reference
      */
-    void SetSpawnedCharacter(APACS_NPCCharacter* Character) { SpawnedCharacter = Character; }
+    void SetSpawnedCharacter(TScriptInterface<IPACS_SelectableCharacterInterface> Character);
+
+    /**
+     * Legacy getter for backward compatibility - will be removed
+     */
+    APACS_NPCCharacter* GetSpawnedCharacterLegacy() const;
 
 protected:
     virtual void BeginPlay() override;
@@ -73,7 +65,7 @@ protected:
 
 private:
     UPROPERTY()
-    APACS_NPCCharacter* SpawnedCharacter = nullptr;
+    TScriptInterface<IPACS_SelectableCharacterInterface> SpawnedCharacter;
 
 #if WITH_EDITORONLY_DATA
     UPROPERTY()

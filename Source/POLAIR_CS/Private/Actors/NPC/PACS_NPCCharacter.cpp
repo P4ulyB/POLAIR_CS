@@ -655,3 +655,9 @@ void APACS_NPCCharacter::ServerMoveToLocation_Implementation(FVector TargetLocat
 		UE_LOG(LogTemp, Warning, TEXT("[NPC MOVE] Movement request failed for %s"), *GetName());
 	}
 }
+
+// IPACS_SelectableCharacterInterface Implementation
+void APACS_NPCCharacter::MoveToLocation(const FVector& TargetLocation)
+{
+	ServerMoveToLocation(TargetLocation);
+}

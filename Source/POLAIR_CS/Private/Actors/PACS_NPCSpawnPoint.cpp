@@ -3,6 +3,8 @@
 #include "Actors/PACS_NPCSpawnPoint.h"
 #include "Components/BillboardComponent.h"
 #include "Engine/Texture2D.h"
+#include "Interfaces/PACS_SelectableCharacterInterface.h"
+#include "Actors/NPC/PACS_NPCCharacter.h"
 
 APACS_NPCSpawnPoint::APACS_NPCSpawnPoint()
 {
@@ -51,9 +53,33 @@ void APACS_NPCSpawnPoint::PostEditChangeProperty(FPropertyChangedEvent& Property
         if (PropertyName == GET_MEMBER_NAME_CHECKED(APACS_NPCSpawnPoint, CharacterType))
         {
             FString TypeString = UEnum::GetValueAsString(CharacterType);
-            TypeString = TypeString.Replace(TEXT("EPACSSpawnCharacterType::"), TEXT(""));
+            TypeString = TypeString.Replace(TEXT("EPACSCharacterType::"), TEXT(""));
             SetActorLabel(FString::Printf(TEXT("NPCSpawn_%s"), *TypeString));
         }
     }
 }
 #endif
+
+// Interface methods implementation
+TScriptInterface<IPACS_SelectableCharacterInterface> APACS_NPCSpawnPoint::GetSpawnedCharacter() const
+{
+    return SpawnedCharacter;
+}
+
+void APACS_NPCSpawnPoint::SetSpawnedCharacter(TScriptInterface<IPACS_SelectableCharacterInterface> Character)
+{
+    SpawnedCharacter = Character;
+}
+
+APACS_NPCCharacter* APACS_NPCSpawnPoint::GetSpawnedCharacterLegacy() const
+{
+    // Try to cast the interface to the legacy character type
+    if (SpawnedCharacter.GetInterface())
+    {
+        if (APawn* Pawn = Cast<APawn>(SpawnedCharacter.GetObject()))
+        {
+            return Cast<APACS_NPCCharacter>(Pawn);
+        }
+    }
+    return nullptr;
+}
