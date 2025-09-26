@@ -5,6 +5,8 @@
 #include "PACS_PlayerState.h"
 #include "PACSGameMode.generated.h"
 
+class UPACS_SpawnConfig;
+
 
 UCLASS()
 class POLAIR_CS_API APACSGameMode : public AGameModeBase
@@ -36,9 +38,18 @@ protected:
     UPROPERTY(EditDefaultsOnly, Category = "PACS|Spawning")
     TSubclassOf<APawn> AssessorPawnClass;
 
+    // Spawn configuration for object pooling system
+    // This is server-only and should be configured in the GameMode blueprint defaults
+    UPROPERTY(EditDefaultsOnly, Category = "PACS|Spawning", meta = (DisplayName = "Spawn Configuration Asset"))
+    TSoftObjectPtr<UPACS_SpawnConfig> SpawnConfigAsset;
+
     // Override to provide custom pawn selection logic
     virtual UClass* GetDefaultPawnClassForController_Implementation(AController* InController) override;
 
     // Zero-swap spawn implementation - BlueprintNativeEvent override
     virtual void HandleStartingNewPlayer_Implementation(APlayerController* NewPlayer) override;
+
+private:
+    // Initialize spawn system with config (server-only)
+    void InitializeSpawnSystem();
 };

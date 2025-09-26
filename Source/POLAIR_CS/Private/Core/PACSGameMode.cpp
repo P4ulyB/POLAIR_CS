@@ -2,11 +2,15 @@
 #include "Core/PACS_PlayerController.h"
 #include "Core/PACS_PlayerState.h"
 #include "Subsystems/PACSServerKeepaliveSubsystem.h"
+#include "Subsystems/PACS_SpawnOrchestrator.h"
+#include "Data/PACS_SpawnConfig.h"
 #include "GenericPlatform/GenericPlatformHttp.h"
 #include "GameFramework/PlayerState.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/NetConnection.h"
+#include "Engine/StreamableManager.h"
+#include "Engine/AssetManager.h"
 #include "Misc/Parse.h"
 #include "Actors/Pawn/PACS_CandidateHelicopterCharacter.h"
 #include "Actors/Pawn/PACS_AssessorPawn.h"
@@ -31,14 +35,16 @@ void APACSGameMode::BeginPlay()
     // This needs to happen early for all players
     // Optimization subsystem removed - will be reimplemented later
 
-    // Only spawn NPCs on server
+    // Only initialize spawn system on server
     if (!HasAuthority())
     {
         return;
     }
 
-    // NPC spawning removed - will be reimplemented later
-    UE_LOG(LogTemp, Log, TEXT("PACS GameMode: NPC spawning system removed, clean slate for new implementation"));
+    // Initialize the spawn system with configuration
+    InitializeSpawnSystem();
+
+    UE_LOG(LogTemp, Log, TEXT("PACS GameMode: Server initialization complete"));
 }
 
 void APACSGameMode::PreLogin(const FString& Options, const FString& Address, 
@@ -294,6 +300,80 @@ void APACSGameMode::OnHMDTimeout(APlayerController* PlayerController)
             Candidate->ApplyOffsetsThenSeed(/*Offsets*/ nullptr);
         }
     }
+}
+
+void APACSGameMode::InitializeSpawnSystem()
+{
+    // Server-only: Initialize spawn system with configuration
+    if (!HasAuthority())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("PACS GameMode: InitializeSpawnSystem called without authority"));
+        return;
+    }
+
+    // Get the spawn orchestrator subsystem
+    UPACS_SpawnOrchestrator* SpawnOrchestrator = GetWorld()->GetSubsystem<UPACS_SpawnOrchestrator>();
+    if (!SpawnOrchestrator)
+    {
+        UE_LOG(LogTemp, Error, TEXT("PACS GameMode: Failed to get SpawnOrchestrator subsystem"));
+        return;
+    }
+
+    // Check if spawn config asset is configured
+    if (SpawnConfigAsset.IsNull())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("PACS GameMode: No SpawnConfigAsset configured in GameMode. Spawn system will not initialize."));
+        UE_LOG(LogTemp, Warning, TEXT("PACS GameMode: Please set 'Spawn Configuration Asset' in your GameMode Blueprint defaults."));
+        return;
+    }
+
+    // Async load the spawn config asset
+    FStreamableManager& StreamableManager = UAssetManager::GetStreamableManager();
+
+    StreamableManager.RequestAsyncLoad(
+        SpawnConfigAsset.ToSoftObjectPath(),
+        FStreamableDelegate::CreateLambda([this, SpawnOrchestrator]()
+        {
+            // This lambda is called when the asset is loaded
+            if (!IsValid(this))
+            {
+                return;
+            }
+
+            UPACS_SpawnConfig* LoadedConfig = SpawnConfigAsset.Get();
+            if (!LoadedConfig)
+            {
+                UE_LOG(LogTemp, Error, TEXT("PACS GameMode: Failed to load SpawnConfigAsset"));
+                return;
+            }
+
+            // Set the config on the orchestrator
+            SpawnOrchestrator->SetSpawnConfig(LoadedConfig);
+
+            UE_LOG(LogTemp, Log, TEXT("PACS GameMode: Spawn system initialized with config: %s"),
+                *GetNameSafe(LoadedConfig));
+
+            // Get all spawn tags and prewarm pools if configured
+            TArray<FGameplayTag> SpawnTags = LoadedConfig->GetAllSpawnTags();
+            for (const FGameplayTag& Tag : SpawnTags)
+            {
+                FSpawnClassConfig Config;
+                if (LoadedConfig->GetConfigForTag(Tag, Config))
+                {
+                    if (Config.PoolSettings.bPrewarmOnStart)
+                    {
+                        SpawnOrchestrator->PrewarmPool(Tag, Config.PoolSettings.InitialSize);
+                        UE_LOG(LogTemp, Log, TEXT("PACS GameMode: Prewarming pool for tag %s with %d actors"),
+                            *Tag.ToString(), Config.PoolSettings.InitialSize);
+                    }
+                }
+            }
+
+            UE_LOG(LogTemp, Log, TEXT("PACS GameMode: Spawn system fully initialized and pools prewarmed"));
+        })
+    );
+
+    UE_LOG(LogTemp, Log, TEXT("PACS GameMode: Spawn config asset loading initiated"));
 }
 
 

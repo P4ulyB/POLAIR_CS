@@ -27,7 +27,9 @@ public class POLAIR_CS : ModuleRules
 			"AIModule", // Required for AIController and UAIBlueprintHelperLibrary
 			"NavigationSystem", // Required for AI pathfinding
 			"ReplicationGraph", // Required for PACS_ReplicationGraph optimization
-			"SignificanceManager" // Required for PACS_SignificanceManager
+			"SignificanceManager", // Required for PACS_SignificanceManager
+			"GameplayTags", // Required for spawn system gameplay tags
+			"ChaosVehicles" // Required for vehicle base class
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] {

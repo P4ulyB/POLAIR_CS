@@ -2,10 +2,14 @@
 
 #include "POLAIR_CS.h"
 #include "Modules/ModuleManager.h"
+#include "Core/PACS_GameplayTags.h"
 
 void FPOLAIR_CSModule::StartupModule()
 {
 	// UDeveloperSettings automatically registers itself, no manual registration needed
+
+	// Initialize native gameplay tags for spawn system
+	FPACS_GameplayTags::InitializeNativeTags();
 }
 
 void FPOLAIR_CSModule::ShutdownModule()
