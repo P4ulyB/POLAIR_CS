@@ -1,6 +1,7 @@
 #include "Subsystems/PACS_SpawnOrchestrator.h"
 #include "Interfaces/PACS_Poolable.h"
 #include "Data/PACS_SpawnConfig.h"
+#include "Subsystems/PACS_MemoryTracker.h"
 #include "Engine/World.h"
 #include "Engine/NetDriver.h"
 #include "Net/UnrealNetwork.h"
@@ -61,6 +62,20 @@ AActor* UPACS_SpawnOrchestrator::AcquireActor(FGameplayTag SpawnTag, const FSpaw
 	{
 		UE_LOG(LogTemp, Warning, TEXT("PACS_SpawnOrchestrator: Invalid spawn tag"));
 		return nullptr;
+	}
+
+	// Check memory budget before acquiring
+	if (UPACS_MemoryTracker* MemoryTracker = GetWorld()->GetSubsystem<UPACS_MemoryTracker>())
+	{
+		// Estimate memory for this actor type (use 1MB as default estimate)
+		float EstimatedMemoryMB = 1.0f;
+		if (!MemoryTracker->CanAllocateMemoryMB(EstimatedMemoryMB))
+		{
+			UE_LOG(LogTemp, Warning, TEXT("PACS_SpawnOrchestrator: Memory budget exceeded, cannot acquire actor for tag %s"),
+				*SpawnTag.ToString());
+			MemoryTracker->CheckMemoryCompliance();
+			return nullptr;
+		}
 	}
 
 	// Initialize pool if needed
@@ -133,6 +148,13 @@ AActor* UPACS_SpawnOrchestrator::AcquireActor(FGameplayTag SpawnTag, const FSpaw
 		ActorToTagMap.Add(Actor, SpawnTag);
 		PrepareActorForUse(Actor, Params);
 
+		// Register with memory tracker
+		if (UPACS_MemoryTracker* MemoryTracker = GetWorld()->GetSubsystem<UPACS_MemoryTracker>())
+		{
+			MemoryTracker->RegisterPooledActor(SpawnTag, Actor);
+			MemoryTracker->MarkActorActive(SpawnTag, Actor, true);
+		}
+
 		UE_LOG(LogTemp, Verbose, TEXT("PACS_SpawnOrchestrator: Acquired actor %s for tag %s"),
 			*Actor->GetName(), *SpawnTag.ToString());
 	}
@@ -176,6 +198,13 @@ void UPACS_SpawnOrchestrator::ReleaseActor(AActor* Actor)
 
 	// Move from active to available
 	Pool->ActiveActors.RemoveSwap(Actor);
+
+	// Update memory tracking - mark as inactive (pooled)
+	if (UPACS_MemoryTracker* MemoryTracker = GetWorld()->GetSubsystem<UPACS_MemoryTracker>())
+	{
+		MemoryTracker->MarkActorActive(Tag, Actor, false);
+	}
+
 	ReturnActorToPool(Actor, Tag);
 
 	UE_LOG(LogTemp, Verbose, TEXT("PACS_SpawnOrchestrator: Released actor %s to pool %s"),
