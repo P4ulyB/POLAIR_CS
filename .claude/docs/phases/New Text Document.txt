@@ -1,0 +1,11 @@
+that this project is designed to work in a multiplayer dedicated server environment, so any subsequent designs should take this into account and follow the below principles.
+
+1. Pre-load Selection Profiles in Spawn Manager
+
+2. Skip Visual Assets on Dedicated Server
+
+3. Use Async Loading for Runtime Assets
+
+4. Pool Pre-configured NPCs
+
+5. Proper SK Asset Handling

@@ -9,6 +9,7 @@
 #include "Net/UnrealNetwork.h"
 #include "Engine/StreamableManager.h"
 #include "Engine/AssetManager.h"
+#include "Components/SkeletalMeshComponent.h"
 
 APACS_NPC_Base_Char::APACS_NPC_Base_Char()
 {
@@ -39,6 +40,39 @@ APACS_NPC_Base_Char::APACS_NPC_Base_Char()
 	// Set AI controller class (can be overridden in Blueprint)
 	AIControllerClass = AAIController::StaticClass();
 	AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;
+}
+
+void APACS_NPC_Base_Char::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	// Replicate the skeletal mesh to all clients
+	// Epic doesn't replicate SetSkeletalMesh() by default, so we need custom replication
+	DOREPLIFETIME(APACS_NPC_Base_Char, ReplicatedSkeletalMesh);
+}
+
+void APACS_NPC_Base_Char::OnRep_SkeletalMeshAsset()
+{
+	UE_LOG(LogTemp, Warning, TEXT("PACS_NPC_Base_Char::OnRep_SkeletalMeshAsset: Called on client for %s"), *GetName());
+
+	// Apply the replicated skeletal mesh to the mesh component
+	if (ReplicatedSkeletalMesh && GetMesh())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("PACS_NPC_Base_Char::OnRep_SkeletalMeshAsset: Applying SK mesh %s to %s on client"),
+			*ReplicatedSkeletalMesh->GetName(), *GetName());
+
+		GetMesh()->SetSkeletalMesh(ReplicatedSkeletalMesh);
+
+		// Also apply the transform if we have a cached selection profile
+		// Note: We may need to replicate the transform separately if needed
+		UE_LOG(LogTemp, Warning, TEXT("PACS_NPC_Base_Char::OnRep_SkeletalMeshAsset: Successfully applied SK mesh on client"));
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("PACS_NPC_Base_Char::OnRep_SkeletalMeshAsset: Failed - ReplicatedMesh=%s, GetMesh=%s"),
+			ReplicatedSkeletalMesh ? TEXT("Valid") : TEXT("Null"),
+			GetMesh() ? TEXT("Valid") : TEXT("Null"));
+	}
 }
 
 void APACS_NPC_Base_Char::BeginPlay()
@@ -227,29 +261,38 @@ void APACS_NPC_Base_Char::SetSelectionProfile(UPACS_SelectionProfileAsset* InPro
 	// Only server should set the profile to ensure consistency
 	if (!HasAuthority())
 	{
+		UE_LOG(LogTemp, Warning, TEXT("PACS_NPC_Base_Char: SetSelectionProfile called without authority for %s"), *GetName());
 		return;
 	}
 
-	// Skip on dedicated server (Principle #2: Skip Visual Assets on Dedicated Server)
-	if (GetWorld() && GetWorld()->GetNetMode() == NM_DedicatedServer)
+	if (!InProfile)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("PACS_NPC_Base_Char: SetSelectionProfile called with null profile for %s"), *GetName());
 		return;
 	}
 
-	// Apply the profile directly to components
-	if (InProfile)
+	UE_LOG(LogTemp, Warning, TEXT("PACS_NPC_Base_Char: SetSelectionProfile starting for %s with profile %s"),
+		*GetName(), *InProfile->GetName());
+
+	// CRITICAL FIX: Do NOT skip SK mesh on dedicated server!
+	// SK mesh MUST be set on server for replication to clients
+	// Only skip expensive visual effects on DS, not replicated mesh data
+
+	// Apply skeletal mesh - MUST happen on server for replication
+	ApplySkeletalMeshFromProfile(InProfile);
+
+	// Apply other visual components (can skip on DS since they're client-side)
+	if (GetWorld() && GetWorld()->GetNetMode() != NM_DedicatedServer)
 	{
-		// Apply to selection plane component
+		// Apply to selection plane component (client-side visual)
 		if (SelectionPlaneComponent)
 		{
 			SelectionPlaneComponent->ApplyProfileAsset(InProfile);
+			UE_LOG(LogTemp, Warning, TEXT("PACS_NPC_Base_Char: Applied selection plane for %s"), *GetName());
 		}
-
-		// Apply skeletal mesh if character has mesh component
-		ApplySkeletalMeshFromProfile(InProfile);
-
-		UE_LOG(LogTemp, Verbose, TEXT("PACS_NPC_Base_Char: Applied selection profile to %s"), *GetName());
 	}
+
+	UE_LOG(LogTemp, Warning, TEXT("PACS_NPC_Base_Char: SetSelectionProfile completed for %s"), *GetName());
 }
 
 void APACS_NPC_Base_Char::ApplySelectionProfile()
@@ -298,51 +341,93 @@ void APACS_NPC_Base_Char::OnSelectionProfileLoaded()
 
 void APACS_NPC_Base_Char::ApplySkeletalMeshFromProfile(UPACS_SelectionProfileAsset* ProfileAsset)
 {
-	// Principle 2: Skip Visual Assets on Dedicated Server
-	if (GetWorld() && GetWorld()->GetNetMode() == NM_DedicatedServer)
+	// CRITICAL: Do NOT skip on dedicated server!
+	// The SkeletalMesh property is REPLICATED and MUST be set on the server
+	// for clients to receive it. This is NOT just a visual effect - it's replicated data!
+
+	if (!ProfileAsset)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("PACS_NPC_Base_Char::ApplySkeletalMeshFromProfile: Null ProfileAsset for %s"), *GetName());
 		return;
 	}
 
-	if (!ProfileAsset || ProfileAsset->SkeletalMeshAsset.IsNull())
+	if (ProfileAsset->SkeletalMeshAsset.IsNull())
 	{
+		UE_LOG(LogTemp, Warning, TEXT("PACS_NPC_Base_Char::ApplySkeletalMeshFromProfile: Null SkeletalMeshAsset in profile for %s"), *GetName());
 		return;
 	}
 
 	// Apply skeletal mesh to character mesh component
-	if (USkeletalMeshComponent* MeshComp = GetMesh())
+	USkeletalMeshComponent* MeshComp = GetMesh();
+	if (!MeshComp)
 	{
-		// Principle 1 & 4: First check if already loaded (from pre-loading or pooling)
-		USkeletalMesh* SkMesh = ProfileAsset->SkeletalMeshAsset.Get();
+		UE_LOG(LogTemp, Error, TEXT("PACS_NPC_Base_Char::ApplySkeletalMeshFromProfile: No mesh component found for %s"), *GetName());
+		return;
+	}
 
-		if (!SkMesh)
+	// Log current state for debugging
+	UE_LOG(LogTemp, Warning, TEXT("PACS_NPC_Base_Char::ApplySkeletalMeshFromProfile: Starting for %s on %s"),
+		*GetName(),
+		HasAuthority() ? TEXT("Server") : TEXT("Client"));
+
+	// Principle 1 & 4: First check if already loaded (from pre-loading or pooling)
+	USkeletalMesh* SkMesh = ProfileAsset->SkeletalMeshAsset.Get();
+
+	if (!SkMesh)
+	{
+		// Principle 4: Pool Pre-configured NPCs - Allow synchronous load only during pooling/initialization
+		// This ensures pooled NPCs are fully configured before being made available
+		bool bIsPoolingPhase = !HasActorBegunPlay();
+
+		if (bIsPoolingPhase)
 		{
-			// Principle 4: Pool Pre-configured NPCs - Allow synchronous load only during pooling/initialization
-			// This ensures pooled NPCs are fully configured before being made available
-			bool bIsPoolingPhase = !HasActorBegunPlay();
+			// Safe to load synchronously during pool initialization
+			SkMesh = ProfileAsset->SkeletalMeshAsset.LoadSynchronous();
+			UE_LOG(LogTemp, Warning, TEXT("PACS_NPC_Base_Char::ApplySkeletalMeshFromProfile: Synchronously loaded SK mesh during pooling for %s"), *GetName());
+		}
+		else
+		{
+			// Principle 3: Runtime loads should use async - this shouldn't happen if pre-loading works correctly
+			UE_LOG(LogTemp, Error, TEXT("PACS_NPC_Base_Char::ApplySkeletalMeshFromProfile: SK mesh not pre-loaded for runtime use on %s - CRITICAL ERROR"), *GetName());
+			return;
+		}
+	}
 
-			if (bIsPoolingPhase)
-			{
-				// Safe to load synchronously during pool initialization
-				SkMesh = ProfileAsset->SkeletalMeshAsset.LoadSynchronous();
-				UE_LOG(LogTemp, Verbose, TEXT("PACS_NPC_Base_Char: Synchronously loaded SK mesh during pooling for %s"), *GetName());
-			}
-			else
-			{
-				// Principle 3: Runtime loads should use async - this shouldn't happen if pre-loading works correctly
-				UE_LOG(LogTemp, Warning, TEXT("PACS_NPC_Base_Char: SK mesh not pre-loaded for runtime use on %s - should use async loading"), *GetName());
-				return;
-			}
+	// Principle 5: Proper SK Asset Handling - Apply mesh and transform
+	if (SkMesh)
+	{
+		// Store current mesh for comparison
+		USkeletalMesh* OldMesh = MeshComp->GetSkeletalMeshAsset();
+
+		// CRITICAL: Set the replicated property on server
+		// This will trigger OnRep_SkeletalMeshAsset on clients
+		if (HasAuthority())
+		{
+			ReplicatedSkeletalMesh = SkMesh;
+			UE_LOG(LogTemp, Warning, TEXT("PACS_NPC_Base_Char::ApplySkeletalMeshFromProfile: Set ReplicatedSkeletalMesh on server for %s"),
+				*GetName());
 		}
 
-		// Principle 5: Proper SK Asset Handling - Apply mesh and transform
-		if (SkMesh)
-		{
-			MeshComp->SetSkeletalMesh(SkMesh);
-			MeshComp->SetRelativeTransform(ProfileAsset->SkeletalMeshTransform);
+		// Apply new mesh locally (server needs this, clients will get it via OnRep)
+		MeshComp->SetSkeletalMesh(SkMesh);
+		MeshComp->SetRelativeTransform(ProfileAsset->SkeletalMeshTransform);
 
-			UE_LOG(LogTemp, Verbose, TEXT("PACS_NPC_Base_Char: Applied skeletal mesh to %s"), *GetName());
+		// Log success with detailed info
+		UE_LOG(LogTemp, Warning, TEXT("PACS_NPC_Base_Char::ApplySkeletalMeshFromProfile: SUCCESS - Applied SK mesh %s to %s (was %s) [Authority=%s]"),
+			*SkMesh->GetName(),
+			*GetName(),
+			OldMesh ? *OldMesh->GetName() : TEXT("null"),
+			HasAuthority() ? TEXT("Server") : TEXT("Client"));
+
+		// Verify the mesh was actually applied
+		if (MeshComp->GetSkeletalMeshAsset() != SkMesh)
+		{
+			UE_LOG(LogTemp, Error, TEXT("PACS_NPC_Base_Char::ApplySkeletalMeshFromProfile: VERIFICATION FAILED - Mesh not applied correctly to %s"), *GetName());
 		}
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("PACS_NPC_Base_Char::ApplySkeletalMeshFromProfile: Failed to load SK mesh for %s"), *GetName());
 	}
 }
 

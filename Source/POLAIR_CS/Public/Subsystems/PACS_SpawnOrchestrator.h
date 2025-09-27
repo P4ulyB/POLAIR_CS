@@ -135,6 +135,14 @@ protected:
 	// Selection profile pre-loading
 	void PreloadSelectionProfiles();
 
+	// === PROFILE APPLICATION SECTION ===
+	// Organized methods for applying selection profiles to actors
+	void ApplySelectionProfileToActor(AActor* Actor, class UPACS_SelectionProfileAsset* Profile);
+	void ApplyProfileToCharacterNPC(class APACS_NPC_Base_Char* CharNPC, class UPACS_SelectionProfileAsset* Profile);
+	void ApplyProfileToVehicleNPC(class APACS_NPC_Base_Veh* VehNPC, class UPACS_SelectionProfileAsset* Profile);
+	bool VerifyProfileAssetsLoaded(class UPACS_SelectionProfileAsset* Profile);
+	void LogProfileApplicationStatus(AActor* Actor, bool bSuccess, const FString& Reason);
+
 private:
 	// Pool storage by gameplay tag
 	UPROPERTY()

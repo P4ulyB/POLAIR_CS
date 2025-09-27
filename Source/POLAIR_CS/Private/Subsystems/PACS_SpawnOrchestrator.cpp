@@ -465,57 +465,92 @@ void UPACS_SpawnOrchestrator::PrepareActorForUse(AActor* Actor, const FSpawnRequ
 {
 	if (!Actor)
 	{
+		UE_LOG(LogTemp, Error, TEXT("PACS_SpawnOrchestrator::PrepareActorForUse: Null actor provided"));
 		return;
 	}
 
+	UE_LOG(LogTemp, Warning, TEXT("PACS_SpawnOrchestrator::PrepareActorForUse: Starting for %s on %s"),
+		*Actor->GetName(),
+		GetWorld()->GetNetMode() == NM_DedicatedServer ? TEXT("DedicatedServer") :
+		GetWorld()->GetNetMode() == NM_ListenServer ? TEXT("ListenServer") :
+		GetWorld()->GetNetMode() == NM_Client ? TEXT("Client") : TEXT("Standalone"));
+
 	// Set transform
 	Actor->SetActorTransform(Params.Transform);
+	UE_LOG(LogTemp, Verbose, TEXT("PACS_SpawnOrchestrator::PrepareActorForUse: Set transform for %s"), *Actor->GetName());
 
 	// Set ownership
 	if (Params.Owner)
 	{
 		Actor->SetOwner(Params.Owner);
+		UE_LOG(LogTemp, Verbose, TEXT("PACS_SpawnOrchestrator::PrepareActorForUse: Set owner for %s to %s"),
+			*Actor->GetName(), *Params.Owner->GetName());
 	}
 	if (Params.Instigator)
 	{
 		Actor->SetInstigator(Params.Instigator);
+		UE_LOG(LogTemp, Verbose, TEXT("PACS_SpawnOrchestrator::PrepareActorForUse: Set instigator for %s to %s"),
+			*Actor->GetName(), *Params.Instigator->GetName());
 	}
 
-	// Apply selection profile from spawn config if actor is an NPC
-	// Skip on dedicated server (Principle #2: Skip Visual Assets on Dedicated Server)
-	if (GetWorld() && GetWorld()->GetNetMode() != NM_DedicatedServer)
+	// Apply selection profile from spawn config
+	// IMPORTANT: Do NOT skip on dedicated server - SK mesh must be set for replication!
+	// We only skip expensive visual effects on DS, not replicated data
 	{
-		// Cast to base NPC class - works for all derived types (Character and Vehicle)
-		if (APACS_NPC_Base* NPCActor = Cast<APACS_NPC_Base>(Actor))
+		// Find the spawn tag for this actor to get its config
+		FGameplayTag* TagPtr = ActorToTagMap.Find(Actor);
+		if (TagPtr && SpawnConfig)
 		{
-			// Find the spawn tag for this actor to get its config
-			FGameplayTag* TagPtr = ActorToTagMap.Find(Actor);
-			if (TagPtr && SpawnConfig)
+			UE_LOG(LogTemp, Warning, TEXT("PACS_SpawnOrchestrator::PrepareActorForUse: Found spawn tag %s for actor %s"),
+				*TagPtr->ToString(), *Actor->GetName());
+
+			FSpawnClassConfig Config;
+			if (SpawnConfig->GetConfigForTag(*TagPtr, Config))
 			{
-				FSpawnClassConfig Config;
-				if (SpawnConfig->GetConfigForTag(*TagPtr, Config))
+				UE_LOG(LogTemp, Warning, TEXT("PACS_SpawnOrchestrator::PrepareActorForUse: Got config for tag %s"),
+					*TagPtr->ToString());
+
+				// Apply the preloaded selection profile from config
+				if (!Config.SelectionProfile.IsNull())
 				{
-					// Apply the preloaded selection profile from config
-					// Profile should already be loaded via PreloadSelectionProfiles (Principle #1)
-					if (!Config.SelectionProfile.IsNull())
+					UE_LOG(LogTemp, Warning, TEXT("PACS_SpawnOrchestrator::PrepareActorForUse: Selection profile soft ptr exists: %s"),
+						*Config.SelectionProfile.ToString());
+
+					// Use Get() instead of LoadSynchronous since profiles are preloaded
+					UPACS_SelectionProfileAsset* ProfileAsset = Config.SelectionProfile.Get();
+					if (ProfileAsset)
 					{
-						// Use Get() instead of LoadSynchronous since profiles are preloaded
-						UPACS_SelectionProfileAsset* ProfileAsset = Config.SelectionProfile.Get();
-						if (ProfileAsset)
-						{
-							NPCActor->SetSelectionProfile(ProfileAsset);
-							UE_LOG(LogTemp, Verbose, TEXT("PACS_SpawnOrchestrator: Applied preloaded selection profile to %s"),
-								*Actor->GetName());
-						}
-						else
-						{
-							// Profile wasn't preloaded, log warning
-							UE_LOG(LogTemp, Warning, TEXT("PACS_SpawnOrchestrator: Selection profile not preloaded for tag %s"),
-								*TagPtr->ToString());
-						}
+						UE_LOG(LogTemp, Warning, TEXT("PACS_SpawnOrchestrator::PrepareActorForUse: Got profile asset %s, applying to %s"),
+							*ProfileAsset->GetName(), *Actor->GetName());
+
+						// Use the new organized method for profile application
+						ApplySelectionProfileToActor(Actor, ProfileAsset);
+					}
+					else
+					{
+						// Profile wasn't preloaded, log warning
+						UE_LOG(LogTemp, Error, TEXT("PACS_SpawnOrchestrator::PrepareActorForUse: Selection profile not preloaded for tag %s (soft ptr: %s)"),
+							*TagPtr->ToString(), *Config.SelectionProfile.ToString());
 					}
 				}
+				else
+				{
+					UE_LOG(LogTemp, Warning, TEXT("PACS_SpawnOrchestrator::PrepareActorForUse: No selection profile configured for tag %s"),
+						*TagPtr->ToString());
+				}
 			}
+			else
+			{
+				UE_LOG(LogTemp, Warning, TEXT("PACS_SpawnOrchestrator::PrepareActorForUse: No config found for tag %s"),
+					*TagPtr->ToString());
+			}
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("PACS_SpawnOrchestrator::PrepareActorForUse: No spawn tag or config for actor %s (TagPtr: %s, SpawnConfig: %s)"),
+				*Actor->GetName(),
+				TagPtr ? TEXT("Valid") : TEXT("Null"),
+				SpawnConfig ? TEXT("Valid") : TEXT("Null"));
 		}
 	}
 
@@ -523,15 +558,21 @@ void UPACS_SpawnOrchestrator::PrepareActorForUse(AActor* Actor, const FSpawnRequ
 	Actor->SetActorHiddenInGame(false);
 	Actor->SetActorEnableCollision(true);
 	Actor->SetActorTickEnabled(true);
+	UE_LOG(LogTemp, Verbose, TEXT("PACS_SpawnOrchestrator::PrepareActorForUse: Enabled actor %s"), *Actor->GetName());
 
 	// Prepare replication
 	PrepareReplicationState(Actor);
+	UE_LOG(LogTemp, Verbose, TEXT("PACS_SpawnOrchestrator::PrepareActorForUse: Prepared replication for %s"), *Actor->GetName());
 
 	// Call poolable interface if implemented
 	if (Actor->GetClass()->ImplementsInterface(UPACS_Poolable::StaticClass()))
 	{
 		IPACS_Poolable::Execute_OnAcquiredFromPool(Actor);
+		UE_LOG(LogTemp, Verbose, TEXT("PACS_SpawnOrchestrator::PrepareActorForUse: Called OnAcquiredFromPool for %s"),
+			*Actor->GetName());
 	}
+
+	UE_LOG(LogTemp, Warning, TEXT("PACS_SpawnOrchestrator::PrepareActorForUse: Completed for %s"), *Actor->GetName());
 }
 
 void UPACS_SpawnOrchestrator::LoadActorClass(FGameplayTag SpawnTag)
@@ -727,32 +768,221 @@ void UPACS_SpawnOrchestrator::PreloadSelectionProfiles()
 
 	// Batch load all selection profiles asynchronously
 	FStreamableManager& AssetStreamableManager = UAssetManager::GetStreamableManager();
-	TArray<FSoftObjectPath> PathArray = ProfilesToLoad.Array();
+	TArray<FSoftObjectPath> ProfilePathArray = ProfilesToLoad.Array();
 
-	TSharedPtr<FStreamableHandle> Handle = AssetStreamableManager.RequestAsyncLoad(
-		PathArray,
-		FStreamableDelegate::CreateLambda([PathArray]()
+	// First load the profiles themselves, then extract and load their SK meshes
+	TSharedPtr<FStreamableHandle> ProfileHandle = AssetStreamableManager.RequestAsyncLoad(
+		ProfilePathArray,
+		FStreamableDelegate::CreateLambda([this, ProfilePathArray]()
 		{
-			int32 LoadedCount = 0;
-			for (const FSoftObjectPath& Path : PathArray)
+			int32 LoadedProfileCount = 0;
+			TSet<FSoftObjectPath> SKMeshesToLoad;
+
+			// Iterate through loaded profiles to extract SK mesh assets
+			for (const FSoftObjectPath& ProfilePath : ProfilePathArray)
 			{
-				if (Path.ResolveObject())
+				if (UObject* LoadedObject = ProfilePath.ResolveObject())
 				{
-					LoadedCount++;
+					LoadedProfileCount++;
+
+					// Cast to selection profile asset
+					if (UPACS_SelectionProfileAsset* ProfileAsset = Cast<UPACS_SelectionProfileAsset>(LoadedObject))
+					{
+						// Extract SK mesh asset if present (Principle #1: Pre-load all visual assets)
+						if (!ProfileAsset->SkeletalMeshAsset.IsNull())
+						{
+							SKMeshesToLoad.Add(ProfileAsset->SkeletalMeshAsset.ToSoftObjectPath());
+							UE_LOG(LogTemp, Verbose, TEXT("PACS_SpawnOrchestrator: Found SK mesh to preload: %s"),
+								*ProfileAsset->SkeletalMeshAsset.ToString());
+						}
+					}
 				}
 			}
 
 			UE_LOG(LogTemp, Log, TEXT("PACS_SpawnOrchestrator: Pre-loaded %d/%d selection profiles"),
-				LoadedCount, PathArray.Num());
+				LoadedProfileCount, ProfilePathArray.Num());
+
+			// Now load the SK meshes referenced by the profiles
+			// Principle #1 & #5: Pre-load Selection Profiles including proper SK asset handling
+			if (SKMeshesToLoad.Num() > 0)
+			{
+				TArray<FSoftObjectPath> SKMeshPathArray = SKMeshesToLoad.Array();
+
+				FStreamableManager& Manager = UAssetManager::GetStreamableManager();
+				TSharedPtr<FStreamableHandle> SKMeshHandle = Manager.RequestAsyncLoad(
+					SKMeshPathArray,
+					FStreamableDelegate::CreateLambda([SKMeshPathArray]()
+					{
+						int32 LoadedMeshCount = 0;
+						for (const FSoftObjectPath& MeshPath : SKMeshPathArray)
+						{
+							if (MeshPath.ResolveObject())
+							{
+								LoadedMeshCount++;
+							}
+						}
+
+						UE_LOG(LogTemp, Log, TEXT("PACS_SpawnOrchestrator: Pre-loaded %d/%d SK meshes from selection profiles"),
+							LoadedMeshCount, SKMeshPathArray.Num());
+					})
+				);
+
+				// Store handle to keep SK meshes loaded (Principle #4: Pool Pre-configured NPCs)
+				if (SKMeshHandle.IsValid())
+				{
+					LoadHandles.Add(FGameplayTag::RequestGameplayTag(TEXT("PACS.Preload.SKMeshes")), SKMeshHandle);
+				}
+			}
 		})
 	);
 
-	// Store handle to keep assets loaded
-	if (Handle.IsValid())
+	// Store handle to keep profile assets loaded
+	if (ProfileHandle.IsValid())
 	{
-		// Store with a special tag for profile preloading
-		LoadHandles.Add(FGameplayTag::RequestGameplayTag(TEXT("PACS.Preload.SelectionProfiles")), Handle);
+		LoadHandles.Add(FGameplayTag::RequestGameplayTag(TEXT("PACS.Preload.SelectionProfiles")), ProfileHandle);
 	}
 
 	UE_LOG(LogTemp, Log, TEXT("PACS_SpawnOrchestrator: Started pre-loading %d selection profiles"), ProfilesToLoad.Num());
+}
+
+// === PROFILE APPLICATION SECTION ===
+// Organized methods for clean separation of profile application logic
+
+void UPACS_SpawnOrchestrator::ApplySelectionProfileToActor(AActor* Actor, UPACS_SelectionProfileAsset* Profile)
+{
+	if (!Actor || !Profile)
+	{
+		LogProfileApplicationStatus(Actor, false, TEXT("Null actor or profile"));
+		return;
+	}
+
+	// Log the start of profile application
+	UE_LOG(LogTemp, Warning, TEXT("PACS_SpawnOrchestrator: Starting profile application for actor %s with profile %s"),
+		*Actor->GetName(), *Profile->GetName());
+
+	// Verify assets are loaded before attempting application
+	if (!VerifyProfileAssetsLoaded(Profile))
+	{
+		LogProfileApplicationStatus(Actor, false, TEXT("Profile assets not loaded"));
+		return;
+	}
+
+	// Apply profile based on actor type
+	bool bProfileApplied = false;
+
+	if (APACS_NPC_Base_Char* CharNPC = Cast<APACS_NPC_Base_Char>(Actor))
+	{
+		ApplyProfileToCharacterNPC(CharNPC, Profile);
+		bProfileApplied = true;
+	}
+	else if (APACS_NPC_Base_Veh* VehNPC = Cast<APACS_NPC_Base_Veh>(Actor))
+	{
+		ApplyProfileToVehicleNPC(VehNPC, Profile);
+		bProfileApplied = true;
+	}
+	else
+	{
+		LogProfileApplicationStatus(Actor, false, TEXT("Unknown actor type"));
+	}
+
+	if (bProfileApplied)
+	{
+		LogProfileApplicationStatus(Actor, true, TEXT("Profile applied successfully"));
+	}
+}
+
+void UPACS_SpawnOrchestrator::ApplyProfileToCharacterNPC(APACS_NPC_Base_Char* CharNPC, UPACS_SelectionProfileAsset* Profile)
+{
+	if (!CharNPC || !Profile)
+	{
+		return;
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("PACS_SpawnOrchestrator: Applying profile to Character NPC %s"), *CharNPC->GetName());
+
+	// Call SetSelectionProfile on the character NPC
+	// This will handle SK mesh application and other profile settings
+	CharNPC->SetSelectionProfile(Profile);
+
+	// Additional logging to verify SK mesh status
+	if (USkeletalMeshComponent* MeshComp = CharNPC->GetMesh())
+	{
+		if (USkeletalMesh* CurrentMesh = MeshComp->GetSkeletalMeshAsset())
+		{
+			UE_LOG(LogTemp, Warning, TEXT("PACS_SpawnOrchestrator: Character NPC %s now has SK mesh: %s"),
+				*CharNPC->GetName(), *CurrentMesh->GetName());
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("PACS_SpawnOrchestrator: Character NPC %s has NO SK mesh after profile application!"),
+				*CharNPC->GetName());
+		}
+	}
+}
+
+void UPACS_SpawnOrchestrator::ApplyProfileToVehicleNPC(APACS_NPC_Base_Veh* VehNPC, UPACS_SelectionProfileAsset* Profile)
+{
+	if (!VehNPC || !Profile)
+	{
+		return;
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("PACS_SpawnOrchestrator: Applying profile to Vehicle NPC %s"), *VehNPC->GetName());
+
+	// Call SetSelectionProfile on the vehicle NPC
+	VehNPC->SetSelectionProfile(Profile);
+}
+
+bool UPACS_SpawnOrchestrator::VerifyProfileAssetsLoaded(UPACS_SelectionProfileAsset* Profile)
+{
+	if (!Profile)
+	{
+		return false;
+	}
+
+	// Check if the profile's SK mesh is loaded
+	bool bSKMeshLoaded = true;
+	if (!Profile->SkeletalMeshAsset.IsNull())
+	{
+		USkeletalMesh* LoadedMesh = Profile->SkeletalMeshAsset.Get();
+		if (!LoadedMesh)
+		{
+			// Try synchronous load as fallback
+			LoadedMesh = Profile->SkeletalMeshAsset.LoadSynchronous();
+			if (LoadedMesh)
+			{
+				UE_LOG(LogTemp, Warning, TEXT("PACS_SpawnOrchestrator: Had to synchronously load SK mesh for profile %s"),
+					*Profile->GetName());
+			}
+			else
+			{
+				UE_LOG(LogTemp, Error, TEXT("PACS_SpawnOrchestrator: Failed to load SK mesh for profile %s"),
+					*Profile->GetName());
+				bSKMeshLoaded = false;
+			}
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("PACS_SpawnOrchestrator: SK mesh already loaded for profile %s: %s"),
+				*Profile->GetName(), *LoadedMesh->GetName());
+		}
+	}
+
+	return bSKMeshLoaded;
+}
+
+void UPACS_SpawnOrchestrator::LogProfileApplicationStatus(AActor* Actor, bool bSuccess, const FString& Reason)
+{
+	const FString ActorName = Actor ? Actor->GetName() : TEXT("NULL");
+
+	if (bSuccess)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("PACS_SpawnOrchestrator: Profile application SUCCESS for %s: %s"),
+			*ActorName, *Reason);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("PACS_SpawnOrchestrator: Profile application FAILED for %s: %s"),
+			*ActorName, *Reason);
+	}
 }

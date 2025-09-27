@@ -26,6 +26,7 @@ protected:
 	// AActor interface
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	// IPACS_Poolable interface
 	virtual void OnAcquiredFromPool_Implementation() override;
@@ -45,9 +46,18 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Category = "Selection")
 	TWeakObjectPtr<class APlayerState> CurrentSelector;
 
+	// Replicated skeletal mesh for proper multiplayer support
+	// Epic doesn't replicate SetSkeletalMesh() by default, so we need custom replication
+	UPROPERTY(ReplicatedUsing = OnRep_SkeletalMeshAsset)
+	TObjectPtr<USkeletalMesh> ReplicatedSkeletalMesh;
+
 	// Movement state for pooling
 	UPROPERTY()
 	float DefaultMaxWalkSpeed = 600.0f;
+
+	// Called when replicated skeletal mesh changes on clients
+	UFUNCTION()
+	void OnRep_SkeletalMeshAsset();
 
 public:
 	// Selection interface

@@ -1,0 +1,91 @@
+LogTemp: PACS_SpawnOrchestrator: Initialized for World LV_TestMap
+LogTemp: PACS_CustomSignificanceManager: Configured for client-side creation
+LogTemp: PACS_NetworkMonitor: Initialized with 100.0 KB/s bandwidth limit
+LogTemp: PACS GameMode: Spawn config asset loading initiated
+LogTemp: PACS GameMode: Server initialization complete
+LogTemp: Warning: [PACS SUBSYSTEM] Initialize() called
+LogTemp: Warning: [PACS SUBSYSTEM] About to parse command line
+LogTemp: Warning: [PACS SUBSYSTEM] ParseCommandLine - Full command line: -skipcompile
+LogTemp: Warning: [PACS SUBSYSTEM] Parsed ServerIP: ''
+LogTemp: Warning: [PACS SUBSYSTEM] Parsed ServerPort: 0
+LogTemp: Warning: [PACS SUBSYSTEM] Parsed PlayFabPlayerName: ''
+LogTemp: Warning: [PACS SUBSYSTEM] PACS LaunchArgs Final: IP=, Port=0, Player=
+LogTemp: Warning: [PACS SUBSYSTEM] Command line parsing complete
+LogTemp: Warning: [PACS SUBSYSTEM] Invalid arguments or missing data, skipping auto-connect
+LogTemp: PACS_CustomSignificanceManager: Configured for client-side creation
+LogTemp: PACS GameMode: Spawn system initialized with config: DA_SpawnConfigd_Main
+LogTemp: PACS_SpawnConfig::GetConfigForTag - Looking for tag: PACS.Spawn.Human.QFRS
+LogTemp: PACS_SpawnConfig::GetConfigForTag - SpawnConfigs count: 1
+LogTemp: PACS_SpawnConfig::GetConfigForTag - TagToIndexMap count: 1
+LogTemp: PACS_SpawnConfig::GetConfigForTag - Available tags in map:
+LogTemp:   - PACS.Spawn.Human.QFRS -> Index 0
+LogTemp: PACS_SpawnConfig::GetConfigForTag - Found exact match for PACS.Spawn.Human.QFRS at index 0
+LogTemp: PACS GameMode: Spawn system fully initialized and pools prewarmed
+LogTemp: PACS_SpawnConfig::GetConfigForTag - Looking for tag: PACS.Spawn.Human.QFRS
+LogTemp: PACS_SpawnConfig::GetConfigForTag - SpawnConfigs count: 1
+LogTemp: PACS_SpawnConfig::GetConfigForTag - TagToIndexMap count: 1
+LogTemp: PACS_SpawnConfig::GetConfigForTag - Available tags in map:
+LogTemp:   - PACS.Spawn.Human.QFRS -> Index 0
+LogTemp: PACS_SpawnConfig::GetConfigForTag - Found exact match for PACS.Spawn.Human.QFRS at index 0
+LogTemp: PACS_SpawnOrchestrator: Initialized pool for tag PACS.Spawn.Human.QFRS (Initial: 5, Max: 20)
+LogTemp: PACS_SpawnConfig::GetConfigForTag - Looking for tag: PACS.Spawn.Human.QFRS
+LogTemp: PACS_SpawnConfig::GetConfigForTag - SpawnConfigs count: 1
+LogTemp: PACS_SpawnConfig::GetConfigForTag - TagToIndexMap count: 1
+LogTemp: PACS_SpawnConfig::GetConfigForTag - Available tags in map:
+LogTemp:   - PACS.Spawn.Human.QFRS -> Index 0
+LogTemp: PACS_SpawnConfig::GetConfigForTag - Found exact match for PACS.Spawn.Human.QFRS at index 0
+LogTemp: PACS_SpawnOrchestrator: Successfully loaded class NPC_Char_C for tag PACS.Spawn.Human.QFRS
+LogTemp: Warning: PACS_SpawnOrchestrator::PrepareActorForUse: Starting for NPC_Char_C_0 on DedicatedServer
+LogTemp: Warning: PACS_SpawnOrchestrator::PrepareActorForUse: Found spawn tag PACS.Spawn.Human.QFRS for actor NPC_Char_C_0
+LogTemp: PACS_SpawnConfig::GetConfigForTag - Looking for tag: PACS.Spawn.Human.QFRS
+LogTemp: PACS_SpawnConfig::GetConfigForTag - SpawnConfigs count: 1
+LogTemp: PACS_SpawnConfig::GetConfigForTag - TagToIndexMap count: 1
+LogTemp: PACS_SpawnConfig::GetConfigForTag - Available tags in map:
+LogTemp:   - PACS.Spawn.Human.QFRS -> Index 0
+LogTemp: PACS_SpawnConfig::GetConfigForTag - Found exact match for PACS.Spawn.Human.QFRS at index 0
+LogTemp: Warning: PACS_SpawnOrchestrator::PrepareActorForUse: Got config for tag PACS.Spawn.Human.QFRS
+LogTemp: Warning: PACS_SpawnOrchestrator::PrepareActorForUse: Selection profile soft ptr exists: /Game/Data/NPCProfile/DA_QFRS.DA_QFRS
+LogTemp: Warning: PACS_SpawnOrchestrator::PrepareActorForUse: Got profile asset DA_QFRS, applying to NPC_Char_C_0
+LogTemp: Warning: PACS_SpawnOrchestrator: Starting profile application for actor NPC_Char_C_0 with profile DA_QFRS
+LogTemp: Warning: PACS_SpawnOrchestrator: SK mesh already loaded for profile DA_QFRS: Fireman_3LOD_withMask_LODGroup
+LogTemp: Warning: PACS_SpawnOrchestrator: Applying profile to Character NPC NPC_Char_C_0
+LogTemp: Warning: PACS_NPC_Base_Char: SetSelectionProfile starting for NPC_Char_C_0 with profile DA_QFRS
+LogTemp: Warning: PACS_NPC_Base_Char::ApplySkeletalMeshFromProfile: Starting for NPC_Char_C_0 on Server
+LogTemp: Warning: PACS_NPC_Base_Char::ApplySkeletalMeshFromProfile: SUCCESS - Applied SK mesh Fireman_3LOD_withMask_LODGroup to NPC_Char_C_0 (was null)
+LogTemp: Warning: PACS_NPC_Base_Char: SetSelectionProfile completed for NPC_Char_C_0
+LogTemp: Warning: PACS_SpawnOrchestrator: Character NPC NPC_Char_C_0 now has SK mesh: Fireman_3LOD_withMask_LODGroup
+LogTemp: Warning: PACS_SpawnOrchestrator: Profile application SUCCESS for NPC_Char_C_0: Profile applied successfully
+LogTemp: Warning: PACS_SpawnOrchestrator::PrepareActorForUse: Completed for NPC_Char_C_0
+LogTemp: PACS_SpawnPoint: Spawned NPC_Char_C_0 with tag PACS.Spawn.Human.QFRS
+LogTemp: PACS_SpawnPoint: Orchestrator ready, starting spawning for BP_Spawner_C_2
+LogTemp: Warning: PACS: No pfu parameter found in login options: ?Name=RIG_23-DD39544F42D21D7E523F4AB2DFADC6D1?SplitscreenCount=1
+LogTemp: PACS_CustomSignificanceManager: Configured for client-side creation
+LogTemp: EdgeScrollComponent initialized on BP_PlayerController_C_0
+LogTemp: Warning: PACS GameMode: HMD state unknown - falling back to AssessorPawn
+LogTemp: PACS GameMode: HMD state unknown - setting timeout
+LogTemp: PACS: Registered player: Player_4863 (Total: 1)
+LogTemp: PACS GameMode: PostLogin called for player
+LogTemp: PACS GameMode: Requesting HMD state from client
+LogTemp: Warning: PACS PlayerController: HMD not detected or not enabled
+LogTemp: EdgeScrollComponent initialized on BP_PlayerController_C_0
+LogTemp: Creating HoverProbe component for local controller
+LogTemp: HoverProbe component created and registered successfully
+LogTemp: PACS PlayerController: Server received HMD state 1
+LogTemp: PACS PlayerController: Triggering spawn for player with HMD state 1
+LogTemp: PACS GameMode: HMD state known (1) - proceeding with spawn
+LogTemp: PACS GameMode: Selecting AssessorPawn for non-HMD user
+LogTemp: PACS GameMode: Selecting AssessorPawn for non-HMD user
+LogTemp: APACS_AssessorPawn: Using Config 'DA_AssessorPawn' (Tilt=50.00, Arm=4000.0, MoveSpeed=8000.0)
+LogTemp: Warning: APACS_AssessorPawn::PossessedBy called with controller: BP_PlayerController_C
+LogTemp: AssessorPawn: Registered with PACS on client (IsLocal=0)
+LogTemp: Warning: AssessorPawn: registered with PACS InputHandler (may init later)
+LogTemp: PACS PlayerController: Set PlayFab player name to 'NoUser'
+LogTemp: Warning: AssessorPawn: registered with PACS InputHandler (may init later)
+LogTemp: AssessorPawn OnRep_Controller: registered with PACS (IsLocal=1)
+LogTemp: APACS_AssessorPawn: Using Config 'DA_AssessorPawn' (Tilt=50.00, Arm=4000.0, MoveSpeed=8000.0)
+LogTemp: PACS PlayerState: HMD state changed to 1
+LogTemp: EdgeScrollComponent readiness: READY
+LogTemp: Warning: AssessorPawn: registered with PACS InputHandler (may init later)
+LogTemp: AssessorPawn OnRep_Controller: registered with PACS (IsLocal=1)
+LogTemp: APACS_AssessorPawn: SetupPlayerInputComponent called - PACS input system will handle all input
+LogTemp: Warning: AssessorPawn: re-registered after handler init
