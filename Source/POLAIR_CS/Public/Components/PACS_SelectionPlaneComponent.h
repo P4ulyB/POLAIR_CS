@@ -37,13 +37,9 @@ protected:
 	UPROPERTY()
 	TObjectPtr<UStaticMeshComponent> SelectionPlane;
 
-	// Current visual profile
+	// Current profile reference
 	UPROPERTY()
-	FSelectionVisualProfile CurrentProfile;
-
-	// Current plane configuration (client-side only)
-	UPROPERTY()
-	FSelectionPlaneConfiguration CurrentPlaneConfig;
+	TObjectPtr<UPACS_SelectionProfileAsset> CurrentProfileAsset;
 
 	// Selection visual state (0=Hovered, 1=Selected, 2=Unavailable, 3=Available, 4=Hidden)
 	UPROPERTY(ReplicatedUsing=OnRep_SelectionState)
@@ -63,18 +59,6 @@ public:
 	// Apply configuration from profile asset (client-side only)
 	UFUNCTION(BlueprintCallable, Category = "Selection")
 	void ApplyProfileAsset(UPACS_SelectionProfileAsset* ProfileAsset);
-
-	// Apply plane configuration directly (client-side only)
-	UFUNCTION(BlueprintCallable, Category = "Selection")
-	void ApplyPlaneConfiguration(const FSelectionPlaneConfiguration& PlaneConfig);
-
-	// Apply NPC visual representation (for ALL clients including VR)
-	UFUNCTION(BlueprintCallable, Category = "NPC Visual")
-	void ApplyNPCVisualRepresentation(const FNPCVisualRepresentation& NPCVisual);
-
-	// Apply a visual profile
-	UFUNCTION(BlueprintCallable, Category = "Selection")
-	void ApplyProfile(const FSelectionVisualProfile& Profile);
 
 	// Set selection state (server authoritative)
 	UFUNCTION(BlueprintCallable, Category = "Selection")

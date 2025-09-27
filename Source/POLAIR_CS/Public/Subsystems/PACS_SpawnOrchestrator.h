@@ -132,6 +132,9 @@ protected:
 	void ResetReplicationState(AActor* Actor);
 	void PrepareReplicationState(AActor* Actor);
 
+	// Selection profile pre-loading
+	void PreloadSelectionProfiles();
+
 private:
 	// Pool storage by gameplay tag
 	UPROPERTY()

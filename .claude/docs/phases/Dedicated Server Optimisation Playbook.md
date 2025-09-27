@@ -184,3 +184,6 @@ Epic Games Developers
 Significance/Anim Budget shift cost to where it matters visually and keep you within a predictable budget. 
 Epic Games Developers
 +1
+
+
+pre-loaded during level load or use async loading

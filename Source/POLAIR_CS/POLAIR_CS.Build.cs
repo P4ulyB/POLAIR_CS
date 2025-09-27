@@ -29,7 +29,8 @@ public class POLAIR_CS : ModuleRules
 			"ReplicationGraph", // Required for PACS_ReplicationGraph optimization
 			"SignificanceManager", // Required for PACS_SignificanceManager
 			"GameplayTags", // Required for spawn system gameplay tags
-			"ChaosVehicles" // Required for vehicle base class
+			"ChaosVehicles", // Required for vehicle base class
+			"Niagara" // Required for UNiagaraComponent in NPC base class
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] {

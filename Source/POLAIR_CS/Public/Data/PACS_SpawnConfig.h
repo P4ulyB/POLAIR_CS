@@ -88,6 +88,11 @@ struct FSpawnClassConfig
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (MetaClass = "/Script/Engine.Actor"))
 	TSoftClassPtr<AActor> ActorClass;
 
+	// Selection profile for visual configuration
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Visual",
+		meta = (ToolTip = "Selection profile defining NPC mesh, materials and selection visuals"))
+	TSoftObjectPtr<class UPACS_SelectionProfileAsset> SelectionProfile;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pool")
 	FPoolSettings PoolSettings;
 
@@ -123,6 +128,9 @@ public:
 	// Get all configured spawn tags
 	UFUNCTION(BlueprintCallable, Category = "Spawn Config")
 	TArray<FGameplayTag> GetAllSpawnTags() const;
+
+	// Get all spawn configurations
+	const TArray<FSpawnClassConfig>& GetSpawnConfigs() const { return SpawnConfigs; }
 
 	// Validation
 #if WITH_EDITOR

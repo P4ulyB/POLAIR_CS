@@ -1,13 +1,18 @@
 #include "Subsystems/PACS_SpawnOrchestrator.h"
 #include "Interfaces/PACS_Poolable.h"
 #include "Data/PACS_SpawnConfig.h"
+#include "Data/PACS_SelectionProfile.h"
 #include "Subsystems/PACS_MemoryTracker.h"
+#include "Actors/NPC/PACS_NPC_Base.h"
+#include "Actors/NPC/PACS_NPC_Base_Char.h"
+#include "Actors/NPC/PACS_NPC_Base_Veh.h"
 #include "Engine/World.h"
 #include "Engine/NetDriver.h"
 #include "Net/UnrealNetwork.h"
 #include "Components/PrimitiveComponent.h"
 #include "GameFramework/Actor.h"
 #include "TimerManager.h"
+#include "Engine/AssetManager.h"
 
 void UPACS_SpawnOrchestrator::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -299,6 +304,12 @@ void UPACS_SpawnOrchestrator::FlushAllPools()
 void UPACS_SpawnOrchestrator::SetSpawnConfig(UPACS_SpawnConfig* InConfig)
 {
 	SpawnConfig = InConfig;
+
+	// Pre-load all selection profiles on non-dedicated servers
+	if (SpawnConfig && GetWorld() && GetWorld()->GetNetMode() != NM_DedicatedServer)
+	{
+		PreloadSelectionProfiles();
+	}
 }
 
 void UPACS_SpawnOrchestrator::GetPoolStatistics(FGameplayTag SpawnTag, int32& OutActive, int32& OutAvailable, int32& OutTotal) const
@@ -468,6 +479,44 @@ void UPACS_SpawnOrchestrator::PrepareActorForUse(AActor* Actor, const FSpawnRequ
 	if (Params.Instigator)
 	{
 		Actor->SetInstigator(Params.Instigator);
+	}
+
+	// Apply selection profile from spawn config if actor is an NPC
+	// Skip on dedicated server (Principle #2: Skip Visual Assets on Dedicated Server)
+	if (GetWorld() && GetWorld()->GetNetMode() != NM_DedicatedServer)
+	{
+		// Cast to base NPC class - works for all derived types (Character and Vehicle)
+		if (APACS_NPC_Base* NPCActor = Cast<APACS_NPC_Base>(Actor))
+		{
+			// Find the spawn tag for this actor to get its config
+			FGameplayTag* TagPtr = ActorToTagMap.Find(Actor);
+			if (TagPtr && SpawnConfig)
+			{
+				FSpawnClassConfig Config;
+				if (SpawnConfig->GetConfigForTag(*TagPtr, Config))
+				{
+					// Apply the preloaded selection profile from config
+					// Profile should already be loaded via PreloadSelectionProfiles (Principle #1)
+					if (!Config.SelectionProfile.IsNull())
+					{
+						// Use Get() instead of LoadSynchronous since profiles are preloaded
+						UPACS_SelectionProfileAsset* ProfileAsset = Config.SelectionProfile.Get();
+						if (ProfileAsset)
+						{
+							NPCActor->SetSelectionProfile(ProfileAsset);
+							UE_LOG(LogTemp, Verbose, TEXT("PACS_SpawnOrchestrator: Applied preloaded selection profile to %s"),
+								*Actor->GetName());
+						}
+						else
+						{
+							// Profile wasn't preloaded, log warning
+							UE_LOG(LogTemp, Warning, TEXT("PACS_SpawnOrchestrator: Selection profile not preloaded for tag %s"),
+								*TagPtr->ToString());
+						}
+					}
+				}
+			}
+		}
 	}
 
 	// Enable actor
@@ -643,4 +692,67 @@ void UPACS_SpawnOrchestrator::PrepareReplicationState(AActor* Actor)
 
 	// Force immediate replication
 	Actor->ForceNetUpdate();
+}
+
+void UPACS_SpawnOrchestrator::PreloadSelectionProfiles()
+{
+	// Skip on dedicated server - selection profiles are visual only
+	if (!SpawnConfig || !GetWorld())
+	{
+		return;
+	}
+
+	if (GetWorld()->GetNetMode() == NM_DedicatedServer)
+	{
+		return;
+	}
+
+	// Get all spawn configs from the spawn config asset
+	const TArray<FSpawnClassConfig>& Configs = SpawnConfig->GetSpawnConfigs();
+
+	// Collect all unique selection profiles
+	TSet<FSoftObjectPath> ProfilesToLoad;
+	for (const FSpawnClassConfig& Config : Configs)
+	{
+		if (!Config.SelectionProfile.IsNull())
+		{
+			ProfilesToLoad.Add(Config.SelectionProfile.ToSoftObjectPath());
+		}
+	}
+
+	if (ProfilesToLoad.Num() == 0)
+	{
+		return;
+	}
+
+	// Batch load all selection profiles asynchronously
+	FStreamableManager& AssetStreamableManager = UAssetManager::GetStreamableManager();
+	TArray<FSoftObjectPath> PathArray = ProfilesToLoad.Array();
+
+	TSharedPtr<FStreamableHandle> Handle = AssetStreamableManager.RequestAsyncLoad(
+		PathArray,
+		FStreamableDelegate::CreateLambda([PathArray]()
+		{
+			int32 LoadedCount = 0;
+			for (const FSoftObjectPath& Path : PathArray)
+			{
+				if (Path.ResolveObject())
+				{
+					LoadedCount++;
+				}
+			}
+
+			UE_LOG(LogTemp, Log, TEXT("PACS_SpawnOrchestrator: Pre-loaded %d/%d selection profiles"),
+				LoadedCount, PathArray.Num());
+		})
+	);
+
+	// Store handle to keep assets loaded
+	if (Handle.IsValid())
+	{
+		// Store with a special tag for profile preloading
+		LoadHandles.Add(FGameplayTag::RequestGameplayTag(TEXT("PACS.Preload.SelectionProfiles")), Handle);
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("PACS_SpawnOrchestrator: Started pre-loading %d selection profiles"), ProfilesToLoad.Num());
 }

@@ -14,40 +14,40 @@ EDataValidationResult UPACS_SelectionProfileAsset::IsDataValid(TArray<FText>& Va
 {
     EDataValidationResult Result = Super::IsDataValid(ValidationErrors);
 
-    // Validate brightness values are reasonable
-    if (Profile.HoveredBrightness < 0.1f || Profile.HoveredBrightness > 3.0f)
+    // Validate brightness values
+    if (HoveredBrightness < 0.1f || HoveredBrightness > 3.0f)
     {
         ValidationErrors.Add(NSLOCTEXT("SelectionProfile", "InvalidHoveredBrightness",
-            "Hovered brightness is outside valid range (0.1 - 3.0)"));
+            "Hovered brightness must be between 0.1 and 3.0"));
         Result = EDataValidationResult::Invalid;
     }
 
-    if (Profile.SelectedBrightness < 0.1f || Profile.SelectedBrightness > 3.0f)
+    if (SelectedBrightness < 0.1f || SelectedBrightness > 3.0f)
     {
         ValidationErrors.Add(NSLOCTEXT("SelectionProfile", "InvalidSelectedBrightness",
-            "Selected brightness is outside valid range (0.1 - 3.0)"));
+            "Selected brightness must be between 0.1 and 3.0"));
         Result = EDataValidationResult::Invalid;
     }
 
-    if (Profile.UnavailableBrightness < 0.1f || Profile.UnavailableBrightness > 3.0f)
+    if (UnavailableBrightness < 0.1f || UnavailableBrightness > 3.0f)
     {
         ValidationErrors.Add(NSLOCTEXT("SelectionProfile", "InvalidUnavailableBrightness",
-            "Unavailable brightness is outside valid range (0.1 - 3.0)"));
+            "Unavailable brightness must be between 0.1 and 3.0"));
         Result = EDataValidationResult::Invalid;
     }
 
-    if (Profile.AvailableBrightness < 0.1f || Profile.AvailableBrightness > 3.0f)
+    if (AvailableBrightness < 0.1f || AvailableBrightness > 3.0f)
     {
         ValidationErrors.Add(NSLOCTEXT("SelectionProfile", "InvalidAvailableBrightness",
-            "Available brightness is outside valid range (0.1 - 3.0)"));
+            "Available brightness must be between 0.1 and 3.0"));
         Result = EDataValidationResult::Invalid;
     }
 
-    // Validate scale values
-    if (Profile.ProjectionScale < 0.5f || Profile.ProjectionScale > 3.0f)
+    // Validate render distance
+    if (RenderDistance < 100.0f || RenderDistance > 10000.0f)
     {
-        ValidationErrors.Add(NSLOCTEXT("SelectionProfile", "InvalidScale",
-            "Projection scale is outside valid range (0.5 - 3.0)"));
+        ValidationErrors.Add(NSLOCTEXT("SelectionProfile", "InvalidRenderDistance",
+            "Render distance must be between 100.0 and 10000.0"));
         Result = EDataValidationResult::Invalid;
     }
 

@@ -32,10 +32,6 @@ protected:
 	virtual void OnReturnedToPool_Implementation() override;
 
 public:
-	// Components
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UBoxComponent> BoxCollision;
-
 	// Selection plane component for visual indicators (manages state and client-side visuals)
 	// This component handles creating visual elements ONLY on non-VR clients
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
@@ -64,6 +60,13 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Selection")
 	class APlayerState* GetCurrentSelector() const { return CurrentSelector.Get(); }
 
+	// Set the selection profile (can be called by spawn system)
+	UFUNCTION(BlueprintCallable, Category = "Selection")
+	virtual void SetSelectionProfile(class UPACS_SelectionProfileAsset* InProfile);
+
+	// Apply the selection profile to the component
+	virtual void ApplySelectionProfile();
+
 	// Movement control
 	UFUNCTION(BlueprintCallable, Category = "NPC Movement")
 	virtual void MoveToLocation(const FVector& TargetLocation);
@@ -83,7 +86,11 @@ protected:
 	virtual void ResetCharacterMovement();
 	virtual void ResetCharacterAnimation();
 
-private:
-	// Default component setup
-	void SetupDefaultCollision();
+	// Async loading support for selection profiles
+	virtual void OnSelectionProfileLoaded();
+	void ApplySkeletalMeshFromProfile(class UPACS_SelectionProfileAsset* ProfileAsset);
+
+	// Handle for async loading
+	TSharedPtr<struct FStreamableHandle> ProfileLoadHandle;
+
 };

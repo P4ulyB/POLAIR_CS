@@ -1,6 +1,7 @@
 #include "Actors/NPC/PACS_NPC_Base.h"
-#include "Components/BoxComponent.h"
 #include "Components/PACS_SelectionPlaneComponent.h"
+#include "Data/PACS_SelectionProfile.h"
+#include "NiagaraComponent.h"
 #include "GameFramework/PlayerState.h"
 #include "Net/UnrealNetwork.h"
 #include "Engine/World.h"
@@ -10,10 +11,9 @@ APACS_NPC_Base::APACS_NPC_Base()
 {
 	PrimaryActorTick.bCanEverTick = false;
 
-	// Create root box collision
-	BoxCollision = CreateDefaultSubobject<UBoxComponent>(TEXT("BoxCollision"));
-	RootComponent = BoxCollision;
-	SetupDefaultCollision();
+	// Create Niagara component
+	NiagaraComponent = CreateDefaultSubobject<UNiagaraComponent>(TEXT("NiagaraComponent"));
+	RootComponent = NiagaraComponent;
 
 	// Create selection plane component (manages state and client-side visuals)
 	// The component itself handles creating visual elements ONLY on non-VR clients
@@ -36,6 +36,9 @@ void APACS_NPC_Base::BeginPlay()
 	{
 		SelectionPlaneComponent->InitializeSelectionPlane();
 		SelectionPlaneComponent->SetSelectionPlaneVisible(false);
+
+		// Note: Selection profile is now applied by spawn orchestrator
+		// This ensures profiles are preloaded and properly managed
 	}
 }
 
@@ -120,22 +123,10 @@ void APACS_NPC_Base::ResetForPool()
 	// Reset transform
 	SetActorTransform(FTransform::Identity);
 
-	// Clear velocity if physics enabled
-	if (BoxCollision && BoxCollision->IsSimulatingPhysics())
-	{
-		BoxCollision->SetPhysicsLinearVelocity(FVector::ZeroVector);
-		BoxCollision->SetPhysicsAngularVelocityInDegrees(FVector::ZeroVector);
-	}
 }
 
 void APACS_NPC_Base::PrepareForUse()
 {
-	// Re-enable collision
-	if (BoxCollision)
-	{
-		BoxCollision->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-	}
-
 	// Ensure selection plane is hidden initially
 	if (SelectionPlaneComponent)
 	{
@@ -143,24 +134,31 @@ void APACS_NPC_Base::PrepareForUse()
 	}
 }
 
-
-void APACS_NPC_Base::SetupDefaultCollision()
+void APACS_NPC_Base::SetSelectionProfile(UPACS_SelectionProfileAsset* InProfile)
 {
-	if (!BoxCollision)
+	// Only server should set the profile to ensure consistency
+	if (!HasAuthority())
 	{
 		return;
 	}
 
-	// Set default box size (can be overridden in Blueprint)
-	BoxCollision->SetBoxExtent(FVector(50.0f, 50.0f, 88.0f));
+	// Skip on dedicated server (Principle #2: Skip Visual Assets on Dedicated Server)
+	if (GetWorld() && GetWorld()->GetNetMode() == NM_DedicatedServer)
+	{
+		return;
+	}
 
-	// Set collision profile
-	BoxCollision->SetCollisionProfileName(TEXT("Pawn"));
-	BoxCollision->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-	BoxCollision->SetCollisionResponseToAllChannels(ECR_Block);
-	BoxCollision->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
-	BoxCollision->SetCollisionResponseToChannel(ECC_Vehicle, ECR_Ignore);
+	// Apply the profile directly to the component
+	if (InProfile && SelectionPlaneComponent)
+	{
+		SelectionPlaneComponent->ApplyProfileAsset(InProfile);
+		UE_LOG(LogTemp, Verbose, TEXT("PACS_NPC_Base: Applied selection profile to %s"), *GetName());
+	}
+}
 
-	// Generate overlap events for selection
-	BoxCollision->SetGenerateOverlapEvents(true);
+void APACS_NPC_Base::ApplySelectionProfile()
+{
+	// This method is now deprecated - selection profiles are applied directly
+	// via SetSelectionProfile which is called by the spawn orchestrator
+	// with preloaded profiles (following Principle #1: Pre-load Selection Profiles)
 }

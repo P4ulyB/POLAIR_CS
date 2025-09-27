@@ -1,6 +1,6 @@
 #include "Actors/NPC/PACS_NPC_Base_Veh.h"
-#include "Components/BoxComponent.h"
 #include "Components/PACS_SelectionPlaneComponent.h"
+#include "Data/PACS_SelectionProfile.h"
 #include "ChaosWheeledVehicleMovementComponent.h"
 #include "GameFramework/PlayerState.h"
 #include "Net/UnrealNetwork.h"
@@ -9,10 +9,6 @@ APACS_NPC_Base_Veh::APACS_NPC_Base_Veh()
 {
 	PrimaryActorTick.bCanEverTick = false;
 
-	// Create box collision for selection
-	BoxCollision = CreateDefaultSubobject<UBoxComponent>(TEXT("BoxCollision"));
-	BoxCollision->SetupAttachment(RootComponent);
-	SetupDefaultCollision();
 
 	// Create selection plane component (manages state and client-side visuals)
 	// The component itself handles creating visual elements ONLY on non-VR clients
@@ -41,6 +37,9 @@ void APACS_NPC_Base_Veh::BeginPlay()
 	{
 		SelectionPlaneComponent->InitializeSelectionPlane();
 		SelectionPlaneComponent->SetSelectionPlaneVisible(false);
+
+		// Apply selection profile if set
+		ApplySelectionProfile();
 	}
 }
 
@@ -189,11 +188,6 @@ void APACS_NPC_Base_Veh::ResetForPool()
 
 void APACS_NPC_Base_Veh::PrepareForUse()
 {
-	// Re-enable collision
-	if (BoxCollision)
-	{
-		BoxCollision->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-	}
 
 	// Reset vehicle movement
 	if (UChaosWheeledVehicleMovementComponent* VehicleMovement = Cast<UChaosWheeledVehicleMovementComponent>(GetVehicleMovementComponent()))
@@ -258,22 +252,32 @@ void APACS_NPC_Base_Veh::ResetVehiclePhysics()
 	}
 }
 
-void APACS_NPC_Base_Veh::SetupDefaultCollision()
+
+void APACS_NPC_Base_Veh::SetSelectionProfile(UPACS_SelectionProfileAsset* InProfile)
 {
-	if (!BoxCollision)
+	// Only server should set the profile to ensure consistency
+	if (!HasAuthority())
 	{
 		return;
 	}
 
-	// Set box size for vehicle selection (larger than characters)
-	BoxCollision->SetBoxExtent(FVector(200.0f, 100.0f, 100.0f));
+	// Skip on dedicated server (Principle #2: Skip Visual Assets on Dedicated Server)
+	if (GetWorld() && GetWorld()->GetNetMode() == NM_DedicatedServer)
+	{
+		return;
+	}
 
-	// Set collision profile for selection
-	BoxCollision->SetCollisionProfileName(TEXT("OverlapOnlyPawn"));
-	BoxCollision->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
-	BoxCollision->SetCollisionResponseToAllChannels(ECR_Ignore);
-	BoxCollision->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
+	// Apply the profile directly to the component
+	if (InProfile && SelectionPlaneComponent)
+	{
+		SelectionPlaneComponent->ApplyProfileAsset(InProfile);
+		UE_LOG(LogTemp, Verbose, TEXT("PACS_NPC_Base_Veh: Applied selection profile to %s"), *GetName());
+	}
+}
 
-	// Generate overlap events for selection
-	BoxCollision->SetGenerateOverlapEvents(true);
+void APACS_NPC_Base_Veh::ApplySelectionProfile()
+{
+	// This method is now deprecated - selection profiles are applied directly
+	// via SetSelectionProfile which is called by the spawn orchestrator
+	// with preloaded profiles (following Principle #1: Pre-load Selection Profiles)
 }

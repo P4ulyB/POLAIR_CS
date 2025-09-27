@@ -5,7 +5,7 @@
 #include "Interfaces/PACS_Poolable.h"
 #include "PACS_NPC_Base.generated.h"
 
-class UBoxComponent;
+class UNiagaraComponent;
 class UPACS_SelectionPlaneComponent;
 
 /**
@@ -34,7 +34,7 @@ protected:
 public:
 	// Components
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UBoxComponent> BoxCollision;
+	TObjectPtr<class UNiagaraComponent> NiagaraComponent;
 
 	// Selection plane component for visual indicators (manages state and CPD)
 	// This component handles client-side visual creation and server-side state
@@ -61,6 +61,13 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Selection")
 	class APlayerState* GetCurrentSelector() const { return CurrentSelector.Get(); }
 
+	// Set the selection profile (can be called by spawn system)
+	UFUNCTION(BlueprintCallable, Category = "Selection")
+	virtual void SetSelectionProfile(class UPACS_SelectionProfileAsset* InProfile);
+
+	// Apply the selection profile to the component
+	virtual void ApplySelectionProfile();
+
 protected:
 	// Visual feedback
 	virtual void UpdateSelectionVisuals();
@@ -69,7 +76,4 @@ protected:
 	virtual void ResetForPool();
 	virtual void PrepareForUse();
 
-private:
-	// Setup default collision
-	void SetupDefaultCollision();
 };

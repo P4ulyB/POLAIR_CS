@@ -1,21 +1,19 @@
 #include "Actors/NPC/PACS_NPC_Base_Char.h"
-#include "Components/BoxComponent.h"
 #include "Components/PACS_SelectionPlaneComponent.h"
+#include "Data/PACS_SelectionProfile.h"
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerState.h"
 #include "AIController.h"
 #include "Navigation/PathFollowingComponent.h"
 #include "Net/UnrealNetwork.h"
+#include "Engine/StreamableManager.h"
+#include "Engine/AssetManager.h"
 
 APACS_NPC_Base_Char::APACS_NPC_Base_Char()
 {
 	PrimaryActorTick.bCanEverTick = false;
 
-	// Create box collision (in addition to capsule)
-	BoxCollision = CreateDefaultSubobject<UBoxComponent>(TEXT("BoxCollision"));
-	BoxCollision->SetupAttachment(RootComponent);
-	SetupDefaultCollision();
 
 	// Create selection plane component (manages state and client-side visuals)
 	// The component itself handles creating visual elements ONLY on non-VR clients
@@ -58,6 +56,9 @@ void APACS_NPC_Base_Char::BeginPlay()
 	{
 		SelectionPlaneComponent->InitializeSelectionPlane();
 		SelectionPlaneComponent->SetSelectionPlaneVisible(false);
+
+		// Apply selection profile if set
+		ApplySelectionProfile();
 	}
 }
 
@@ -199,11 +200,6 @@ void APACS_NPC_Base_Char::ResetForPool()
 void APACS_NPC_Base_Char::PrepareForUse()
 {
 	// Re-enable collision
-	if (BoxCollision)
-	{
-		BoxCollision->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-	}
-
 	if (GetCapsuleComponent())
 	{
 		GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
@@ -221,6 +217,46 @@ void APACS_NPC_Base_Char::PrepareForUse()
 	{
 		SelectionPlaneComponent->SetSelectionPlaneVisible(false);
 	}
+
+	// Selection profile is now applied by spawn orchestrator when acquired from pool
+	// This follows Principle #4: Pool Pre-configured NPCs
+}
+
+void APACS_NPC_Base_Char::SetSelectionProfile(UPACS_SelectionProfileAsset* InProfile)
+{
+	// Only server should set the profile to ensure consistency
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	// Skip on dedicated server (Principle #2: Skip Visual Assets on Dedicated Server)
+	if (GetWorld() && GetWorld()->GetNetMode() == NM_DedicatedServer)
+	{
+		return;
+	}
+
+	// Apply the profile directly to components
+	if (InProfile)
+	{
+		// Apply to selection plane component
+		if (SelectionPlaneComponent)
+		{
+			SelectionPlaneComponent->ApplyProfileAsset(InProfile);
+		}
+
+		// Apply skeletal mesh if character has mesh component
+		ApplySkeletalMeshFromProfile(InProfile);
+
+		UE_LOG(LogTemp, Verbose, TEXT("PACS_NPC_Base_Char: Applied selection profile to %s"), *GetName());
+	}
+}
+
+void APACS_NPC_Base_Char::ApplySelectionProfile()
+{
+	// This method is now deprecated - selection profiles are applied directly
+	// via SetSelectionProfile which is called by the spawn orchestrator
+	// with preloaded profiles (following Principle #1: Pre-load Selection Profiles)
 }
 
 void APACS_NPC_Base_Char::ResetCharacterMovement()
@@ -253,25 +289,60 @@ void APACS_NPC_Base_Char::ResetCharacterAnimation()
 	}
 }
 
-void APACS_NPC_Base_Char::SetupDefaultCollision()
+void APACS_NPC_Base_Char::OnSelectionProfileLoaded()
 {
-	if (!BoxCollision)
+	// This method is now deprecated - selection profiles are preloaded
+	// by the spawn orchestrator and applied directly via SetSelectionProfile
+	// (following Principle #1: Pre-load Selection Profiles)
+}
+
+void APACS_NPC_Base_Char::ApplySkeletalMeshFromProfile(UPACS_SelectionProfileAsset* ProfileAsset)
+{
+	// Principle 2: Skip Visual Assets on Dedicated Server
+	if (GetWorld() && GetWorld()->GetNetMode() == NM_DedicatedServer)
 	{
 		return;
 	}
 
-	// Set box size to match capsule roughly
-	float CapsuleRadius = GetCapsuleComponent() ? GetCapsuleComponent()->GetScaledCapsuleRadius() : 42.0f;
-	float CapsuleHalfHeight = GetCapsuleComponent() ? GetCapsuleComponent()->GetScaledCapsuleHalfHeight() : 88.0f;
+	if (!ProfileAsset || ProfileAsset->SkeletalMeshAsset.IsNull())
+	{
+		return;
+	}
 
-	BoxCollision->SetBoxExtent(FVector(CapsuleRadius, CapsuleRadius, CapsuleHalfHeight));
+	// Apply skeletal mesh to character mesh component
+	if (USkeletalMeshComponent* MeshComp = GetMesh())
+	{
+		// Principle 1 & 4: First check if already loaded (from pre-loading or pooling)
+		USkeletalMesh* SkMesh = ProfileAsset->SkeletalMeshAsset.Get();
 
-	// Set collision profile for selection
-	BoxCollision->SetCollisionProfileName(TEXT("OverlapOnlyPawn"));
-	BoxCollision->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
-	BoxCollision->SetCollisionResponseToAllChannels(ECR_Ignore);
-	BoxCollision->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
+		if (!SkMesh)
+		{
+			// Principle 4: Pool Pre-configured NPCs - Allow synchronous load only during pooling/initialization
+			// This ensures pooled NPCs are fully configured before being made available
+			bool bIsPoolingPhase = !HasActorBegunPlay();
 
-	// Generate overlap events for selection
-	BoxCollision->SetGenerateOverlapEvents(true);
+			if (bIsPoolingPhase)
+			{
+				// Safe to load synchronously during pool initialization
+				SkMesh = ProfileAsset->SkeletalMeshAsset.LoadSynchronous();
+				UE_LOG(LogTemp, Verbose, TEXT("PACS_NPC_Base_Char: Synchronously loaded SK mesh during pooling for %s"), *GetName());
+			}
+			else
+			{
+				// Principle 3: Runtime loads should use async - this shouldn't happen if pre-loading works correctly
+				UE_LOG(LogTemp, Warning, TEXT("PACS_NPC_Base_Char: SK mesh not pre-loaded for runtime use on %s - should use async loading"), *GetName());
+				return;
+			}
+		}
+
+		// Principle 5: Proper SK Asset Handling - Apply mesh and transform
+		if (SkMesh)
+		{
+			MeshComp->SetSkeletalMesh(SkMesh);
+			MeshComp->SetRelativeTransform(ProfileAsset->SkeletalMeshTransform);
+
+			UE_LOG(LogTemp, Verbose, TEXT("PACS_NPC_Base_Char: Applied skeletal mesh to %s"), *GetName());
+		}
+	}
 }
+

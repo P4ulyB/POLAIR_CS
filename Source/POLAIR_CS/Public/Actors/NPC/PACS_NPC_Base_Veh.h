@@ -32,10 +32,6 @@ protected:
 	virtual void OnReturnedToPool_Implementation() override;
 
 public:
-	// Components
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UBoxComponent> BoxCollision;
-
 	// Selection plane component for visual indicators (manages state and client-side visuals)
 	// This component handles creating visual elements ONLY on non-VR clients
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
@@ -64,6 +60,13 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Selection")
 	class APlayerState* GetCurrentSelector() const { return CurrentSelector.Get(); }
 
+	// Set the selection profile (can be called by spawn system)
+	UFUNCTION(BlueprintCallable, Category = "Selection")
+	virtual void SetSelectionProfile(class UPACS_SelectionProfileAsset* InProfile);
+
+	// Apply the selection profile to the component
+	virtual void ApplySelectionProfile();
+
 	// Vehicle control
 	UFUNCTION(BlueprintCallable, Category = "NPC Vehicle")
 	virtual void DriveToLocation(const FVector& TargetLocation);
@@ -86,7 +89,4 @@ protected:
 	virtual void ResetVehicleState();
 	virtual void ResetVehiclePhysics();
 
-private:
-	// Default component setup
-	void SetupDefaultCollision();
 };
