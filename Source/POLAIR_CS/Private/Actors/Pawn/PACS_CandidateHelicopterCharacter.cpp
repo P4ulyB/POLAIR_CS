@@ -33,17 +33,33 @@ APACS_CandidateHelicopterCharacter::APACS_CandidateHelicopterCharacter(const FOb
     VRCamera->SetupAttachment(SeatOffsetRoot);
     VRCamera->bLockToHmd = true;
 
-    // CCTV Camera System Setup
+    // CCTV Camera System 1 Setup (Rotates with helicopter)
     MonitorPlane = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("CCTV_MonitorPlane"));
     MonitorPlane->SetupAttachment(HelicopterFrame);  // Consistent with VR hierarchy
     MonitorPlane->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
     ExternalCam = CreateDefaultSubobject<USceneCaptureComponent2D>(TEXT("CCTV_ExternalCam"));
-    ExternalCam->SetupAttachment(HelicopterFrame);  // Better attachment than RootComponent
+    ExternalCam->SetupAttachment(HelicopterFrame);  // Rotates with helicopter
     ExternalCam->CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
     ExternalCam->bCaptureEveryFrame = true;
     ExternalCam->bCaptureOnMovement = true;
     ExternalCam->FOVAngle = NormalFOV;
+
+    // CCTV Camera System 2 Setup (Static world rotation)
+    MonitorPlane2 = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("CCTV_MonitorPlane2"));
+    MonitorPlane2->SetupAttachment(HelicopterFrame);
+    MonitorPlane2->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    // Position second monitor slightly offset from first
+    MonitorPlane2->SetRelativeLocation(FVector(0, 50, 0)); // Adjust as needed
+
+    ExternalCam2 = CreateDefaultSubobject<USceneCaptureComponent2D>(TEXT("CCTV_ExternalCam2"));
+    ExternalCam2->SetupAttachment(RootComponent);  // Attached to root, not frame - won't inherit rotation
+    ExternalCam2->CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
+    ExternalCam2->bCaptureEveryFrame = true;
+    ExternalCam2->bCaptureOnMovement = true;
+    ExternalCam2->FOVAngle = NormalFOV;
+    // Set absolute rotation to prevent inheriting parent rotation
+    ExternalCam2->SetAbsolute(false, true, false); // Only rotation is absolute
 
     bUseControllerRotationYaw = false;
     GetCharacterMovement()->bOrientRotationToMovement = true;
@@ -53,9 +69,17 @@ APACS_CandidateHelicopterCharacter::APACS_CandidateHelicopterCharacter(const FOb
 void APACS_CandidateHelicopterCharacter::BeginPlay()
 {
     Super::BeginPlay();
-    
-    // Setup CCTV system
+
+    // Setup both CCTV systems
     SetupCCTV();
+    SetupCCTV2();
+
+    // Initialize static camera world rotation
+    if (ExternalCam2)
+    {
+        StaticCameraWorldRotation = GetActorRotation();
+        ExternalCam2->SetWorldRotation(StaticCameraWorldRotation);
+    }
 
     if (UPACS_HeliMovementComponent* CMC = Cast<UPACS_HeliMovementComponent>(GetCharacterMovement()))
     {
@@ -108,6 +132,7 @@ void APACS_CandidateHelicopterCharacter::Tick(float DeltaSeconds)
 {
     Super::Tick(DeltaSeconds);
     UpdateBankVisual(DeltaSeconds);
+    UpdateStaticCameraPosition(DeltaSeconds);
 }
 
 void APACS_CandidateHelicopterCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -443,7 +468,7 @@ EPACS_InputHandleResult APACS_CandidateHelicopterCharacter::HandleInputAction(FN
     {
         const bool bPressed = Value.Get<bool>();
         UE_LOG(LogPACSInput, Warning, TEXT("CCTV: Cam.ZoomToggle received - Value: %s"), bPressed ? TEXT("true") : TEXT("false"));
-        
+
         // Since we're only receiving 'false' (release) events, toggle on release instead
         if (!bPressed)
         {
@@ -451,6 +476,19 @@ EPACS_InputHandleResult APACS_CandidateHelicopterCharacter::HandleInputAction(FN
             UE_LOG(LogPACSInput, Log, TEXT("CCTV Zoom toggled: %s"), bCCTVZoomed ? TEXT("Zoomed") : TEXT("Normal"));
         }
         // Always consume the action whether pressed or released
+        return EPACS_InputHandleResult::HandledConsume;
+    }
+    else if (ActionName == TEXT("Cam2.ZoomToggle"))
+    {
+        const bool bPressed = Value.Get<bool>();
+        UE_LOG(LogPACSInput, Warning, TEXT("CCTV2: Cam2.ZoomToggle received - Value: %s"), bPressed ? TEXT("true") : TEXT("false"));
+
+        // Toggle on release to match behavior of Cam1
+        if (!bPressed)
+        {
+            ToggleCam2Zoom();
+            UE_LOG(LogPACSInput, Log, TEXT("CCTV2 Zoom toggled: %s"), bCCTV2Zoomed ? TEXT("Zoomed") : TEXT("Normal"));
+        }
         return EPACS_InputHandleResult::HandledConsume;
     }
     
@@ -532,15 +570,104 @@ void APACS_CandidateHelicopterCharacter::SetupCCTV()
 
 void APACS_CandidateHelicopterCharacter::ToggleCamZoom()
 {
-    if (!ExternalCam) 
+    if (!ExternalCam)
     {
         UE_LOG(LogTemp, Warning, TEXT("PACS CCTV: ExternalCam is null"));
         return;
     }
-    
+
     bCCTVZoomed = !bCCTVZoomed;
     ExternalCam->FOVAngle = bCCTVZoomed ? ZoomFOV : NormalFOV;
-    
-    UE_LOG(LogTemp, Log, TEXT("PACS CCTV: Zoom %s (FOV: %.1f°)"), 
+
+    UE_LOG(LogTemp, Log, TEXT("PACS CCTV: Zoom %s (FOV: %.1f°)"),
         bCCTVZoomed ? TEXT("IN") : TEXT("OUT"), ExternalCam->FOVAngle);
+}
+
+void APACS_CandidateHelicopterCharacter::SetupCCTV2()
+{
+    // Create render target for second camera
+    CameraRT2 = NewObject<UTextureRenderTarget2D>(this, TEXT("RT_CCTV2"));
+    if (CameraRT2)
+    {
+        CameraRT2->InitAutoFormat(RT_Resolution, RT_Resolution);
+        CameraRT2->ClearColor = FLinearColor::Black;
+        CameraRT2->TargetGamma = 2.2f;
+        CameraRT2->bAutoGenerateMips = false;  // Performance optimization
+
+        UE_LOG(LogTemp, Log, TEXT("PACS CCTV2: Render target created (%dx%d)"),
+            RT_Resolution, RT_Resolution);
+    }
+
+    // Configure second camera capture
+    if (ExternalCam2 && CameraRT2)
+    {
+        ExternalCam2->TextureTarget = CameraRT2;
+        ExternalCam2->FOVAngle = NormalFOV;
+
+        // Optimize for VR performance
+        ExternalCam2->bCaptureEveryFrame = true;
+        ExternalCam2->bCaptureOnMovement = false;  // Better performance
+
+        // Position camera with offset from actor
+        FVector CameraOffset(0, 0, 150.0f);  // 150cm above actor
+        ExternalCam2->SetRelativeLocation(CameraOffset);
+
+        UE_LOG(LogTemp, Log, TEXT("PACS CCTV2: External camera 2 configured (static world rotation)"));
+    }
+
+    // Setup second monitor material
+    if (MonitorPlane2 && ScreenBaseMaterial)
+    {
+        ScreenMID2 = UMaterialInstanceDynamic::Create(ScreenBaseMaterial, this);
+        if (ScreenMID2 && CameraRT2)
+        {
+            ScreenMID2->SetTextureParameterValue(TEXT("ScreenTex"), CameraRT2);
+            MonitorPlane2->SetMaterial(0, ScreenMID2);
+
+            UE_LOG(LogTemp, Log, TEXT("PACS CCTV2: Monitor 2 material configured"));
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("PACS CCTV2: Failed to create screen material 2"));
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("PACS CCTV2: Missing components - MonitorPlane2: %s, ScreenBaseMaterial: %s"),
+            MonitorPlane2 ? TEXT("Valid") : TEXT("NULL"),
+            ScreenBaseMaterial ? TEXT("Valid") : TEXT("NULL"));
+    }
+}
+
+void APACS_CandidateHelicopterCharacter::ToggleCam2Zoom()
+{
+    if (!ExternalCam2)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("PACS CCTV2: ExternalCam2 is null"));
+        return;
+    }
+
+    bCCTV2Zoomed = !bCCTV2Zoomed;
+    ExternalCam2->FOVAngle = bCCTV2Zoomed ? ZoomFOV : NormalFOV;
+
+    UE_LOG(LogTemp, Log, TEXT("PACS CCTV2: Zoom %s (FOV: %.1f°)"),
+        bCCTV2Zoomed ? TEXT("IN") : TEXT("OUT"), ExternalCam2->FOVAngle);
+}
+
+void APACS_CandidateHelicopterCharacter::UpdateStaticCameraPosition(float DeltaSeconds)
+{
+    if (!ExternalCam2)
+    {
+        return;
+    }
+
+    // Update camera location to follow the helicopter
+    FVector ActorLocation = GetActorLocation();
+    FVector CameraOffset(0, 0, 150.0f);  // Height offset above helicopter
+
+    // Set world location (follows helicopter position)
+    ExternalCam2->SetWorldLocation(ActorLocation + CameraOffset);
+
+    // Maintain static world rotation (doesn't rotate with helicopter)
+    ExternalCam2->SetWorldRotation(StaticCameraWorldRotation);
 }

@@ -60,23 +60,38 @@ public:
     UPROPERTY(VisibleAnywhere) USceneComponent*      SeatOffsetRoot;
     UPROPERTY(VisibleAnywhere) UCameraComponent*     VRCamera;
 
-    // CCTV Camera System
+    // CCTV Camera System 1 (Rotates with helicopter)
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CCTV")
     USceneCaptureComponent2D* ExternalCam = nullptr;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CCTV") 
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CCTV")
     UStaticMeshComponent* MonitorPlane = nullptr;
+
+    // CCTV Camera System 2 (Static world rotation)
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CCTV")
+    USceneCaptureComponent2D* ExternalCam2 = nullptr;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CCTV")
+    UStaticMeshComponent* MonitorPlane2 = nullptr;
 
     UPROPERTY() UPACS_HeliMovementComponent* HeliCMC;
     UPROPERTY(EditDefaultsOnly) UPACS_CandidateHelicopterData* Data;
 
+    // Camera 1 render target and material
     UPROPERTY(Transient)
     UMaterialInstanceDynamic* ScreenMID = nullptr;
 
-    UPROPERTY(Transient)  
+    UPROPERTY(Transient)
     UTextureRenderTarget2D* CameraRT = nullptr;
 
-    // CCTV Configuration
+    // Camera 2 render target and material
+    UPROPERTY(Transient)
+    UMaterialInstanceDynamic* ScreenMID2 = nullptr;
+
+    UPROPERTY(Transient)
+    UTextureRenderTarget2D* CameraRT2 = nullptr;
+
+    // CCTV Configuration (shared by both cameras)
     UPROPERTY(EditDefaultsOnly, Category = "CCTV")
     float NormalFOV = 70.f;
 
@@ -86,12 +101,20 @@ public:
     UPROPERTY(EditDefaultsOnly, Category = "CCTV")
     int32 RT_Resolution = 1024;
 
-    UPROPERTY(EditDefaultsOnly, Category = "CCTV", 
+    UPROPERTY(EditDefaultsOnly, Category = "CCTV",
         meta = (DisplayName = "Screen Base Material"))
     TObjectPtr<UMaterialInterface> ScreenBaseMaterial = nullptr;
 
+    // Zoom states for each camera
     UPROPERTY(Transient)
     bool bCCTVZoomed = false;
+
+    UPROPERTY(Transient)
+    bool bCCTV2Zoomed = false;
+
+    // Static camera world rotation tracking
+    UPROPERTY(Transient)
+    FRotator StaticCameraWorldRotation = FRotator::ZeroRotator;
 
     UPROPERTY(ReplicatedUsing=OnRep_OrbitTargets) FPACS_OrbitTargets OrbitTargets;
     UPROPERTY(ReplicatedUsing=OnRep_OrbitAnchors) FPACS_OrbitAnchors OrbitAnchors;
@@ -140,6 +163,9 @@ private:
     // CCTV System
     void SetupCCTV();
     void ToggleCamZoom();
+    void SetupCCTV2();
+    void ToggleCam2Zoom();
+    void UpdateStaticCameraPosition(float DeltaSeconds);
 
     UPROPERTY(EditDefaultsOnly, Category = "VR Seat")
     float SeatNudgeStepCm = 2.f; // tune in BP/data
