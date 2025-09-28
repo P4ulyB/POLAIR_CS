@@ -53,11 +53,12 @@ APACS_CandidateHelicopterCharacter::APACS_CandidateHelicopterCharacter(const FOb
     MonitorPlane2->SetRelativeLocation(FVector(0, 50, 0)); // Adjust as needed
 
     ExternalCam2 = CreateDefaultSubobject<USceneCaptureComponent2D>(TEXT("CCTV_ExternalCam2"));
-    ExternalCam2->SetupAttachment(RootComponent);  // Attached to root, not frame - won't inherit rotation
+    ExternalCam2->SetupAttachment(MonitorPlane2);  // Nested under MonitorPlane2 for logical hierarchy
     ExternalCam2->CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
     ExternalCam2->bCaptureEveryFrame = true;
     ExternalCam2->bCaptureOnMovement = true;
     ExternalCam2->FOVAngle = NormalFOV;
+    ExternalCam2->SetRelativeRotation(FRotator(0, -90, 0));
     // Set absolute rotation to prevent inheriting parent rotation
     ExternalCam2->SetAbsolute(false, true, false); // Only rotation is absolute
 
@@ -74,10 +75,11 @@ void APACS_CandidateHelicopterCharacter::BeginPlay()
     SetupCCTV();
     SetupCCTV2();
 
-    // Initialize static camera world rotation
+    // Initialize static camera world rotation with configurable settings
     if (ExternalCam2)
     {
-        StaticCameraWorldRotation = GetActorRotation();
+        // Set static world rotation: Pitch = -90 (facing ground), Yaw = configurable
+        StaticCameraWorldRotation = FRotator(-90.0f, Camera2YAxisRotation, Camera2ZAxisRotation);
         ExternalCam2->SetWorldRotation(StaticCameraWorldRotation);
     }
 
@@ -535,12 +537,33 @@ void APACS_CandidateHelicopterCharacter::SetupCCTV()
     if (ExternalCam && CameraRT)
     {
         ExternalCam->TextureTarget = CameraRT;
-        ExternalCam->FOVAngle = NormalFOV;
-        
+
+        // Configure projection type from data asset
+        if (Data && Data->bCamera1UseOrtho)
+        {
+            ExternalCam->ProjectionType = ECameraProjectionMode::Orthographic;
+            if (Data->Camera1OrthoWidths.Num() > 0)
+            {
+                ExternalCam->OrthoWidth = Data->Camera1OrthoWidths[0];
+                Camera1ZoomIndex = 0; // Reset zoom index
+            }
+            else
+            {
+                ExternalCam->OrthoWidth = 1000.0f; // Default fallback
+            }
+            UE_LOG(LogTemp, Log, TEXT("PACS CCTV: Camera 1 set to Orthographic, OrthoWidth: %.1f"), ExternalCam->OrthoWidth);
+        }
+        else
+        {
+            ExternalCam->ProjectionType = ECameraProjectionMode::Perspective;
+            ExternalCam->FOVAngle = NormalFOV;
+            UE_LOG(LogTemp, Log, TEXT("PACS CCTV: Camera 1 set to Perspective, FOV: %.1f"), ExternalCam->FOVAngle);
+        }
+
         // Optimise for VR performance
         ExternalCam->bCaptureEveryFrame = true;
         ExternalCam->bCaptureOnMovement = false;  // Better performance
-        
+
         UE_LOG(LogTemp, Log, TEXT("PACS CCTV: External camera configured"));
     }
 
@@ -570,17 +593,39 @@ void APACS_CandidateHelicopterCharacter::SetupCCTV()
 
 void APACS_CandidateHelicopterCharacter::ToggleCamZoom()
 {
-    if (!ExternalCam)
+    // Now calls the new cycle zoom function
+    CycleCamera1Zoom();
+}
+
+void APACS_CandidateHelicopterCharacter::CycleCamera1Zoom()
+{
+    if (!ExternalCam || !Data)
     {
-        UE_LOG(LogTemp, Warning, TEXT("PACS CCTV: ExternalCam is null"));
+        UE_LOG(LogTemp, Warning, TEXT("PACS CCTV: ExternalCam or Data is null"));
         return;
     }
 
-    bCCTVZoomed = !bCCTVZoomed;
-    ExternalCam->FOVAngle = bCCTVZoomed ? ZoomFOV : NormalFOV;
+    // Handle orthographic projection
+    if (Data->bCamera1UseOrtho && Data->Camera1OrthoWidths.Num() > 0)
+    {
+        // Cycle to next zoom level
+        Camera1ZoomIndex = (Camera1ZoomIndex + 1) % Data->Camera1OrthoWidths.Num();
 
-    UE_LOG(LogTemp, Log, TEXT("PACS CCTV: Zoom %s (FOV: %.1f°)"),
-        bCCTVZoomed ? TEXT("IN") : TEXT("OUT"), ExternalCam->FOVAngle);
+        // Apply new ortho width
+        ExternalCam->OrthoWidth = Data->Camera1OrthoWidths[Camera1ZoomIndex];
+
+        UE_LOG(LogTemp, Log, TEXT("PACS CCTV: Camera 1 Zoom Level %d of %d, OrthoWidth: %.1f"),
+            Camera1ZoomIndex + 1, Data->Camera1OrthoWidths.Num(), ExternalCam->OrthoWidth);
+    }
+    // Handle perspective projection (legacy)
+    else
+    {
+        bCCTVZoomed = !bCCTVZoomed;
+        ExternalCam->FOVAngle = bCCTVZoomed ? ZoomFOV : NormalFOV;
+
+        UE_LOG(LogTemp, Log, TEXT("PACS CCTV: Perspective Zoom %s (FOV: %.1f°)"),
+            bCCTVZoomed ? TEXT("IN") : TEXT("OUT"), ExternalCam->FOVAngle);
+    }
 }
 
 void APACS_CandidateHelicopterCharacter::SetupCCTV2()
@@ -602,15 +647,39 @@ void APACS_CandidateHelicopterCharacter::SetupCCTV2()
     if (ExternalCam2 && CameraRT2)
     {
         ExternalCam2->TextureTarget = CameraRT2;
-        ExternalCam2->FOVAngle = NormalFOV;
+
+        // Configure projection type from data asset
+        if (Data && Data->bCamera2UseOrtho)
+        {
+            ExternalCam2->ProjectionType = ECameraProjectionMode::Orthographic;
+            if (Data->Camera2OrthoWidths.Num() > 0)
+            {
+                ExternalCam2->OrthoWidth = Data->Camera2OrthoWidths[0];
+                Camera2ZoomIndex = 0; // Reset zoom index
+            }
+            else
+            {
+                ExternalCam2->OrthoWidth = 1000.0f; // Default fallback
+            }
+            UE_LOG(LogTemp, Log, TEXT("PACS CCTV2: Camera 2 set to Orthographic, OrthoWidth: %.1f"), ExternalCam2->OrthoWidth);
+        }
+        else
+        {
+            ExternalCam2->ProjectionType = ECameraProjectionMode::Perspective;
+            ExternalCam2->FOVAngle = NormalFOV;
+            UE_LOG(LogTemp, Log, TEXT("PACS CCTV2: Camera 2 set to Perspective, FOV: %.1f"), ExternalCam2->FOVAngle);
+        }
 
         // Optimize for VR performance
         ExternalCam2->bCaptureEveryFrame = true;
         ExternalCam2->bCaptureOnMovement = false;  // Better performance
 
-        // Position camera with offset from actor
-        FVector CameraOffset(0, 0, 150.0f);  // 150cm above actor
-        ExternalCam2->SetRelativeLocation(CameraOffset);
+        // Position camera with configurable offset
+        ExternalCam2->SetRelativeLocation(Camera2PositionOffset);
+
+        // Set initial rotation (pitch -90 degrees to face ground, configurable yaw)
+        FRotator CameraRotation(-90.0f, Camera2YAxisRotation, Camera2ZAxisRotation);
+        ExternalCam2->SetRelativeRotation(CameraRotation);
 
         UE_LOG(LogTemp, Log, TEXT("PACS CCTV2: External camera 2 configured (static world rotation)"));
     }
@@ -641,17 +710,39 @@ void APACS_CandidateHelicopterCharacter::SetupCCTV2()
 
 void APACS_CandidateHelicopterCharacter::ToggleCam2Zoom()
 {
-    if (!ExternalCam2)
+    // Now calls the new cycle zoom function
+    CycleCamera2Zoom();
+}
+
+void APACS_CandidateHelicopterCharacter::CycleCamera2Zoom()
+{
+    if (!ExternalCam2 || !Data)
     {
-        UE_LOG(LogTemp, Warning, TEXT("PACS CCTV2: ExternalCam2 is null"));
+        UE_LOG(LogTemp, Warning, TEXT("PACS CCTV2: ExternalCam2 or Data is null"));
         return;
     }
 
-    bCCTV2Zoomed = !bCCTV2Zoomed;
-    ExternalCam2->FOVAngle = bCCTV2Zoomed ? ZoomFOV : NormalFOV;
+    // Handle orthographic projection
+    if (Data->bCamera2UseOrtho && Data->Camera2OrthoWidths.Num() > 0)
+    {
+        // Cycle to next zoom level
+        Camera2ZoomIndex = (Camera2ZoomIndex + 1) % Data->Camera2OrthoWidths.Num();
 
-    UE_LOG(LogTemp, Log, TEXT("PACS CCTV2: Zoom %s (FOV: %.1f°)"),
-        bCCTV2Zoomed ? TEXT("IN") : TEXT("OUT"), ExternalCam2->FOVAngle);
+        // Apply new ortho width
+        ExternalCam2->OrthoWidth = Data->Camera2OrthoWidths[Camera2ZoomIndex];
+
+        UE_LOG(LogTemp, Log, TEXT("PACS CCTV2: Camera 2 Zoom Level %d of %d, OrthoWidth: %.1f"),
+            Camera2ZoomIndex + 1, Data->Camera2OrthoWidths.Num(), ExternalCam2->OrthoWidth);
+    }
+    // Handle perspective projection (legacy)
+    else
+    {
+        bCCTV2Zoomed = !bCCTV2Zoomed;
+        ExternalCam2->FOVAngle = bCCTV2Zoomed ? ZoomFOV : NormalFOV;
+
+        UE_LOG(LogTemp, Log, TEXT("PACS CCTV2: Perspective Zoom %s (FOV: %.1f°)"),
+            bCCTV2Zoomed ? TEXT("IN") : TEXT("OUT"), ExternalCam2->FOVAngle);
+    }
 }
 
 void APACS_CandidateHelicopterCharacter::UpdateStaticCameraPosition(float DeltaSeconds)
@@ -661,13 +752,35 @@ void APACS_CandidateHelicopterCharacter::UpdateStaticCameraPosition(float DeltaS
         return;
     }
 
-    // Update camera location to follow the helicopter
+    // Update camera location to follow the helicopter using configurable offset
     FVector ActorLocation = GetActorLocation();
-    FVector CameraOffset(0, 0, 150.0f);  // Height offset above helicopter
 
-    // Set world location (follows helicopter position)
-    ExternalCam2->SetWorldLocation(ActorLocation + CameraOffset);
+    // Set world location (follows helicopter position with configurable offset)
+    ExternalCam2->SetWorldLocation(ActorLocation + Camera2PositionOffset);
 
-    // Maintain static world rotation (doesn't rotate with helicopter)
-    ExternalCam2->SetWorldRotation(StaticCameraWorldRotation);
+    // Maintain static world rotation with configurable Y-axis rotation
+    // Pitch = -90 (facing ground), Yaw = configurable, Roll = 0
+    FRotator CameraRotation(-90.0f, Camera2YAxisRotation, Camera2ZAxisRotation);
+    ExternalCam2->SetWorldRotation(CameraRotation);
+}
+
+void APACS_CandidateHelicopterCharacter::ApplyOrthoSettings(USceneCaptureComponent2D* Camera, bool bUseOrtho, float OrthoWidth)
+{
+    if (!Camera)
+    {
+        return;
+    }
+
+    if (bUseOrtho)
+    {
+        Camera->ProjectionType = ECameraProjectionMode::Orthographic;
+        Camera->OrthoWidth = OrthoWidth;
+        UE_LOG(LogTemp, Log, TEXT("PACS CCTV: Applied Orthographic projection with width: %.1f"), OrthoWidth);
+    }
+    else
+    {
+        Camera->ProjectionType = ECameraProjectionMode::Perspective;
+        Camera->FOVAngle = NormalFOV;
+        UE_LOG(LogTemp, Log, TEXT("PACS CCTV: Applied Perspective projection with FOV: %.1f"), Camera->FOVAngle);
+    }
 }

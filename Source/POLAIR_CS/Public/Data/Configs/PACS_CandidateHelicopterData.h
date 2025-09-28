@@ -30,4 +30,23 @@ public:
     UPROPERTY(EditDefaultsOnly) FVector SeatLocalClamp = FVector(50,50,50);
 
     UPROPERTY(EditDefaultsOnly) FTransform AssessorFollowView;
+
+    // Camera Zoom - Orthographic Projection Settings
+    UPROPERTY(EditDefaultsOnly, Category = "Camera Zoom",
+        meta = (DisplayName = "Camera 1 - Use Orthographic"))
+    bool bCamera1UseOrtho = true;
+
+    UPROPERTY(EditDefaultsOnly, Category = "Camera Zoom",
+        meta = (DisplayName = "Camera 1 - Ortho Width Levels",
+        EditCondition = "bCamera1UseOrtho", EditConditionHides))
+    TArray<float> Camera1OrthoWidths = {500.0f, 1000.0f, 2000.0f};
+
+    UPROPERTY(EditDefaultsOnly, Category = "Camera Zoom",
+        meta = (DisplayName = "Camera 2 - Use Orthographic"))
+    bool bCamera2UseOrtho = true;
+
+    UPROPERTY(EditDefaultsOnly, Category = "Camera Zoom",
+        meta = (DisplayName = "Camera 2 - Ortho Width Levels",
+        EditCondition = "bCamera2UseOrtho", EditConditionHides))
+    TArray<float> Camera2OrthoWidths = {500.0f, 1000.0f, 2000.0f};
 };

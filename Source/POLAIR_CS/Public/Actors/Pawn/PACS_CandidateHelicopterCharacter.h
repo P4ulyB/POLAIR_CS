@@ -61,17 +61,17 @@ public:
     UPROPERTY(VisibleAnywhere) UCameraComponent*     VRCamera;
 
     // CCTV Camera System 1 (Rotates with helicopter)
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CCTV")
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "PACS|CCTV")
     USceneCaptureComponent2D* ExternalCam = nullptr;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CCTV")
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "PACS|CCTV")
     UStaticMeshComponent* MonitorPlane = nullptr;
 
     // CCTV Camera System 2 (Static world rotation)
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CCTV")
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "PACS|CCTV")
     USceneCaptureComponent2D* ExternalCam2 = nullptr;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CCTV")
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "PACS|CCTV")
     UStaticMeshComponent* MonitorPlane2 = nullptr;
 
     UPROPERTY() UPACS_HeliMovementComponent* HeliCMC;
@@ -92,25 +92,45 @@ public:
     UTextureRenderTarget2D* CameraRT2 = nullptr;
 
     // CCTV Configuration (shared by both cameras)
-    UPROPERTY(EditDefaultsOnly, Category = "CCTV")
+    UPROPERTY(EditDefaultsOnly, Category = "PACS|CCTV")
     float NormalFOV = 70.f;
 
-    UPROPERTY(EditDefaultsOnly, Category = "CCTV")
+    UPROPERTY(EditDefaultsOnly, Category = "PACS|CCTV")
     float ZoomFOV = 25.f;
 
-    UPROPERTY(EditDefaultsOnly, Category = "CCTV")
+    UPROPERTY(EditDefaultsOnly, Category = "PACS|CCTV")
     int32 RT_Resolution = 1024;
 
-    UPROPERTY(EditDefaultsOnly, Category = "CCTV",
+    UPROPERTY(EditDefaultsOnly, Category = "PACS|CCTV",
         meta = (DisplayName = "Screen Base Material"))
     TObjectPtr<UMaterialInterface> ScreenBaseMaterial = nullptr;
 
-    // Zoom states for each camera
+    // Camera 2 Configuration (Static world rotation camera)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "PACS|CCTV Camera 2",
+        meta = (DisplayName = "Camera 2 Position Offset"))
+    FVector Camera2PositionOffset = FVector(0, 0, 150.0f);
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "PACS|CCTV Camera 2",
+        meta = (DisplayName = "Camera 2 Y-Axis Rotation", ClampMin = "-180", ClampMax = "180"))
+    float Camera2YAxisRotation = -90.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "PACS|CCTV Camera 2",
+        meta = (DisplayName = "Camera 2 Z-Axis Rotation", ClampMin = "-180", ClampMax = "180"))
+    float Camera2ZAxisRotation = 90.0f;
+
+    // Zoom states for each camera (legacy - kept for compatibility)
     UPROPERTY(Transient)
     bool bCCTVZoomed = false;
 
     UPROPERTY(Transient)
     bool bCCTV2Zoomed = false;
+
+    // Orthographic zoom level indices
+    UPROPERTY(Transient)
+    int32 Camera1ZoomIndex = 0;
+
+    UPROPERTY(Transient)
+    int32 Camera2ZoomIndex = 0;
 
     // Static camera world rotation tracking
     UPROPERTY(Transient)
@@ -162,12 +182,17 @@ private:
     
     // CCTV System
     void SetupCCTV();
-    void ToggleCamZoom();
+    void ToggleCamZoom();  // Legacy - cycles through ortho zoom levels now
     void SetupCCTV2();
-    void ToggleCam2Zoom();
+    void ToggleCam2Zoom(); // Legacy - cycles through ortho zoom levels now
     void UpdateStaticCameraPosition(float DeltaSeconds);
 
-    UPROPERTY(EditDefaultsOnly, Category = "VR Seat")
+    // Orthographic zoom cycling
+    void CycleCamera1Zoom();
+    void CycleCamera2Zoom();
+    void ApplyOrthoSettings(USceneCaptureComponent2D* Camera, bool bUseOrtho, float OrthoWidth);
+
+    UPROPERTY(EditDefaultsOnly, Category = "PACS|VR Seat")
     float SeatNudgeStepCm = 2.f; // tune in BP/data
 
 protected:
