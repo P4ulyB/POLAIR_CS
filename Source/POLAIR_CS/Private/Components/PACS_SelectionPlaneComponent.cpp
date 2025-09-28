@@ -62,7 +62,8 @@ void UPACS_SelectionPlaneComponent::InitializeSelectionPlane()
 
 	// CREATE selection plane component dynamically (client-only)
 	// This ensures it NEVER exists on servers
-	SelectionPlane = NewObject<UStaticMeshComponent>(Owner, TEXT("SelectionPlane"), RF_Transient);
+	// Use unique name to avoid conflicts with other components
+	SelectionPlane = NewObject<UStaticMeshComponent>(Owner, TEXT("SelectionPlaneMesh"), RF_Transient);
 
 	if (!SelectionPlane)
 	{

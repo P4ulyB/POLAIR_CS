@@ -42,6 +42,15 @@ public:
 		meta = (DisplayName = "SK Transforms"))
 	FTransform SkeletalMeshTransform = FTransform::Identity;
 
+	// --- Animation Sequences ---
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NPC Visuals|Animation",
+		meta = (DisplayName = "Idle Animation"))
+	TSoftObjectPtr<class UAnimSequence> IdleAnimationSequence;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NPC Visuals|Animation",
+		meta = (DisplayName = "Run Animation"))
+	TSoftObjectPtr<class UAnimSequence> RunAnimationSequence;
+
 	// --- Static Mesh ---
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NPC Visuals|Static Mesh",
 		meta = (DisplayName = "SM Asset"))

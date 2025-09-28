@@ -51,6 +51,14 @@ void UPACS_ReplicationGraph::InitClassReplicationInfo()
 	NPCInfo.SetCullDistanceSquared(NPCNetCullDistance * NPCNetCullDistance);
 	NPCInfo.ReplicationPeriodFrame = 2;
 
+	// Register lightweight NPC class with optimized settings
+	FClassReplicationInfo LightweightNPCInfo;
+	LightweightNPCInfo.DistancePriorityScale = 0.5f; // Lower priority than standard NPCs
+	LightweightNPCInfo.StarvationPriorityScale = 1.0f;
+	LightweightNPCInfo.ActorChannelFrameTimeout = 2; // Shorter timeout for lightweight NPCs
+	LightweightNPCInfo.SetCullDistanceSquared(10000.0f * 10000.0f); // 100 meter cull distance
+	LightweightNPCInfo.ReplicationPeriodFrame = 4; // Less frequent updates (every 4 frames)
+
 	// NPC class registration removed - will be reimplemented later
 	// Track spatialized classes
 	SpatializedClasses.Add(APawn::StaticClass());
