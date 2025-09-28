@@ -30,8 +30,11 @@ public class POLAIR_CS : ModuleRules
 			"SignificanceManager", // Required for PACS_SignificanceManager
 			"GameplayTags", // Required for spawn system gameplay tags
 			"ChaosVehicles", // Required for vehicle base class
-			"Niagara" // Required for UNiagaraComponent in NPC base class
-		});
+			"Niagara", // Required for UNiagaraComponent in NPC base class
+			"WorldDirectorPRO",
+            "NPC_Optimizator"
+
+        });
 
 		PrivateDependencyModuleNames.AddRange(new string[] {
 			"PlayFab",

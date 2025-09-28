@@ -1,0 +1,36 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "2.2.4",
+	"FriendlyName": "World Director PRO",
+	"Description": "The World Director NPC PRO plugin is ideal for creating games where there are many pawns in the world at the same time. ",
+	"Category": "BitProtectStudio",
+	"CreatedBy": "Taueron",
+	"CreatedByURL": "https://www.fab.com/sellers/BitProtectStudio",
+	"DocsURL": "https://docs.google.com/document/d/1BAI3753pqr2SSb52gh14sZRB4GHyH8kZW5HD106HvqM/edit?usp=sharing",
+	"MarketplaceURL": "",
+	"SupportURL": "https://discord.gg/DN4PhbmShg",
+	"EngineVersion": "5.5.0",
+	"CanContainContent": true,
+	"Installed": true,
+	"Modules": [
+		{
+			"Name": "WorldDirectorPRO",
+			"Type": "Runtime",
+			"LoadingPhase": "Default",
+			"PlatformAllowList": [
+				"Win64",
+				"Android",
+				"Mac",
+				"IOS",
+				"Linux"
+			]
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "Niagara",
+			"Enabled": true
+		}
+	]
+}
