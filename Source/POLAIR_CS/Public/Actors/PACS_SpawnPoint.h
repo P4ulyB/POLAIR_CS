@@ -18,8 +18,9 @@ enum class ESpawnPattern : uint8
 	Immediate    UMETA(DisplayName = "Immediate"),
 	Delayed      UMETA(DisplayName = "Delayed"),
 	Wave         UMETA(DisplayName = "Wave"),
-	Continuous   UMETA(DisplayName = "Continuous"),
 	Manual       UMETA(DisplayName = "Manual Only")
+	// Note: Continuous respawn removed - incompatible with pooling architecture
+	// (pooled actors aren't destroyed, so respawn trigger doesn't exist)
 };
 
 /**
@@ -84,9 +85,6 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Spawn Configuration", meta = (EditCondition = "SpawnPattern == ESpawnPattern::Wave", EditConditionHides, ClampMin = 0.1, ClampMax = 10.0))
 	float WaveInterval = 2.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Spawn Configuration", meta = (EditCondition = "SpawnPattern == ESpawnPattern::Continuous", EditConditionHides, ClampMin = 0.5, ClampMax = 60.0))
-	float RespawnDelay = 5.0f;
-
 	// Auto-start spawning on BeginPlay
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Spawn Configuration")
 	bool bAutoStart = true;
@@ -120,7 +118,6 @@ private:
 	void ExecuteSpawn();
 	void ScheduleNextSpawn();
 	void HandleWaveSpawn();
-	void HandleContinuousRespawn();
 	void CheckOrchestratorReady();
 
 	// Get spawn parameters
@@ -139,6 +136,5 @@ private:
 	// Timer handles
 	FTimerHandle SpawnTimerHandle;
 	FTimerHandle WaveTimerHandle;
-	FTimerHandle RespawnTimerHandle;
 	FTimerHandle ReadyCheckTimerHandle;
 };

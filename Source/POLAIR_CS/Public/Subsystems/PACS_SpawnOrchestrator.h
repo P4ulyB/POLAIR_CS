@@ -18,11 +18,11 @@ struct FPoolEntry
 {
 	GENERATED_BODY()
 
-	// Available actors (returned to pool)
+	// Available actors (returned to pool) - Array is fine for Pop/Add operations
 	TArray<TWeakObjectPtr<AActor>> AvailableActors;
 
-	// Active actors (currently in use)
-	TArray<TWeakObjectPtr<AActor>> ActiveActors;
+	// Active actors (currently in use) - TSet for O(1) Add/Remove instead of O(n)
+	TSet<TWeakObjectPtr<AActor>> ActiveActors;
 
 	// Soft class reference for lazy loading
 	TSoftClassPtr<AActor> ActorClass;
@@ -37,7 +37,7 @@ struct FPoolEntry
 
 	// Loading state
 	bool bIsLoading = false;
-	TArray<TPair<FTransform, TFunction<void(AActor*)>>> PendingRequests;
+	TArray<FSpawnRequestParams> PendingRequests;
 
 	void Reset()
 	{
@@ -162,4 +162,8 @@ private:
 
 	// Handles for async loads
 	TMap<FGameplayTag, TSharedPtr<FStreamableHandle>> LoadHandles;
+
+	// Cached subsystem pointers (avoid repeated GetSubsystem calls)
+	UPROPERTY()
+	TObjectPtr<class UPACS_MemoryTracker> MemoryTracker;
 };

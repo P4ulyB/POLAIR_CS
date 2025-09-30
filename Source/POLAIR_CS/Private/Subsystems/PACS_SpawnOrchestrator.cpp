@@ -19,6 +19,9 @@ void UPACS_SpawnOrchestrator::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
 
+	// Cache subsystem pointers
+	MemoryTracker = GetWorld()->GetSubsystem<UPACS_MemoryTracker>();
+
 	UE_LOG(LogTemp, Log, TEXT("PACS_SpawnOrchestrator: Initialized for World %s"),
 		*GetWorld()->GetName());
 }
@@ -71,7 +74,7 @@ AActor* UPACS_SpawnOrchestrator::AcquireActor(FGameplayTag SpawnTag, const FSpaw
 	}
 
 	// Check memory budget before acquiring
-	if (UPACS_MemoryTracker* MemoryTracker = GetWorld()->GetSubsystem<UPACS_MemoryTracker>())
+	if (MemoryTracker)
 	{
 		// Estimate memory for this actor type (use 1MB as default estimate)
 		float EstimatedMemoryMB = 1.0f;
@@ -104,16 +107,7 @@ AActor* UPACS_SpawnOrchestrator::AcquireActor(FGameplayTag SpawnTag, const FSpaw
 		UE_LOG(LogTemp, Log, TEXT("PACS_SpawnOrchestrator: Class still loading for tag %s, queuing request"),
 			*SpawnTag.ToString());
 
-		// Queue request with callback
-		Pool->PendingRequests.Add(TPair<FTransform, TFunction<void(AActor*)>>(
-			Params.Transform,
-			[this, Params](AActor* Actor) {
-				if (Actor)
-				{
-					PrepareActorForUse(Actor, Params);
-				}
-			}
-		));
+		Pool->PendingRequests.Add(Params);
 		return nullptr;
 	}
 
@@ -155,7 +149,7 @@ AActor* UPACS_SpawnOrchestrator::AcquireActor(FGameplayTag SpawnTag, const FSpaw
 		PrepareActorForUse(Actor, Params);
 
 		// Register with memory tracker
-		if (UPACS_MemoryTracker* MemoryTracker = GetWorld()->GetSubsystem<UPACS_MemoryTracker>())
+		if (MemoryTracker)
 		{
 			MemoryTracker->RegisterPooledActor(SpawnTag, Actor);
 			MemoryTracker->MarkActorActive(SpawnTag, Actor, true);
@@ -202,11 +196,11 @@ void UPACS_SpawnOrchestrator::ReleaseActor(AActor* Actor)
 		return;
 	}
 
-	// Move from active to available
-	Pool->ActiveActors.RemoveSwap(Actor);
+	// Move from active to available (O(1) with TSet)
+	Pool->ActiveActors.Remove(Actor);
 
 	// Update memory tracking - mark as inactive (pooled)
-	if (UPACS_MemoryTracker* MemoryTracker = GetWorld()->GetSubsystem<UPACS_MemoryTracker>())
+	if (MemoryTracker)
 	{
 		MemoryTracker->MarkActorActive(Tag, Actor, false);
 	}
@@ -306,8 +300,8 @@ void UPACS_SpawnOrchestrator::SetSpawnConfig(UPACS_SpawnConfig* InConfig)
 {
 	SpawnConfig = InConfig;
 
-	// Pre-load all selection profiles on non-dedicated servers
-	if (SpawnConfig && GetWorld() && GetWorld()->GetNetMode() != NM_DedicatedServer)
+	// Pre-load all selection profiles (including on dedicated servers for SK mesh replication)
+	if (SpawnConfig && GetWorld())
 	{
 		PreloadSelectionProfiles();
 	}
@@ -466,92 +460,43 @@ void UPACS_SpawnOrchestrator::PrepareActorForUse(AActor* Actor, const FSpawnRequ
 {
 	if (!Actor)
 	{
-		UE_LOG(LogTemp, Error, TEXT("PACS_SpawnOrchestrator::PrepareActorForUse: Null actor provided"));
+		UE_LOG(LogTemp, Error, TEXT("PACS_SpawnOrchestrator: PrepareActorForUse called with null actor"));
 		return;
 	}
 
-	UE_LOG(LogTemp, Warning, TEXT("PACS_SpawnOrchestrator::PrepareActorForUse: Starting for %s on %s"),
-		*Actor->GetName(),
-		GetWorld()->GetNetMode() == NM_DedicatedServer ? TEXT("DedicatedServer") :
-		GetWorld()->GetNetMode() == NM_ListenServer ? TEXT("ListenServer") :
-		GetWorld()->GetNetMode() == NM_Client ? TEXT("Client") : TEXT("Standalone"));
-
 	// Set transform
 	Actor->SetActorTransform(Params.Transform);
-	UE_LOG(LogTemp, Verbose, TEXT("PACS_SpawnOrchestrator::PrepareActorForUse: Set transform for %s"), *Actor->GetName());
 
 	// Set ownership
 	if (Params.Owner)
 	{
 		Actor->SetOwner(Params.Owner);
-		UE_LOG(LogTemp, Verbose, TEXT("PACS_SpawnOrchestrator::PrepareActorForUse: Set owner for %s to %s"),
-			*Actor->GetName(), *Params.Owner->GetName());
 	}
 	if (Params.Instigator)
 	{
 		Actor->SetInstigator(Params.Instigator);
-		UE_LOG(LogTemp, Verbose, TEXT("PACS_SpawnOrchestrator::PrepareActorForUse: Set instigator for %s to %s"),
-			*Actor->GetName(), *Params.Instigator->GetName());
 	}
 
 	// Apply selection profile from spawn config
-	// IMPORTANT: Do NOT skip on dedicated server - SK mesh must be set for replication!
-	// We only skip expensive visual effects on DS, not replicated data
+	// IMPORTANT: Profiles loaded on DS for SK mesh replication
+	FGameplayTag* TagPtr = ActorToTagMap.Find(Actor);
+	if (TagPtr && SpawnConfig)
 	{
-		// Find the spawn tag for this actor to get its config
-		FGameplayTag* TagPtr = ActorToTagMap.Find(Actor);
-		if (TagPtr && SpawnConfig)
+		FSpawnClassConfig Config;
+		if (SpawnConfig->GetConfigForTag(*TagPtr, Config) && !Config.SelectionProfile.IsNull())
 		{
-			UE_LOG(LogTemp, Warning, TEXT("PACS_SpawnOrchestrator::PrepareActorForUse: Found spawn tag %s for actor %s"),
-				*TagPtr->ToString(), *Actor->GetName());
-
-			FSpawnClassConfig Config;
-			if (SpawnConfig->GetConfigForTag(*TagPtr, Config))
+			// Use Get() instead of LoadSynchronous since profiles are preloaded
+			UPACS_SelectionProfileAsset* ProfileAsset = Config.SelectionProfile.Get();
+			if (ProfileAsset)
 			{
-				UE_LOG(LogTemp, Warning, TEXT("PACS_SpawnOrchestrator::PrepareActorForUse: Got config for tag %s"),
-					*TagPtr->ToString());
-
-				// Apply the preloaded selection profile from config
-				if (!Config.SelectionProfile.IsNull())
-				{
-					UE_LOG(LogTemp, Warning, TEXT("PACS_SpawnOrchestrator::PrepareActorForUse: Selection profile soft ptr exists: %s"),
-						*Config.SelectionProfile.ToString());
-
-					// Use Get() instead of LoadSynchronous since profiles are preloaded
-					UPACS_SelectionProfileAsset* ProfileAsset = Config.SelectionProfile.Get();
-					if (ProfileAsset)
-					{
-						UE_LOG(LogTemp, Warning, TEXT("PACS_SpawnOrchestrator::PrepareActorForUse: Got profile asset %s, applying to %s"),
-							*ProfileAsset->GetName(), *Actor->GetName());
-
-						// Use the new organized method for profile application
-						ApplySelectionProfileToActor(Actor, ProfileAsset);
-					}
-					else
-					{
-						// Profile wasn't preloaded, log warning
-						UE_LOG(LogTemp, Error, TEXT("PACS_SpawnOrchestrator::PrepareActorForUse: Selection profile not preloaded for tag %s (soft ptr: %s)"),
-							*TagPtr->ToString(), *Config.SelectionProfile.ToString());
-					}
-				}
-				else
-				{
-					UE_LOG(LogTemp, Warning, TEXT("PACS_SpawnOrchestrator::PrepareActorForUse: No selection profile configured for tag %s"),
-						*TagPtr->ToString());
-				}
+				ApplySelectionProfileToActor(Actor, ProfileAsset);
 			}
 			else
 			{
-				UE_LOG(LogTemp, Warning, TEXT("PACS_SpawnOrchestrator::PrepareActorForUse: No config found for tag %s"),
+				// Profile wasn't preloaded - this is an error
+				UE_LOG(LogTemp, Error, TEXT("PACS_SpawnOrchestrator: Selection profile not preloaded for tag %s"),
 					*TagPtr->ToString());
 			}
-		}
-		else
-		{
-			UE_LOG(LogTemp, Warning, TEXT("PACS_SpawnOrchestrator::PrepareActorForUse: No spawn tag or config for actor %s (TagPtr: %s, SpawnConfig: %s)"),
-				*Actor->GetName(),
-				TagPtr ? TEXT("Valid") : TEXT("Null"),
-				SpawnConfig ? TEXT("Valid") : TEXT("Null"));
 		}
 	}
 
@@ -559,21 +504,17 @@ void UPACS_SpawnOrchestrator::PrepareActorForUse(AActor* Actor, const FSpawnRequ
 	Actor->SetActorHiddenInGame(false);
 	Actor->SetActorEnableCollision(true);
 	Actor->SetActorTickEnabled(true);
-	UE_LOG(LogTemp, Verbose, TEXT("PACS_SpawnOrchestrator::PrepareActorForUse: Enabled actor %s"), *Actor->GetName());
 
 	// Prepare replication
 	PrepareReplicationState(Actor);
-	UE_LOG(LogTemp, Verbose, TEXT("PACS_SpawnOrchestrator::PrepareActorForUse: Prepared replication for %s"), *Actor->GetName());
 
 	// Call poolable interface if implemented
 	if (Actor->GetClass()->ImplementsInterface(UPACS_Poolable::StaticClass()))
 	{
 		IPACS_Poolable::Execute_OnAcquiredFromPool(Actor);
-		UE_LOG(LogTemp, Verbose, TEXT("PACS_SpawnOrchestrator::PrepareActorForUse: Called OnAcquiredFromPool for %s"),
-			*Actor->GetName());
 	}
 
-	UE_LOG(LogTemp, Warning, TEXT("PACS_SpawnOrchestrator::PrepareActorForUse: Completed for %s"), *Actor->GetName());
+	UE_LOG(LogTemp, Verbose, TEXT("PACS_SpawnOrchestrator: Prepared actor %s for use"), *Actor->GetName());
 }
 
 void UPACS_SpawnOrchestrator::LoadActorClass(FGameplayTag SpawnTag)
@@ -685,18 +626,9 @@ void UPACS_SpawnOrchestrator::ProcessPendingRequests(FGameplayTag SpawnTag)
 	}
 
 	// Process all pending requests
-	for (const auto& Request : Pool->PendingRequests)
+	for (const FSpawnRequestParams& Params : Pool->PendingRequests)
 	{
-		FSpawnRequestParams Params;
-		Params.Transform = Request.Key;
-
-		AActor* Actor = AcquireActor(SpawnTag, Params);
-
-		// Execute callback
-		if (Request.Value)
-		{
-			Request.Value(Actor);
-		}
+		AcquireActor(SpawnTag, Params);
 	}
 
 	Pool->PendingRequests.Empty();
@@ -738,13 +670,9 @@ void UPACS_SpawnOrchestrator::PrepareReplicationState(AActor* Actor)
 
 void UPACS_SpawnOrchestrator::PreloadSelectionProfiles()
 {
-	// Skip on dedicated server - selection profiles are visual only
+	// CRITICAL: Dedicated servers MUST load SK meshes from profiles for replication
+	// Only materials/VFX/sounds can be skipped on DS
 	if (!SpawnConfig || !GetWorld())
-	{
-		return;
-	}
-
-	if (GetWorld()->GetNetMode() == NM_DedicatedServer)
 	{
 		return;
 	}

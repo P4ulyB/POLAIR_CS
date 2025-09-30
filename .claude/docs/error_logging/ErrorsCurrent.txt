@@ -1,0 +1,20 @@
+>	UnrealEditor-GameplayTags.dll!UGameplayTagsManager::RequestGameplayTag::__l23::<lambda_2>::operator()() Line 2015	C++
+ 	UnrealEditor-GameplayTags.dll!UGameplayTagsManager::RequestGameplayTag(FName TagName, bool ErrorIfNotFound) Line 2016	C++
+ 	UnrealEditor-GameplayTags.dll!FGameplayTag::RequestGameplayTag(const FName & TagName, bool ErrorIfNotFound) Line 1093	C++
+ 	UnrealEditor-POLAIR_CS.dll!UPACS_SpawnOrchestrator::PreloadSelectionProfiles() Line 771	C++
+ 	UnrealEditor-POLAIR_CS.dll!UPACS_SpawnOrchestrator::SetSpawnConfig(UPACS_SpawnConfig * InConfig) Line 308	C++
+ 	UnrealEditor-POLAIR_CS.dll!APACSGameMode::InitializeSpawnSystem::__l2::<lambda_1>::operator()() Line 353	C++
+ 	[Inline Frame] UnrealEditor-POLAIR_CS.dll!Invoke(APACSGameMode::InitializeSpawnSystem::__l2::<lambda_1> &) Line 47	C++
+ 	[Inline Frame] UnrealEditor-POLAIR_CS.dll!UE::Core::Private::Tuple::TTupleBase<TIntegerSequence<unsigned int>>::ApplyAfter(APACSGameMode::InitializeSpawnSystem::__l2::<lambda_1> &) Line 317	C++
+ 	UnrealEditor-POLAIR_CS.dll!TBaseFunctorDelegateInstance<void __cdecl(void),FDefaultDelegateUserPolicy,`APACSGameMode::InitializeSpawnSystem'::`2'::<lambda_1>>::ExecuteIfSafe() Line 872	C++
+ 	[Inline Frame] UnrealEditor-Engine.dll!TDelegate<void __cdecl(void),FDefaultDelegateUserPolicy>::ExecuteIfBound() Line 634	C++
+ 	UnrealEditor-Engine.dll!FStreamableDelegateDelayHelper::Tick(float DeltaTime) Line 179	C++
+ 	UnrealEditor-Engine.dll!FTickableGameObject::TickObjects(UWorld * World, ELevelTick LevelTickType, bool bIsPaused, float DeltaSeconds) Line 196	C++
+ 	UnrealEditor-UnrealEd.dll!UEditorEngine::Tick(float DeltaSeconds, bool bIdleMode) Line 2193	C++
+ 	UnrealEditor-UnrealEd.dll!UUnrealEdEngine::Tick(float DeltaSeconds, bool bIdleMode) Line 550	C++
+ 	UnrealEditor.exe!FEngineLoop::Tick() Line 5877	C++
+ 	[Inline Frame] UnrealEditor.exe!EngineTick() Line 69	C++
+ 	UnrealEditor.exe!GuardedMain(const wchar_t * CmdLine) Line 188	C++
+ 	UnrealEditor.exe!LaunchWindowsStartup(HINSTANCE__ * hInInstance, HINSTANCE__ * hPrevInstance, char * __formal, int nCmdShow, const wchar_t * CmdLine) Line 266	C++
+ 	UnrealEditor.exe!WinMain(HINSTANCE__ * hInInstance, HINSTANCE__ * hPrevInstance, char * pCmdLine, int nCmdShow) Line 317	C++
+ 	[External Code]	

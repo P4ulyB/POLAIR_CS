@@ -161,14 +161,6 @@ EDataValidationResult UPACS_SpawnConfig::IsDataValid(TArray<FText>& ValidationEr
 			}
 		}
 
-		// Check VR settings consistency
-		if (Config.VRSettings.bEnableVROptimizations && Config.VRSettings.VRCullDistance > 10000.0f)
-		{
-			ValidationErrors.Add(FText::Format(
-				FText::FromString("Warning: VR cull distance may be too large for optimal Quest 3 performance for tag: {0}"),
-				FText::FromString(Config.SpawnTag.ToString())
-			));
-		}
 	}
 
 	// Check global pool size

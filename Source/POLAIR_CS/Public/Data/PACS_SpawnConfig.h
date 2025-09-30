@@ -54,27 +54,6 @@ struct FReplicationPolicy
 };
 
 /**
- * VR-specific optimization settings
- */
-USTRUCT(BlueprintType)
-struct FVROptimizationSettings
-{
-	GENERATED_BODY()
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	bool bEnableVROptimizations = true;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (EditCondition = "bEnableVROptimizations"))
-	float VRCullDistance = 5000.0f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (EditCondition = "bEnableVROptimizations"))
-	int32 MaxVRLOD = 2;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (EditCondition = "bEnableVROptimizations"))
-	bool bReduceTickRateForVR = true;
-};
-
-/**
  * Configuration for a single spawnable class type
  */
 USTRUCT(BlueprintType)
@@ -98,9 +77,6 @@ struct FSpawnClassConfig
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Replication")
 	FReplicationPolicy ReplicationPolicy;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VR")
-	FVROptimizationSettings VRSettings;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawn")
 	bool bSpawnOnServer = true;

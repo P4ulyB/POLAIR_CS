@@ -103,7 +103,6 @@ void APACS_SpawnPoint::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	// Clean up timers
 	GetWorld()->GetTimerManager().ClearTimer(SpawnTimerHandle);
 	GetWorld()->GetTimerManager().ClearTimer(WaveTimerHandle);
-	GetWorld()->GetTimerManager().ClearTimer(RespawnTimerHandle);
 	GetWorld()->GetTimerManager().ClearTimer(ReadyCheckTimerHandle);
 
 	// Release spawned actor back to pool
@@ -195,14 +194,6 @@ AActor* APACS_SpawnPoint::SpawnActor()
 	{
 		UE_LOG(LogTemp, Log, TEXT("PACS_SpawnPoint: Spawned %s with tag %s"),
 			*SpawnedActor->GetName(), *SpawnTag.ToString());
-
-		// Handle continuous respawn
-		if (SpawnPattern == ESpawnPattern::Continuous)
-		{
-			// Set up respawn timer when actor is destroyed
-			// Note: We can't use OnDestroyed for pooled actors since they're not actually destroyed
-			// Instead, we'll handle respawn differently
-		}
 	}
 	else
 	{
@@ -259,10 +250,6 @@ void APACS_SpawnPoint::StartSpawning()
 			HandleWaveSpawn();
 			break;
 
-		case ESpawnPattern::Continuous:
-			ExecuteSpawn();
-			break;
-
 		case ESpawnPattern::Manual:
 			// Do nothing - manual spawning only
 			break;
@@ -281,7 +268,6 @@ void APACS_SpawnPoint::StopSpawning()
 	// Clear all timers
 	GetWorld()->GetTimerManager().ClearTimer(SpawnTimerHandle);
 	GetWorld()->GetTimerManager().ClearTimer(WaveTimerHandle);
-	GetWorld()->GetTimerManager().ClearTimer(RespawnTimerHandle);
 
 	// Optionally despawn current actor
 	// DespawnActor();
@@ -306,10 +292,6 @@ void APACS_SpawnPoint::ScheduleNextSpawn()
 	{
 		case ESpawnPattern::Wave:
 			// Handled by HandleWaveSpawn
-			break;
-
-		case ESpawnPattern::Continuous:
-			// Respawn timer set when actor is destroyed
 			break;
 
 		default:
@@ -343,34 +325,6 @@ void APACS_SpawnPoint::HandleWaveSpawn()
 			false
 		);
 	}
-}
-
-void APACS_SpawnPoint::HandleContinuousRespawn()
-{
-	if (!bIsSpawnActive || SpawnPattern != ESpawnPattern::Continuous)
-	{
-		return;
-	}
-
-	// For pooled actors, continuous respawn needs to be handled differently
-	// This could be called when we detect the actor should respawn
-	// (e.g., via a custom event or timer rather than OnDestroyed)
-
-	// Return current actor to pool
-	if (SpawnedActor && SpawnOrchestrator)
-	{
-		SpawnOrchestrator->ReleaseActor(SpawnedActor);
-		SpawnedActor = nullptr;
-	}
-
-	// Schedule respawn
-	GetWorld()->GetTimerManager().SetTimer(
-		RespawnTimerHandle,
-		this,
-		&APACS_SpawnPoint::ExecuteSpawn,
-		RespawnDelay,
-		false
-	);
 }
 
 void APACS_SpawnPoint::CheckOrchestratorReady()

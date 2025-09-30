@@ -1,14 +1,16 @@
-#include "Components/PACS_NetworkMonitor.h"
+#include "Subsystems/PACS_NetworkMonitorSubsystem.h"
 #include "Subsystems/PACS_SpawnOrchestrator.h"
 #include "GameFramework/Actor.h"
 #include "Engine/World.h"
 #include "Engine/NetDriver.h"
 #include "Net/UnrealNetwork.h"
 
-UPACS_NetworkMonitor::UPACS_NetworkMonitor()
+DECLARE_STATS_GROUP(TEXT("PACS_NetworkMonitorSubsystem"), STATGROUP_PACSNetworkMonitor, STATCAT_Advanced);
+DECLARE_CYCLE_STAT(TEXT("NetworkMonitorSubsystem Tick"), STAT_PACSNetworkMonitor_Tick, STATGROUP_PACSNetworkMonitor);
+
+void UPACS_NetworkMonitorSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
-	PrimaryComponentTick.bCanEverTick = true;
-	PrimaryComponentTick.TickInterval = 0.1f; // Tick every 100ms
+	Super::Initialize(Collection);
 
 	// Initialize bandwidth history
 	BandwidthHistory.SetNum(HistorySize);
@@ -16,33 +18,61 @@ UPACS_NetworkMonitor::UPACS_NetworkMonitor()
 	{
 		BandwidthHistory[i] = 0.0f;
 	}
+
+	// Set up timer for ticking (every frame at ~60fps = 0.016s)
+	LastTickTime = GetWorld()->GetTimeSeconds();
+	GetWorld()->GetTimerManager().SetTimer(
+		TickTimerHandle,
+		this,
+		&UPACS_NetworkMonitorSubsystem::TickMonitor,
+		0.016f,
+		true // Loop
+	);
+
+	UE_LOG(LogTemp, Log, TEXT("PACS_NetworkMonitorSubsystem: Initialized with %.1f KB/s bandwidth limit for World %s"),
+		BandwidthLimitKBps, *GetWorld()->GetName());
 }
 
-void UPACS_NetworkMonitor::BeginPlay()
+void UPACS_NetworkMonitorSubsystem::Deinitialize()
 {
-	Super::BeginPlay();
-
-	// Only run on server
-	if (GetWorld()->GetNetMode() == NM_Client)
+	// CRITICAL: Clear timer BEFORE Super::Deinitialize()
+	if (UWorld* World = GetWorld())
 	{
-		SetComponentTickEnabled(false);
-		return;
+		if (World->GetTimerManager().IsTimerActive(TickTimerHandle))
+		{
+			World->GetTimerManager().ClearTimer(TickTimerHandle);
+		}
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("PACS_NetworkMonitor: Initialized with %.1f KB/s bandwidth limit"),
-		BandwidthLimitKBps);
+	// Clear all transient data to prevent dangling references
+	PendingBatches.Reset();
+	SpawnStats.Reset();
+	BandwidthHistory.Reset();
+
+	Super::Deinitialize();
 }
 
-void UPACS_NetworkMonitor::TickComponent(float DeltaTime, ELevelTick TickType,
-	FActorComponentTickFunction* ThisTickFunction)
+bool UPACS_NetworkMonitorSubsystem::ShouldCreateSubsystem(UObject* Outer) const
 {
-	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-
-	// Only monitor on server
-	if (GetWorld()->GetNetMode() == NM_Client)
+	// Only create on server in networked games, or always in standalone
+	UWorld* World = Cast<UWorld>(Outer);
+	if (!World)
 	{
-		return;
+		return false;
 	}
+
+	// Create for dedicated servers, listen servers, and standalone games
+	return World->GetNetMode() != NM_Client;
+}
+
+void UPACS_NetworkMonitorSubsystem::TickMonitor()
+{
+	SCOPE_CYCLE_COUNTER(STAT_PACSNetworkMonitor_Tick);
+
+	// Calculate delta time manually
+	float CurrentTime = GetWorld()->GetTimeSeconds();
+	float DeltaTime = CurrentTime - LastTickTime;
+	LastTickTime = CurrentTime;
 
 	TimeSinceLastBatch += DeltaTime;
 
@@ -57,7 +87,7 @@ void UPACS_NetworkMonitor::TickComponent(float DeltaTime, ELevelTick TickType,
 	UpdateBandwidthMetrics(DeltaTime);
 }
 
-void UPACS_NetworkMonitor::QueueSpawnRequest(FGameplayTag SpawnTag, const FTransform& Transform)
+void UPACS_NetworkMonitorSubsystem::QueueSpawnRequest(const FGameplayTag& SpawnTag, const FTransform& Transform)
 {
 	if (!bEnableBatching)
 	{
@@ -91,12 +121,12 @@ void UPACS_NetworkMonitor::QueueSpawnRequest(FGameplayTag SpawnTag, const FTrans
 		*SpawnTag.ToString(), Batch.GetCount());
 }
 
-void UPACS_NetworkMonitor::FlushSpawnBatch()
+void UPACS_NetworkMonitorSubsystem::FlushSpawnBatch()
 {
 	ProcessPendingBatches();
 }
 
-void UPACS_NetworkMonitor::RecordSpawnMessage(FGameplayTag SpawnTag, int32 MessageSizeBytes)
+void UPACS_NetworkMonitorSubsystem::RecordSpawnMessage(const FGameplayTag& SpawnTag, int32 MessageSizeBytes)
 {
 	FSpawnNetworkStats& Stats = SpawnStats.FindOrAdd(SpawnTag);
 	Stats.SpawnMessagesSent++;
@@ -111,7 +141,7 @@ void UPACS_NetworkMonitor::RecordSpawnMessage(FGameplayTag SpawnTag, int32 Messa
 		MessageSizeBytes, *SpawnTag.ToString());
 }
 
-void UPACS_NetworkMonitor::RecordActorReplication(AActor* Actor, int32 BytesReplicated)
+void UPACS_NetworkMonitorSubsystem::RecordActorReplication(AActor* Actor, int32 BytesReplicated)
 {
 	if (!Actor)
 	{
@@ -128,7 +158,7 @@ void UPACS_NetworkMonitor::RecordActorReplication(AActor* Actor, int32 BytesRepl
 	}
 }
 
-FSpawnNetworkStats UPACS_NetworkMonitor::GetSpawnNetworkStats(FGameplayTag SpawnTag) const
+FSpawnNetworkStats UPACS_NetworkMonitorSubsystem::GetSpawnNetworkStats(const FGameplayTag& SpawnTag) const
 {
 	if (const FSpawnNetworkStats* Stats = SpawnStats.Find(SpawnTag))
 	{
@@ -138,7 +168,7 @@ FSpawnNetworkStats UPACS_NetworkMonitor::GetSpawnNetworkStats(FGameplayTag Spawn
 	return FSpawnNetworkStats();
 }
 
-bool UPACS_NetworkMonitor::ShouldThrottleSpawns() const
+bool UPACS_NetworkMonitorSubsystem::ShouldThrottleSpawns() const
 {
 	if (!bEnableThrottling)
 	{
@@ -149,7 +179,7 @@ bool UPACS_NetworkMonitor::ShouldThrottleSpawns() const
 	return CurrentBandwidthKBps > (BandwidthLimitKBps * BandwidthWarningThreshold);
 }
 
-float UPACS_NetworkMonitor::GetThrottleDelaySeconds() const
+float UPACS_NetworkMonitorSubsystem::GetThrottleDelaySeconds() const
 {
 	if (!ShouldThrottleSpawns())
 	{
@@ -164,7 +194,7 @@ float UPACS_NetworkMonitor::GetThrottleDelaySeconds() const
 	return Delay;
 }
 
-void UPACS_NetworkMonitor::CheckBandwidthCompliance(float TargetKBps)
+void UPACS_NetworkMonitorSubsystem::CheckBandwidthCompliance(float TargetKBps)
 {
 	if (CurrentBandwidthKBps > TargetKBps)
 	{
@@ -192,7 +222,7 @@ void UPACS_NetworkMonitor::CheckBandwidthCompliance(float TargetKBps)
 	}
 }
 
-void UPACS_NetworkMonitor::ProcessPendingBatches()
+void UPACS_NetworkMonitorSubsystem::ProcessPendingBatches()
 {
 	// Check throttling
 	if (ShouldThrottleSpawns())
@@ -216,7 +246,7 @@ void UPACS_NetworkMonitor::ProcessPendingBatches()
 	}
 }
 
-void UPACS_NetworkMonitor::ExecuteBatch(const FBatchedSpawnRequest& Batch)
+void UPACS_NetworkMonitorSubsystem::ExecuteBatch(const FBatchedSpawnRequest& Batch)
 {
 	if (Batch.GetCount() == 0)
 	{
@@ -245,15 +275,12 @@ void UPACS_NetworkMonitor::ExecuteBatch(const FBatchedSpawnRequest& Batch)
 		}
 	}
 
-	// Send batched multicast if any spawns succeeded
+	// Record spawn metrics if any spawns succeeded
 	if (SpawnedActors.Num() > 0)
 	{
-		// Estimate message size
+		// Estimate message size (for tracking purposes only - actual replication via ReplicationGraph)
 		int32 EstimatedBytes = EstimateBatchSize(Batch);
 		RecordSpawnMessage(Batch.SpawnTag, EstimatedBytes);
-
-		// Send batched multicast
-		MulticastBatchedSpawn(Batch.SpawnTag, Batch.SpawnTransforms);
 
 		UE_LOG(LogTemp, Log, TEXT("PACS_NetworkMonitor: Executed batch of %d spawns for tag %s (est. %d bytes)"),
 			SpawnedActors.Num(), *Batch.SpawnTag.ToString(), EstimatedBytes);
@@ -262,7 +289,7 @@ void UPACS_NetworkMonitor::ExecuteBatch(const FBatchedSpawnRequest& Batch)
 	LastSpawnTime = GetWorld()->GetTimeSeconds();
 }
 
-int32 UPACS_NetworkMonitor::EstimateBatchSize(const FBatchedSpawnRequest& Batch) const
+int32 UPACS_NetworkMonitorSubsystem::EstimateBatchSize(const FBatchedSpawnRequest& Batch) const
 {
 	// Estimate network message size
 	int32 HeaderSize = 32; // RPC header overhead
@@ -273,7 +300,7 @@ int32 UPACS_NetworkMonitor::EstimateBatchSize(const FBatchedSpawnRequest& Batch)
 	return HeaderSize + TagSize + ArrayOverhead + (Batch.GetCount() * TransformSize);
 }
 
-void UPACS_NetworkMonitor::UpdateBandwidthMetrics(float DeltaTime)
+void UPACS_NetworkMonitorSubsystem::UpdateBandwidthMetrics(float DeltaTime)
 {
 	TimeSinceLastMeasure += DeltaTime;
 
@@ -333,7 +360,7 @@ void UPACS_NetworkMonitor::UpdateBandwidthMetrics(float DeltaTime)
 	}
 }
 
-void UPACS_NetworkMonitor::OnBandwidthWarning(float CurrentKBps, float LimitKBps)
+void UPACS_NetworkMonitorSubsystem::OnBandwidthWarning(float CurrentKBps, float LimitKBps)
 {
 	UE_LOG(LogTemp, Warning, TEXT("PACS_NetworkMonitor: Bandwidth warning - %.1f KB/s approaching %.1f KB/s limit"),
 		CurrentKBps, LimitKBps);
@@ -346,7 +373,7 @@ void UPACS_NetworkMonitor::OnBandwidthWarning(float CurrentKBps, float LimitKBps
 	}
 }
 
-void UPACS_NetworkMonitor::OnBandwidthCritical(float CurrentKBps, float LimitKBps)
+void UPACS_NetworkMonitorSubsystem::OnBandwidthCritical(float CurrentKBps, float LimitKBps)
 {
 	UE_LOG(LogTemp, Error, TEXT("PACS_NetworkMonitor: CRITICAL bandwidth - %.1f KB/s exceeds %.1f KB/s limit!"),
 		CurrentKBps, LimitKBps);
@@ -359,15 +386,4 @@ void UPACS_NetworkMonitor::OnBandwidthCritical(float CurrentKBps, float LimitKBp
 	// - Temporarily disabling spawns
 	// - Reducing replication frequency
 	// - Culling distant actors
-}
-
-void UPACS_NetworkMonitor::MulticastBatchedSpawn_Implementation(FGameplayTag SpawnTag,
-	const TArray<FTransform>& Transforms)
-{
-	// This would be received by clients
-	// Clients would process the batched spawn visuals/effects
-	// Note: Actual actor spawning is server-authoritative via SpawnOrchestrator
-
-	UE_LOG(LogTemp, Log, TEXT("PACS_NetworkMonitor: Client received batch of %d spawns for tag %s"),
-		Transforms.Num(), *SpawnTag.ToString());
 }
