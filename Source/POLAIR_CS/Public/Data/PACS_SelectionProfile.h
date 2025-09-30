@@ -97,7 +97,7 @@ public:
 
 	// --- Available ---
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Selection Profile|Available",
-		meta = (DisplayName = "Available Brightness", ClampMin = 0.1, ClampMax = 3.0))
+		meta = (DisplayName = "Available Brightness", ClampMin = 0, ClampMax = 25.0))
 	float AvailableBrightness = 1.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Selection Profile|Available",
@@ -106,7 +106,7 @@ public:
 
 	// --- Hovered ---
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Selection Profile|Hovered",
-		meta = (DisplayName = "Hovered Brightness", ClampMin = 0.1, ClampMax = 3.0))
+		meta = (DisplayName = "Hovered Brightness", ClampMin = 0, ClampMax = 25.0))
 	float HoveredBrightness = 1.2f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Selection Profile|Hovered",
@@ -115,7 +115,7 @@ public:
 
 	// --- Selected ---
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Selection Profile|Selected",
-		meta = (DisplayName = "Selected Brightness", ClampMin = 0.1, ClampMax = 3.0))
+		meta = (DisplayName = "Selected Brightness", ClampMin = 0, ClampMax = 25.0))
 	float SelectedBrightness = 1.5f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Selection Profile|Selected",
@@ -124,7 +124,7 @@ public:
 
 	// --- Unavailable ---
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Selection Profile|Unavailable",
-		meta = (DisplayName = "Unavailable Brightness", ClampMin = 0.1, ClampMax = 3.0))
+		meta = (DisplayName = "Unavailable Brightness", ClampMin = 0, ClampMax = 25.0))
 	float UnavailableBrightness = 0.5f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Selection Profile|Unavailable",

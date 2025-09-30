@@ -4,6 +4,7 @@
 #include "HeadMountedDisplayFunctionLibrary.h"
 #include "IXRTrackingSystem.h"
 #include "Engine/Engine.h"
+#include "Engine/EngineTypes.h"
 #include "Actors/Pawn/PACS_CandidateHelicopterCharacter.h"
 #include "Subsystems/PACSLaunchArgSubsystem.h"
 #include "EngineUtils.h"
@@ -40,7 +41,33 @@ void APACS_PlayerController::BeginPlay()
         if (HoverProbe)
         {
             HoverProbe->RegisterComponent();
-            UE_LOG(LogTemp, Log, TEXT("HoverProbe component created and registered successfully"));
+
+            // Apply configuration from PlayerController properties
+            // If HoverProbeObjectTypes is empty, set default to SelectionObject
+            TArray<TEnumAsByte<EObjectTypeQuery>> ObjectTypes = HoverProbeObjectTypes;
+            if (ObjectTypes.Num() == 0)
+            {
+                // Default to SelectionObject type (ECC_GameTraceChannel2)
+                ObjectTypes.Add(UEngineTypes::ConvertToObjectType(ECC_GameTraceChannel2));
+                UE_LOG(LogTemp, Log, TEXT("HoverProbe: No object types configured, defaulting to SelectionObject (ECC_GameTraceChannel2)"));
+            }
+
+            HoverProbe->ApplyConfiguration(
+                HoverProbeActiveContexts,
+                ObjectTypes,
+                HoverProbeRateHz,
+                bHoverProbeConfirmVisibility
+            );
+
+            // Force enable tick as an extra safety measure
+            HoverProbe->SetComponentTickEnabled(true);
+            HoverProbe->PrimaryComponentTick.bCanEverTick = true;
+            HoverProbe->PrimaryComponentTick.bStartWithTickEnabled = true;
+
+            UE_LOG(LogTemp, Warning, TEXT("HoverProbe component created - TickEnabled=%d, CanEverTick=%d, Owner=%s"),
+                HoverProbe->IsComponentTickEnabled(),
+                HoverProbe->PrimaryComponentTick.bCanEverTick,
+                *GetName());
         }
         else
         {

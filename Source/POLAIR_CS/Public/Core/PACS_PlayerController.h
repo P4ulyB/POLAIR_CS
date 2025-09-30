@@ -99,6 +99,26 @@ public:
     UFUNCTION(BlueprintCallable, Category="Selection")
     UPACS_HoverProbeComponent* GetHoverProbe() const { return HoverProbe; }
 
+    // HoverProbe configuration (applied after runtime creation)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Selection|HoverProbe",
+        meta=(DisplayName="Hover Active Input Contexts",
+              ToolTip="Input contexts that enable hover detection. Leave empty for always active."))
+    TArray<TObjectPtr<UInputMappingContext>> HoverProbeActiveContexts;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Selection|HoverProbe",
+        meta=(DisplayName="Hover Object Types",
+              ToolTip="Object types to detect for hover. Leave empty to use Selection channel default."))
+    TArray<TEnumAsByte<EObjectTypeQuery>> HoverProbeObjectTypes;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Selection|HoverProbe",
+        meta=(DisplayName="Hover Probe Rate (Hz)", ClampMin="1", ClampMax="240"))
+    float HoverProbeRateHz = 30.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Selection|HoverProbe",
+        meta=(DisplayName="Confirm Line of Sight",
+              ToolTip="Only hover when line of sight is clear (prevents hover through walls)"))
+    bool bHoverProbeConfirmVisibility = true;
+
 private:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Input",
         meta=(AllowPrivateAccess="true"))

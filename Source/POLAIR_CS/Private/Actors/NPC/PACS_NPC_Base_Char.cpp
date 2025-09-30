@@ -178,9 +178,15 @@ void APACS_NPC_Base_Char::ApplyCachedProfileData()
 			UE_LOG(LogTemp, Error, TEXT("  -> SelectionMaterial is NULL in cached data!"));
 		}
 
-		// Apply collision
-		SelectionPlane->SetCollisionResponseToChannel(CachedProfileData.SelectionTraceChannel, ECR_Block);
-		UE_LOG(LogTemp, Warning, TEXT("  -> Collision channel set to %d"), (int32)CachedProfileData.SelectionTraceChannel);
+		// Apply collision - Always use SelectionTrace channel (ECC_GameTraceChannel1) for blocking
+		// The object type is already set to SelectionObject in SetupSelectionPlane
+		SelectionPlane->SetCollisionResponseToChannel(ECC_GameTraceChannel1, ECR_Block); // SelectionTrace channel
+		UE_LOG(LogTemp, Warning, TEXT("  -> Set collision to block SelectionTrace channel (ECC_GameTraceChannel1)"));
+
+		// Log current collision setup for debugging
+		UE_LOG(LogTemp, Warning, TEXT("  -> Collision ObjectType: %d, ProfileName: %s"),
+			(int32)SelectionPlane->GetCollisionObjectType(),
+			*SelectionPlane->GetCollisionProfileName().ToString());
 
 		// Selection plane is always visible - state controlled by material/CPD
 		SelectionPlane->SetVisibility(true);

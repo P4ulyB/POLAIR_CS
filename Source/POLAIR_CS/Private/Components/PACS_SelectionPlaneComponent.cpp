@@ -111,10 +111,14 @@ void UPACS_SelectionPlaneComponent::SetupSelectionPlane()
 		return;
 	}
 
-	// Configure collision (trace channel set later in ApplyProfileAsset)
+	// Configure collision for selection detection
 	SelectionPlane->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	SelectionPlane->SetCollisionObjectType(ECC_GameTraceChannel2); // SelectionObject type
 	SelectionPlane->SetCollisionResponseToAllChannels(ECR_Ignore);
-	// Specific channel response set in ApplyProfileAsset()
+	SelectionPlane->SetCollisionResponseToChannel(ECC_GameTraceChannel1, ECR_Block); // Block SelectionTrace channel
+	SelectionPlane->SetCollisionProfileName(TEXT("SelectionProfile"));
+
+	UE_LOG(LogTemp, Warning, TEXT("SetupSelectionPlane: Collision configured - ObjectType=SelectionObject(ECC_GameTraceChannel2), Blocks SelectionTrace(ECC_GameTraceChannel1)"));
 
 	// Visual settings for performance
 	SelectionPlane->SetCastShadow(false);
@@ -315,9 +319,17 @@ void UPACS_SelectionPlaneComponent::ApplyProfileAsset(UPACS_SelectionProfileAsse
 		UE_LOG(LogTemp, Warning, TEXT("  -> No Material in profile"));
 	}
 
-	// Apply collision channel from profile
-	SelectionPlane->SetCollisionResponseToChannel(ProfileAsset->SelectionTraceChannel, ECR_Block);
-	UE_LOG(LogTemp, Warning, TEXT("  -> Collision channel set"));
+	// Apply collision settings from profile (already configured in SetupSelectionPlane, but update if profile specifies different channel)
+	if (ProfileAsset->SelectionTraceChannel != ECC_GameTraceChannel1)
+	{
+		// If profile uses a different trace channel, update the response
+		SelectionPlane->SetCollisionResponseToChannel(ProfileAsset->SelectionTraceChannel, ECR_Block);
+		UE_LOG(LogTemp, Warning, TEXT("  -> Updated collision response for channel %d"), (int32)ProfileAsset->SelectionTraceChannel);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("  -> Using default collision setup (SelectionObject type, blocks SelectionTrace)"));
+	}
 
 	// Store state visuals for CPD updates (indexed by ESelectionVisualState)
 	StateVisuals[0] = {ProfileAsset->HoveredColour, ProfileAsset->HoveredBrightness};			// Hovered

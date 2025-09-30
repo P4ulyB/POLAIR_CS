@@ -21,6 +21,13 @@ class POLAIR_CS_API UPACS_HoverProbeComponent : public UActorComponent
 public:
 	UPACS_HoverProbeComponent();
 
+	// Apply configuration from PlayerController (called after runtime creation)
+	void ApplyConfiguration(
+		const TArray<TObjectPtr<UInputMappingContext>>& InActiveContexts,
+		const TArray<TEnumAsByte<EObjectTypeQuery>>& InObjectTypes,
+		float InRateHz,
+		bool bInConfirmVisibility);
+
 	// Input mapping contexts that allow hover probe to be active
 	// If empty, hover probe is always active (legacy behavior)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Hover",
@@ -54,6 +61,9 @@ private:
 	TWeakObjectPtr<APACS_PlayerController> OwnerPC;
 	TWeakObjectPtr<AActor> CurrentHoverActor;
 	TWeakObjectPtr<class UPACS_SelectionPlaneComponent> CurrentHoverPlaneComponent;
+
+	// Track if configuration has been applied
+	bool bConfigurationApplied = false;
 
 	// Input context monitoring for automatic cleanup
 	FDelegateHandle InputContextHandle;
