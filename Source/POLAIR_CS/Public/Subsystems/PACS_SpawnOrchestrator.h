@@ -140,7 +140,6 @@ protected:
 	void ApplySelectionProfileToActor(AActor* Actor, class UPACS_SelectionProfileAsset* Profile);
 	void ApplyProfileToCharacterNPC(class APACS_NPC_Base_Char* CharNPC, class UPACS_SelectionProfileAsset* Profile);
 	void ApplyProfileToVehicleNPC(class APACS_NPC_Base_Veh* VehNPC, class UPACS_SelectionProfileAsset* Profile);
-	void ApplyProfileToLightweightNPC(class APACS_NPC_Base_LW* LightweightNPC, class UPACS_SelectionProfileAsset* Profile);
 	bool VerifyProfileAssetsLoaded(class UPACS_SelectionProfileAsset* Profile);
 	void LogProfileApplicationStatus(AActor* Actor, bool bSuccess, const FString& Reason);
 

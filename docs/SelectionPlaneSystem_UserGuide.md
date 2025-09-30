@@ -72,13 +72,13 @@ APlayerState* GetCurrentSelector() const;
 ## Material Setup Requirements
 
 ### Creating the Selection Material
-You must create a material in Unreal Editor named `M_PACS_Selection`:
+You must create a material in Unreal Editor named `M_PACS_Selection` or configure `MI_Circle`:
 
 1. **Create Material**:
    - Right-click in Content Browser
-   - Create → Material
-   - Name it `M_PACS_Selection`
-   - Save to: `/Content/Materials/Selection/`
+   - Create → Material (or Material Instance)
+   - Name it `M_PACS_Selection` or `MI_Circle`
+   - Save to: `/Content/Materials/Selection/` or `/Content/Materials/Instances/`
 
 2. **Material Settings**:
    - Blend Mode: `Translucent`
@@ -86,22 +86,45 @@ You must create a material in Unreal Editor named `M_PACS_Selection`:
    - Two Sided: `true`
    - Disable Depth Test: `true` (for visibility through objects)
 
-3. **CustomPrimitiveData Setup**:
-   ```hlsl
-   // In Material Editor:
-   // Add Custom Primitive Data node
-   // Index 0-2: Color RGB
-   // Index 3: Brightness
+3. **CRITICAL - CustomPrimitiveData Setup**:
 
-   // Example node setup:
-   Color = CustomPrimitiveData(float3(0,1,2))
-   Brightness = CustomPrimitiveData(3)
-   FinalColor = Color * Brightness
+   **⚠️ IMPORTANT: The material MUST use Custom Primitive Data nodes, not standard parameters!**
+
+   In the Material Editor:
+
+   a. **Add CustomPrimitiveData Nodes** (not scalar/vector parameters):
+      - Add 5 separate `CustomPrimitiveData` nodes
+      - Set Data Index for each:
+        - Index 0: Red channel
+        - Index 1: Green channel
+        - Index 2: Blue channel
+        - Index 3: Brightness multiplier
+        - Index 4: Alpha/Opacity
+
+   b. **Material Graph Setup**:
+   ```hlsl
+   // Node connections:
+   CustomPrimitiveData(0) → Red
+   CustomPrimitiveData(1) → Green
+   CustomPrimitiveData(2) → Blue
+   CustomPrimitiveData(3) → Brightness
+   CustomPrimitiveData(4) → Opacity
+
+   // Combine RGB:
+   Append(R,G,B) → Multiply(Brightness) → Emissive Color
+   Alpha → Opacity
    ```
 
-4. **Opacity Configuration**:
-   - Connect alpha channel or use constant (e.g., 0.5)
-   - Consider using fresnel for edge highlighting
+   c. **If Using Material Instance**:
+      - The parent material must have CPD nodes
+      - Material instances cannot add CPD support if parent lacks it
+      - Do NOT use scalar/vector parameters named "Colour" or "Brightness"
+
+4. **Troubleshooting CPD Issues**:
+   - If colors aren't changing, verify you're using CPD nodes, not parameters
+   - CPD values show as 0/black in material editor preview (this is normal)
+   - Use `r.ShaderPrintEnable 1` and shader print to debug CPD values in-game
+   - Check that mesh component has CPD enabled (done automatically in code)
 
 ## Usage Workflow
 
@@ -185,6 +208,26 @@ void BeginPlay()
     SelectionPlaneComponent->SetSelectionProfile(CustomProfile);
 }
 ```
+
+## Common Issues and Solutions
+
+### Issue: Material Shows Default Colors Instead of Data Asset Values
+
+**Symptom**: Selection plane always shows the same color regardless of state changes or data asset configuration.
+
+**Root Cause**: The material is using standard scalar/vector parameters instead of CustomPrimitiveData nodes.
+
+**Solution**:
+1. Open your material (MI_Circle or M_PACS_Selection) in the Material Editor
+2. Replace ANY scalar/vector parameters with CustomPrimitiveData nodes
+3. Ensure each CPD node has the correct Data Index set (0-4 as documented above)
+4. The material will show black/0 values in preview - this is normal for CPD
+5. Save and recompile the material
+
+**Verification**:
+- CPD values ARE being set correctly if you see them in logs
+- If material still shows default values, it's not reading from CPD
+- Material MUST use CPD nodes, not traditional parameters
 
 ## Performance Considerations
 

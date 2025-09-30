@@ -6,7 +6,6 @@
 #include "Actors/NPC/PACS_NPC_Base.h"
 #include "Actors/NPC/PACS_NPC_Base_Char.h"
 #include "Actors/NPC/PACS_NPC_Base_Veh.h"
-#include "Actors/NPC/PACS_NPC_Base_LW.h"
 #include "Engine/World.h"
 #include "Engine/NetDriver.h"
 #include "Net/UnrealNetwork.h"
@@ -847,11 +846,6 @@ void UPACS_SpawnOrchestrator::ApplySelectionProfileToActor(AActor* Actor, UPACS_
 		ApplyProfileToVehicleNPC(VehNPC, Profile);
 		bProfileApplied = true;
 	}
-	else if (APACS_NPC_Base_LW* LightweightNPC = Cast<APACS_NPC_Base_LW>(Actor))
-	{
-		ApplyProfileToLightweightNPC(LightweightNPC, Profile);
-		bProfileApplied = true;
-	}
 	else
 	{
 		LogProfileApplicationStatus(Actor, false, TEXT("Unknown actor type"));
@@ -905,34 +899,6 @@ void UPACS_SpawnOrchestrator::ApplyProfileToVehicleNPC(APACS_NPC_Base_Veh* VehNP
 	VehNPC->SetSelectionProfile(Profile);
 }
 
-void UPACS_SpawnOrchestrator::ApplyProfileToLightweightNPC(APACS_NPC_Base_LW* LightweightNPC, UPACS_SelectionProfileAsset* Profile)
-{
-	if (!LightweightNPC || !Profile)
-	{
-		return;
-	}
-
-	UE_LOG(LogTemp, Warning, TEXT("PACS_SpawnOrchestrator: Applying profile to Lightweight NPC %s"), *LightweightNPC->GetName());
-
-	// Call SetSelectionProfile on the lightweight NPC
-	// This will handle loading the skeletal mesh and animations
-	LightweightNPC->SetSelectionProfile(Profile);
-
-	// Log the skeletal mesh application status
-	if (USkeletalMeshComponent* MeshComp = LightweightNPC->SkeletalMeshComponent)
-	{
-		if (USkeletalMesh* CurrentMesh = MeshComp->GetSkeletalMeshAsset())
-		{
-			UE_LOG(LogTemp, Warning, TEXT("PACS_SpawnOrchestrator: Lightweight NPC %s has SK mesh %s after profile application"),
-				*LightweightNPC->GetName(), *CurrentMesh->GetName());
-		}
-		else
-		{
-			UE_LOG(LogTemp, Error, TEXT("PACS_SpawnOrchestrator: Lightweight NPC %s has NO SK mesh after profile application!"),
-				*LightweightNPC->GetName());
-		}
-	}
-}
 
 bool UPACS_SpawnOrchestrator::VerifyProfileAssetsLoaded(UPACS_SelectionProfileAsset* Profile)
 {

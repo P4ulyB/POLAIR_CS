@@ -69,6 +69,10 @@ public:
 	virtual void ApplySelectionProfile();
 
 protected:
+	// Virtual method for subclasses to apply their specific mesh type
+	// Base class handles particle effects, subclasses handle mesh variants
+	virtual void ApplyNPCMeshFromProfile(class UPACS_SelectionProfileAsset* Profile);
+
 	// Visual feedback
 	virtual void UpdateSelectionVisuals();
 

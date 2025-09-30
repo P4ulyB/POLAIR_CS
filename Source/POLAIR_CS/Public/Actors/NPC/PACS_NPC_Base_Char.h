@@ -78,9 +78,6 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Selection")
 	virtual void SetSelectionProfile(class UPACS_SelectionProfileAsset* InProfile);
 
-	// Apply the selection profile to the component
-	virtual void ApplySelectionProfile();
-
 	// Movement control
 	UFUNCTION(BlueprintCallable, Category = "NPC Movement")
 	virtual void MoveToLocation(const FVector& TargetLocation);
@@ -99,11 +96,4 @@ protected:
 	// Character-specific reset
 	virtual void ResetCharacterMovement();
 	virtual void ResetCharacterAnimation();
-
-	// Async loading support for selection profiles (deprecated)
-	virtual void OnSelectionProfileLoaded();
-
-	// Handle for async loading
-	TSharedPtr<struct FStreamableHandle> ProfileLoadHandle;
-
 };

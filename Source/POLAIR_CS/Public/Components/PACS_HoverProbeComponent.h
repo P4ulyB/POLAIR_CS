@@ -53,6 +53,7 @@ protected:
 private:
 	TWeakObjectPtr<APACS_PlayerController> OwnerPC;
 	TWeakObjectPtr<AActor> CurrentHoverActor;
+	TWeakObjectPtr<class UPACS_SelectionPlaneComponent> CurrentHoverPlaneComponent;
 
 	// Input context monitoring for automatic cleanup
 	FDelegateHandle InputContextHandle;

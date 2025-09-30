@@ -4,12 +4,15 @@
 #include "Materials/MaterialInterface.h"
 #include "GameFramework/Actor.h"
 #include "GameFramework/Character.h"
+#include "GameFramework/PlayerState.h"
+#include "GameFramework/PlayerController.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Net/UnrealNetwork.h"
 #include "HeadMountedDisplayFunctionLibrary.h"
 #include "Engine/World.h"
 #include "Engine/Engine.h"
 #include "Data/PACS_SelectionProfile.h"
+#include "Actors/NPC/PACS_NPC_Base.h"
 
 UPACS_SelectionPlaneComponent::UPACS_SelectionPlaneComponent()
 {
@@ -49,14 +52,24 @@ void UPACS_SelectionPlaneComponent::EndPlay(const EEndPlayReason::Type EndPlayRe
 
 void UPACS_SelectionPlaneComponent::InitializeSelectionPlane()
 {
-	if (bIsInitialized || !ShouldShowSelectionVisuals())
+	AActor* Owner = GetOwner();
+	UE_LOG(LogTemp, Warning, TEXT("PACS_SelectionPlaneComponent::InitializeSelectionPlane() - Owner: %s"), Owner ? *Owner->GetName() : TEXT("NULL"));
+
+	if (bIsInitialized)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("  -> Already initialized, skipping"));
 		return;
 	}
 
-	AActor* Owner = GetOwner();
+	if (!ShouldShowSelectionVisuals())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("  -> ShouldShowSelectionVisuals() returned false, skipping"));
+		return;
+	}
+
 	if (!Owner)
 	{
+		UE_LOG(LogTemp, Error, TEXT("  -> No Owner!"));
 		return;
 	}
 
@@ -67,20 +80,28 @@ void UPACS_SelectionPlaneComponent::InitializeSelectionPlane()
 
 	if (!SelectionPlane)
 	{
-		UE_LOG(LogTemp, Error, TEXT("PACS_SelectionPlaneComponent: Failed to create selection plane mesh component"));
+		UE_LOG(LogTemp, Error, TEXT("  -> Failed to create selection plane mesh component"));
 		return;
 	}
+
+	UE_LOG(LogTemp, Warning, TEXT("  -> SelectionPlane mesh component created: %s"), *SelectionPlane->GetName());
 
 	// Setup attachment
 	if (USceneComponent* RootComp = Owner->GetRootComponent())
 	{
 		SelectionPlane->SetupAttachment(RootComp);
 		SelectionPlane->RegisterComponent();
+		UE_LOG(LogTemp, Warning, TEXT("  -> Attached to root: %s"), *RootComp->GetName());
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("  -> No root component!"));
 	}
 
 	// Setup the selection plane with validated assets
 	SetupSelectionPlane();
 	bIsInitialized = true;
+	UE_LOG(LogTemp, Warning, TEXT("  -> Initialization complete"));
 }
 
 void UPACS_SelectionPlaneComponent::SetupSelectionPlane()
@@ -90,13 +111,10 @@ void UPACS_SelectionPlaneComponent::SetupSelectionPlane()
 		return;
 	}
 
-	// Validate and apply assets (client-side only)
-	ValidateAndApplyAssets();
-
-	// Configure collision for selection traces - BUT ONLY FOR NON-VR
+	// Configure collision (trace channel set later in ApplyProfileAsset)
 	SelectionPlane->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 	SelectionPlane->SetCollisionResponseToAllChannels(ECR_Ignore);
-	SelectionPlane->SetCollisionResponseToChannel(ECC_GameTraceChannel1, ECR_Block);
+	// Specific channel response set in ApplyProfileAsset()
 
 	// Visual settings for performance
 	SelectionPlane->SetCastShadow(false);
@@ -104,24 +122,36 @@ void UPACS_SelectionPlaneComponent::SetupSelectionPlane()
 	SelectionPlane->bUseAsOccluder = false;
 	SelectionPlane->SetGenerateOverlapEvents(false);
 
-	// IMPORTANT: Mark as not replicated (client-only visual)
+	// Mark as not replicated (client-only visual)
 	SelectionPlane->SetIsReplicated(false);
 
-	// Apply transform from profile if available
-	if (CurrentProfileAsset)
-	{
-		SelectionPlane->SetRelativeTransform(CurrentProfileAsset->SelectionStaticMeshTransform);
-	}
-	else
-	{
-		CalculateSelectionPlaneTransform();
-	}
+	// Initialize CPD with default Available state values
+	// Material expects: CPD[0-2] = RGB, CPD[3] = Brightness, CPD[4] = Alpha (optional)
+	// Set default values first
+	SelectionPlane->SetDefaultCustomPrimitiveDataFloat(0, 1.0f);  // R
+	SelectionPlane->SetDefaultCustomPrimitiveDataFloat(1, 1.0f);  // G
+	SelectionPlane->SetDefaultCustomPrimitiveDataFloat(2, 1.0f);  // B
+	SelectionPlane->SetDefaultCustomPrimitiveDataFloat(3, 1.0f);  // Brightness
+	SelectionPlane->SetDefaultCustomPrimitiveDataFloat(4, 0.8f);  // Alpha (optional)
 
-	// Start hidden until selection state changes
-	SelectionPlane->SetVisibility(false);
+	// Now set actual initial values (Available state - white with brightness 1.0)
+	SelectionPlane->SetCustomPrimitiveDataFloat(0, 1.0f);  // R
+	SelectionPlane->SetCustomPrimitiveDataFloat(1, 1.0f);  // G
+	SelectionPlane->SetCustomPrimitiveDataFloat(2, 1.0f);  // B
+	SelectionPlane->SetCustomPrimitiveDataFloat(3, 1.0f);  // Brightness
+	SelectionPlane->SetCustomPrimitiveDataFloat(4, 0.8f);  // Alpha
 
-	// Set initial CPD values
-	UpdateSelectionPlaneCPD();
+	// Start visible - appearance controlled by CPD values
+	SelectionPlane->SetVisibility(true);
+
+	UE_LOG(LogTemp, Warning, TEXT("SetupSelectionPlane: Set initial CPD - Color=(1.0,1.0,1.0), Brightness=1.0, Alpha=0.8"));
+
+	// Verify CPD was set (only check indices 0-4)
+	const FCustomPrimitiveData& CPD = SelectionPlane->GetCustomPrimitiveData();
+	for (int32 i = 0; i < FMath::Min(5, CPD.Data.Num()); i++)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("  CPD[%d] = %.2f"), i, CPD.Data[i]);
+	}
 }
 
 void UPACS_SelectionPlaneComponent::ValidateAndApplyAssets()
@@ -175,10 +205,53 @@ void UPACS_SelectionPlaneComponent::ValidateAndApplyAssets()
 }
 
 
+void UPACS_SelectionPlaneComponent::ApplyCachedColorValues(
+	const FLinearColor& InAvailableColor, float InAvailableBrightness,
+	const FLinearColor& InHoveredColor, float InHoveredBrightness,
+	const FLinearColor& InSelectedColor, float InSelectedBrightness,
+	const FLinearColor& InUnavailableColor, float InUnavailableBrightness)
+{
+	// Skip on dedicated servers
+	if (GetWorld() && GetWorld()->GetNetMode() == NM_DedicatedServer)
+	{
+		return;
+	}
+
+	// Store state visuals for CPD updates (indexed by ESelectionVisualState)
+	StateVisuals[0] = {InHoveredColor, InHoveredBrightness};			// Hovered
+	StateVisuals[1] = {InSelectedColor, InSelectedBrightness};			// Selected
+	StateVisuals[2] = {InUnavailableColor, InUnavailableBrightness};	// Unavailable
+	StateVisuals[3] = {InAvailableColor, InAvailableBrightness};		// Available
+
+	// Log the cached values for debugging
+	UE_LOG(LogTemp, Warning, TEXT("ApplyCachedColorValues: Applying cached color values to SelectionPlaneComponent:"));
+	UE_LOG(LogTemp, Warning, TEXT("  Available: Color=(%.2f,%.2f,%.2f,%.2f), Brightness=%.2f"),
+		StateVisuals[3].Color.R, StateVisuals[3].Color.G, StateVisuals[3].Color.B, StateVisuals[3].Color.A, StateVisuals[3].Brightness);
+	UE_LOG(LogTemp, Warning, TEXT("  Hovered: Color=(%.2f,%.2f,%.2f,%.2f), Brightness=%.2f"),
+		StateVisuals[0].Color.R, StateVisuals[0].Color.G, StateVisuals[0].Color.B, StateVisuals[0].Color.A, StateVisuals[0].Brightness);
+	UE_LOG(LogTemp, Warning, TEXT("  Selected: Color=(%.2f,%.2f,%.2f,%.2f), Brightness=%.2f"),
+		StateVisuals[1].Color.R, StateVisuals[1].Color.G, StateVisuals[1].Color.B, StateVisuals[1].Color.A, StateVisuals[1].Brightness);
+	UE_LOG(LogTemp, Warning, TEXT("  Unavailable: Color=(%.2f,%.2f,%.2f,%.2f), Brightness=%.2f"),
+		StateVisuals[2].Color.R, StateVisuals[2].Color.G, StateVisuals[2].Color.B, StateVisuals[2].Color.A, StateVisuals[2].Brightness);
+
+	// Update visuals with cached data
+	if (SelectionPlane)
+	{
+		UpdateSelectionPlaneCPD();
+		UpdateVisuals();
+	}
+}
+
 void UPACS_SelectionPlaneComponent::ApplyProfileAsset(UPACS_SelectionProfileAsset* ProfileAsset)
 {
+	AActor* Owner = GetOwner();
+	UE_LOG(LogTemp, Warning, TEXT("PACS_SelectionPlaneComponent::ApplyProfileAsset() - Owner: %s, Profile: %s"),
+		Owner ? *Owner->GetName() : TEXT("NULL"),
+		ProfileAsset ? *ProfileAsset->GetName() : TEXT("NULL"));
+
 	if (!ProfileAsset)
 	{
+		UE_LOG(LogTemp, Error, TEXT("  -> No ProfileAsset provided!"));
 		return;
 	}
 
@@ -188,73 +261,86 @@ void UPACS_SelectionPlaneComponent::ApplyProfileAsset(UPACS_SelectionProfileAsse
 	// Skip visual application on dedicated servers
 	if (GetWorld() && GetWorld()->GetNetMode() == NM_DedicatedServer)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("  -> Skipping (Dedicated Server)"));
 		return;
 	}
 
-	// Apply NPC visual meshes (for ALL clients including VR)
-	AActor* Owner = GetOwner();
-	if (Owner)
+	// ========================================
+	// SELECTION PLANE VISUALS ONLY
+	// (NPC mesh assignment removed - handled by NPC classes)
+	// ========================================
+
+	if (!SelectionPlane)
 	{
-		// For character NPCs - SK asset is handled by the character class itself
-		// SelectionPlaneComponent only handles selection visuals, not NPC mesh assignment
-
-		// For static mesh NPCs (vehicles, props)
-		if (!ProfileAsset->StaticMeshAsset.IsNull())
-		{
-			UStaticMeshComponent* MainMesh = Owner->FindComponentByClass<UStaticMeshComponent>();
-			if (MainMesh && MainMesh != SelectionPlane)
-			{
-				// Check if already loaded (from pre-loading or pooling)
-				UStaticMesh* Mesh = ProfileAsset->StaticMeshAsset.Get();
-				if (!Mesh)
-				{
-					// If not loaded, try synchronous load only during initialization/pooling
-					// Runtime loads should use async
-					Mesh = ProfileAsset->StaticMeshAsset.LoadSynchronous();
-				}
-
-				if (Mesh)
-				{
-					MainMesh->SetStaticMesh(Mesh);
-					MainMesh->SetRelativeTransform(ProfileAsset->StaticMeshTransform);
-				}
-			}
-		}
-
-		// Apply particle effects if specified (fire, smoke, etc.)
-		if (!ProfileAsset->ParticleEffect.IsNull())
-		{
-			// TODO: Implement particle component creation/update
-		}
+		UE_LOG(LogTemp, Error, TEXT("  -> SelectionPlane is NULL! Was InitializeSelectionPlane() called?"));
+		return;
 	}
 
-	// Apply selection plane configuration (for non-VR clients only)
-	if (ShouldShowSelectionVisuals() && SelectionPlane)
+	UE_LOG(LogTemp, Warning, TEXT("  -> SelectionPlane exists: %s"), *SelectionPlane->GetName());
+
+	// Apply selection plane mesh (assume pre-loaded by SpawnOrchestrator)
+	if (!ProfileAsset->SelectionStaticMesh.IsNull())
 	{
-		// Apply selection plane mesh
-		if (!ProfileAsset->SelectionStaticMesh.IsNull())
+		if (UStaticMesh* PlaneMesh = ProfileAsset->SelectionStaticMesh.Get())
 		{
-			UStaticMesh* PlaneMesh = ProfileAsset->SelectionStaticMesh.LoadSynchronous();
-			if (PlaneMesh)
-			{
-				SelectionPlane->SetStaticMesh(PlaneMesh);
-				SelectionPlane->SetRelativeTransform(ProfileAsset->SelectionStaticMeshTransform);
-			}
+			SelectionPlane->SetStaticMesh(PlaneMesh);
+			SelectionPlane->SetRelativeTransform(ProfileAsset->SelectionStaticMeshTransform);
+			UE_LOG(LogTemp, Warning, TEXT("  -> Static Mesh applied: %s"), *PlaneMesh->GetName());
 		}
-
-		// Apply selection material
-		if (!ProfileAsset->SelectionMaterialInstance.IsNull())
+		else
 		{
-			UMaterialInterface* Material = ProfileAsset->SelectionMaterialInstance.LoadSynchronous();
-			if (Material)
-			{
-				SelectionPlane->SetMaterial(0, Material);
-			}
+			UE_LOG(LogTemp, Error, TEXT("  -> Static Mesh is NULL (not loaded)"));
 		}
-
-		// Update visual state with new colors and brightness
-		UpdateSelectionPlaneCPD();
 	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("  -> No Static Mesh in profile"));
+	}
+
+	// Apply selection material (assume pre-loaded)
+	if (!ProfileAsset->SelectionMaterialInstance.IsNull())
+	{
+		if (UMaterialInterface* Material = ProfileAsset->SelectionMaterialInstance.Get())
+		{
+			SelectionPlane->SetMaterial(0, Material);
+			UE_LOG(LogTemp, Warning, TEXT("  -> Material applied: %s"), *Material->GetName());
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("  -> Material is NULL (not loaded)"));
+		}
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("  -> No Material in profile"));
+	}
+
+	// Apply collision channel from profile
+	SelectionPlane->SetCollisionResponseToChannel(ProfileAsset->SelectionTraceChannel, ECR_Block);
+	UE_LOG(LogTemp, Warning, TEXT("  -> Collision channel set"));
+
+	// Store state visuals for CPD updates (indexed by ESelectionVisualState)
+	StateVisuals[0] = {ProfileAsset->HoveredColour, ProfileAsset->HoveredBrightness};			// Hovered
+	StateVisuals[1] = {ProfileAsset->SelectedColour, ProfileAsset->SelectedBrightness};			// Selected
+	StateVisuals[2] = {ProfileAsset->UnavailableColour, ProfileAsset->UnavailableBrightness};	// Unavailable
+	StateVisuals[3] = {ProfileAsset->AvailableColour, ProfileAsset->AvailableBrightness};		// Available
+
+	// Log the loaded profile values for debugging
+	UE_LOG(LogTemp, Warning, TEXT("ApplyProfileAsset: Loaded state visuals from profile:"));
+	UE_LOG(LogTemp, Warning, TEXT("  Available: Color=(%.2f,%.2f,%.2f,%.2f), Brightness=%.2f"),
+		StateVisuals[3].Color.R, StateVisuals[3].Color.G, StateVisuals[3].Color.B, StateVisuals[3].Color.A, StateVisuals[3].Brightness);
+	UE_LOG(LogTemp, Warning, TEXT("  Hovered: Color=(%.2f,%.2f,%.2f,%.2f), Brightness=%.2f"),
+		StateVisuals[0].Color.R, StateVisuals[0].Color.G, StateVisuals[0].Color.B, StateVisuals[0].Color.A, StateVisuals[0].Brightness);
+	UE_LOG(LogTemp, Warning, TEXT("  Selected: Color=(%.2f,%.2f,%.2f,%.2f), Brightness=%.2f"),
+		StateVisuals[1].Color.R, StateVisuals[1].Color.G, StateVisuals[1].Color.B, StateVisuals[1].Color.A, StateVisuals[1].Brightness);
+	UE_LOG(LogTemp, Warning, TEXT("  Unavailable: Color=(%.2f,%.2f,%.2f,%.2f), Brightness=%.2f"),
+		StateVisuals[2].Color.R, StateVisuals[2].Color.G, StateVisuals[2].Color.B, StateVisuals[2].Color.A, StateVisuals[2].Brightness);
+
+	RenderDistance = ProfileAsset->RenderDistance;
+
+	// Update visuals with new profile data
+	UpdateSelectionPlaneCPD();
+	UpdateVisuals();  // Apply initial Available state visibility
 }
 
 
@@ -284,40 +370,13 @@ void UPACS_SelectionPlaneComponent::SetHoverState(bool bHovered)
 	UpdateVisuals();
 }
 
-void UPACS_SelectionPlaneComponent::SetSelectionPlaneVisible(bool bVisible)
-{
-	// CRITICAL: Only show selection plane on non-VR clients
-	if (!SelectionPlane || !ShouldShowSelectionVisuals())
-	{
-		return;
-	}
-
-	// Check render distance
-	if (bVisible && GetOwner())
-	{
-		if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
-		{
-			if (APawn* Pawn = PC->GetPawn())
-			{
-				const float DistanceSq = FVector::DistSquared(
-					GetOwner()->GetActorLocation(),
-					Pawn->GetActorLocation());
-
-				const float MaxDist = CurrentProfileAsset ? CurrentProfileAsset->RenderDistance : 5000.0f;
-				const float MaxDistSq = MaxDist * MaxDist;
-				bVisible = DistanceSq <= MaxDistSq;
-			}
-		}
-	}
-
-	SelectionPlane->SetVisibility(bVisible);
-}
 
 bool UPACS_SelectionPlaneComponent::ShouldShowSelectionVisuals() const
 {
 	// Never show on dedicated server
 	if (GetWorld() && GetWorld()->GetNetMode() == NM_DedicatedServer)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("PACS_SelectionPlaneComponent::ShouldShowSelectionVisuals() -> FALSE (Dedicated Server)"));
 		return false;
 	}
 
@@ -325,113 +384,139 @@ bool UPACS_SelectionPlaneComponent::ShouldShowSelectionVisuals() const
 	// But they WILL see the actual NPC meshes
 	if (UHeadMountedDisplayFunctionLibrary::IsHeadMountedDisplayEnabled())
 	{
+		UE_LOG(LogTemp, Warning, TEXT("PACS_SelectionPlaneComponent::ShouldShowSelectionVisuals() -> FALSE (HMD Enabled)"));
 		return false;
 	}
+
+	UE_LOG(LogTemp, Warning, TEXT("PACS_SelectionPlaneComponent::ShouldShowSelectionVisuals() -> TRUE"));
 
 	// Only show on regular (flat screen) clients and listen servers
 	return true;
 }
 
-void UPACS_SelectionPlaneComponent::UpdatePlanePosition()
-{
-	if (!SelectionPlane || !GetOwner())
-	{
-		return;
-	}
-
-	CalculateSelectionPlaneTransform();
-}
-
-void UPACS_SelectionPlaneComponent::CalculateSelectionPlaneTransform()
-{
-	if (!SelectionPlane || !GetOwner())
-	{
-		return;
-	}
-
-	// Calculate bounds of the actor
-	FVector Origin, BoxExtent;
-	GetOwner()->GetActorBounds(false, Origin, BoxExtent);
-
-	// Position plane at bottom of bounds
-	FVector PlaneLocation(0, 0, -BoxExtent.Z + 2.0f); // Default 2.0f offset
-	SelectionPlane->SetRelativeLocation(PlaneLocation);
-
-	// Scale plane based on actor bounds
-	float PlaneScale = FMath::Max(BoxExtent.X, BoxExtent.Y) * 2.0f * 1.5f / 100.0f; // Default 1.5x multiplier
-	SelectionPlane->SetRelativeScale3D(FVector(PlaneScale, PlaneScale, 1.0f));
-
-	// Keep rotation facing up
-	SelectionPlane->SetRelativeRotation(FRotator(-90.0f, 0, 0));
-}
 
 void UPACS_SelectionPlaneComponent::UpdateSelectionPlaneCPD()
 {
-	if (!SelectionPlane || !ShouldShowSelectionVisuals())
+	if (!SelectionPlane)
 	{
 		return;
 	}
 
-	// Determine effective display state (hover overrides selection)
-	uint8 DisplayState = (LocalHoverState == 1) ? 0 : SelectionState;
+	// ========================================
+	// DETERMINE DISPLAY STATE
+	// ========================================
+	uint8 DisplayState;
 
-	// Get the appropriate color and brightness based on state
-	FLinearColor StateColor;
-	float StateBrightness;
-
-	// Use default values if no profile is set
-	if (!CurrentProfileAsset)
+	// PRIORITY 1: VR Late Joiner Override (MISSION CRITICAL)
+	if (UHeadMountedDisplayFunctionLibrary::IsHeadMountedDisplayEnabled())
 	{
-		// Default values
-		StateColor = FLinearColor(1.0f, 1.0f, 1.0f, 0.8f);
-		StateBrightness = 1.0f;
+		DisplayState = 3; // Force Available state (neutral visibility for VR clients)
+	}
+	// PRIORITY 2: Local Hover (client-side)
+	else if (LocalHoverState == 1)
+	{
+		DisplayState = 0; // Hovered
+	}
+	// PRIORITY 3: Selection State Differentiation
+	else if (SelectionState == 1) // Selected
+	{
+		// Check if local player selected this NPC
+		bool bIsMySelection = false;
+
+		if (AActor* Owner = GetOwner())
+		{
+			// Get the NPC's CurrentSelector (who selected this NPC)
+			APlayerState* NPCSelector = nullptr;
+
+			// Try to get CurrentSelector from NPC base class
+			if (APACS_NPC_Base* NPC = Cast<APACS_NPC_Base>(Owner))
+			{
+				NPCSelector = NPC->GetCurrentSelector();
+			}
+
+			// Get local player's PlayerState
+			if (UWorld* World = GetWorld())
+			{
+				if (APlayerController* PC = World->GetFirstPlayerController())
+				{
+					if (APlayerState* LocalPS = PC->GetPlayerState<APlayerState>())
+					{
+						bIsMySelection = (NPCSelector == LocalPS);
+					}
+				}
+			}
+		}
+
+		// Apply appropriate state
+		if (bIsMySelection)
+		{
+			DisplayState = 1; // Selected by me (green/selected color)
+		}
+		else
+		{
+			DisplayState = 2; // Selected by other (red/unavailable color)
+		}
+	}
+	// PRIORITY 4: Default to replicated state
+	else
+	{
+		DisplayState = SelectionState; // Available, Unavailable, etc.
+	}
+
+	// Clamp to valid range (0-3 for 4 states)
+	DisplayState = FMath::Clamp(DisplayState, 0, 3);
+
+	// ========================================
+	// APPLY CUSTOM PRIMITIVE DATA
+	// ========================================
+	const FSelectionStateVisuals& Visuals = StateVisuals[DisplayState];
+
+	// Log what we're about to set (matching material expectations)
+	UE_LOG(LogTemp, Warning, TEXT("UpdateSelectionPlaneCPD: Updating for state %d (%s)"),
+		DisplayState,
+		DisplayState == 0 ? TEXT("Hovered") :
+		DisplayState == 1 ? TEXT("Selected") :
+		DisplayState == 2 ? TEXT("Unavailable") : TEXT("Available"));
+	UE_LOG(LogTemp, Warning, TEXT("  Color=(%.2f,%.2f,%.2f), Brightness=%.2f, Alpha=%.2f"),
+		Visuals.Color.R, Visuals.Color.G, Visuals.Color.B, Visuals.Brightness, Visuals.Color.A);
+
+	// Set CPD values matching material's expected indices
+	// Material expects: CPD[0-2] = RGB, CPD[3] = Brightness, CPD[4] = Alpha
+	SelectionPlane->SetCustomPrimitiveDataFloat(0, Visuals.Color.R);      // R
+	SelectionPlane->SetCustomPrimitiveDataFloat(1, Visuals.Color.G);      // G
+	SelectionPlane->SetCustomPrimitiveDataFloat(2, Visuals.Color.B);      // B
+	SelectionPlane->SetCustomPrimitiveDataFloat(3, Visuals.Brightness);   // Brightness
+	SelectionPlane->SetCustomPrimitiveDataFloat(4, Visuals.Color.A);      // Alpha
+
+	// Verify what was actually set (only check the 5 indices we use)
+	UE_LOG(LogTemp, Warning, TEXT("UpdateSelectionPlaneCPD: AFTER setting CPD values:"));
+	const FCustomPrimitiveData& CPD = SelectionPlane->GetCustomPrimitiveData();
+	if (CPD.Data.Num() >= 5)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("  CPD[0] R = %.2f"), CPD.Data[0]);
+		UE_LOG(LogTemp, Warning, TEXT("  CPD[1] G = %.2f"), CPD.Data[1]);
+		UE_LOG(LogTemp, Warning, TEXT("  CPD[2] B = %.2f"), CPD.Data[2]);
+		UE_LOG(LogTemp, Warning, TEXT("  CPD[3] Brightness = %.2f"), CPD.Data[3]);
+		UE_LOG(LogTemp, Warning, TEXT("  CPD[4] Alpha = %.2f"), CPD.Data[4]);
 	}
 	else
 	{
-		switch (DisplayState)
-		{
-		case 0: // Hovered
-			StateColor = CurrentProfileAsset->HoveredColour;
-			StateBrightness = CurrentProfileAsset->HoveredBrightness;
-			break;
-		case 1: // Selected
-			StateColor = CurrentProfileAsset->SelectedColour;
-			StateBrightness = CurrentProfileAsset->SelectedBrightness;
-			break;
-		case 2: // Unavailable
-			StateColor = CurrentProfileAsset->UnavailableColour;
-			StateBrightness = CurrentProfileAsset->UnavailableBrightness;
-			break;
-		case 3: // Available
-		default:
-			StateColor = CurrentProfileAsset->AvailableColour;
-			StateBrightness = CurrentProfileAsset->AvailableBrightness;
-			break;
-		}
+		UE_LOG(LogTemp, Error, TEXT("  Not enough CPD floats allocated! Only %d available"), CPD.Data.Num());
 	}
-
-	// Set CustomPrimitiveData for the material to read
-	SelectionPlane->SetCustomPrimitiveDataFloat(0, (float)DisplayState);
-	SelectionPlane->SetCustomPrimitiveDataFloat(1, StateColor.R);
-	SelectionPlane->SetCustomPrimitiveDataFloat(2, StateColor.G);
-	SelectionPlane->SetCustomPrimitiveDataFloat(3, StateColor.B);
-	SelectionPlane->SetCustomPrimitiveDataFloat(4, StateColor.A);
-	SelectionPlane->SetCustomPrimitiveDataFloat(5, StateBrightness);
-	SelectionPlane->SetCustomPrimitiveDataFloat(6, 1.0f); // Default fade radius
-	SelectionPlane->SetCustomPrimitiveDataFloat(7, 1.0f); // Fade alpha for future animation
 }
 
 void UPACS_SelectionPlaneComponent::UpdateVisuals()
 {
-	if (SelectionPlane && ShouldShowSelectionVisuals())
+	if (!SelectionPlane)
 	{
-		// Update visibility based on state
-		uint8 DisplayState = (LocalHoverState == 1) ? 0 : SelectionState;
-		SelectionPlane->SetVisibility(DisplayState != 4 && DisplayState != 3);
-
-		// Update CPD values
-		UpdateSelectionPlaneCPD();
+		return;
 	}
+
+	// Update CPD (handles VR check internally)
+	UpdateSelectionPlaneCPD();
+
+	// Always keep the plane visible - state appearance controlled by material/CPD
+	SelectionPlane->SetVisibility(true);
 }
 
 void UPACS_SelectionPlaneComponent::OnRep_SelectionState()
@@ -440,16 +525,8 @@ void UPACS_SelectionPlaneComponent::OnRep_SelectionState()
 	UpdateVisuals();
 }
 
-USceneComponent* UPACS_SelectionPlaneComponent::GetAttachmentRoot() const
-{
-	if (AActor* Owner = GetOwner())
-	{
-		return Owner->GetRootComponent();
-	}
-	return nullptr;
-}
 
-void UPACS_SelectionPlaneComponent::OnAcquiredFromPool()
+void UPACS_SelectionPlaneComponent::OnAcquiredFromPool_Implementation()
 {
 	// Reset visual state for pool acquisition
 	if (ShouldShowSelectionVisuals())
@@ -473,7 +550,7 @@ void UPACS_SelectionPlaneComponent::OnAcquiredFromPool()
 	}
 }
 
-void UPACS_SelectionPlaneComponent::OnReturnedToPool()
+void UPACS_SelectionPlaneComponent::OnReturnedToPool_Implementation()
 {
 	// Clear visual state for pool return
 	LocalHoverState = 0;

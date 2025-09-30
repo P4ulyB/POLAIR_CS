@@ -35,10 +35,10 @@ void APACS_NPC_Base::BeginPlay()
 	if (SelectionPlaneComponent)
 	{
 		SelectionPlaneComponent->InitializeSelectionPlane();
-		SelectionPlaneComponent->SetSelectionPlaneVisible(false);
 
 		// Note: Selection profile is now applied by spawn orchestrator
 		// This ensures profiles are preloaded and properly managed
+		// Visibility is handled automatically by component's UpdateVisuals()
 	}
 }
 
@@ -60,7 +60,7 @@ void APACS_NPC_Base::OnAcquiredFromPool_Implementation()
 	// Notify selection component
 	if (SelectionPlaneComponent)
 	{
-		SelectionPlaneComponent->OnAcquiredFromPool();
+		SelectionPlaneComponent->OnAcquiredFromPool_Implementation();
 	}
 }
 
@@ -71,7 +71,7 @@ void APACS_NPC_Base::OnReturnedToPool_Implementation()
 	// Notify selection component
 	if (SelectionPlaneComponent)
 	{
-		SelectionPlaneComponent->OnReturnedToPool();
+		SelectionPlaneComponent->OnReturnedToPool_Implementation();
 	}
 }
 
@@ -102,10 +102,8 @@ void APACS_NPC_Base::SetSelected(bool bNewSelected, APlayerState* Selector)
 
 void APACS_NPC_Base::UpdateSelectionVisuals()
 {
-	if (SelectionPlaneComponent)
-	{
-		SelectionPlaneComponent->SetSelectionPlaneVisible(bIsSelected);
-	}
+	// Visibility handled automatically by component via UpdateVisuals()
+	// Component determines visibility based on state
 }
 
 void APACS_NPC_Base::ResetForPool()
@@ -114,11 +112,7 @@ void APACS_NPC_Base::ResetForPool()
 	bIsSelected = false;
 	CurrentSelector = nullptr;
 
-	// Hide selection plane
-	if (SelectionPlaneComponent)
-	{
-		SelectionPlaneComponent->SetSelectionPlaneVisible(false);
-	}
+	// Selection plane visibility handled by component's OnReturnedToPool()
 
 	// Reset transform
 	SetActorTransform(FTransform::Identity);
@@ -127,33 +121,53 @@ void APACS_NPC_Base::ResetForPool()
 
 void APACS_NPC_Base::PrepareForUse()
 {
-	// Ensure selection plane is hidden initially
-	if (SelectionPlaneComponent)
-	{
-		SelectionPlaneComponent->SetSelectionPlaneVisible(false);
-	}
+	// Selection plane visibility handled by component
+	// Component starts hidden and only shows based on selection state
 }
 
 void APACS_NPC_Base::SetSelectionProfile(UPACS_SelectionProfileAsset* InProfile)
 {
 	// Only server should set the profile to ensure consistency
-	if (!HasAuthority())
+	if (!HasAuthority() || !InProfile)
 	{
 		return;
 	}
 
-	// Skip on dedicated server (Principle #2: Skip Visual Assets on Dedicated Server)
+	// ========================================
+	// NPC VISUALS (moved from component)
+	// ========================================
+
+	// TODO: ParticleEffect in profile is UParticleSystem but NiagaraComponent expects UNiagaraSystem
+	// This needs to be addressed by changing the profile to use UNiagaraSystem or converting the component
+	// For now, particle effects are disabled to prevent type mismatch errors
+
+	// For static mesh NPCs (vehicles, lightweight)
+	// Subclasses override ApplyNPCMeshFromProfile()
+	ApplyNPCMeshFromProfile(InProfile);
+
+	// ========================================
+	// SELECTION VISUALS (component handles)
+	// ========================================
+
+	// Skip on dedicated server
 	if (GetWorld() && GetWorld()->GetNetMode() == NM_DedicatedServer)
 	{
 		return;
 	}
 
-	// Apply the profile directly to the component
-	if (InProfile && SelectionPlaneComponent)
+	// Apply selection profile to component
+	if (SelectionPlaneComponent)
 	{
 		SelectionPlaneComponent->ApplyProfileAsset(InProfile);
 		UE_LOG(LogTemp, Verbose, TEXT("PACS_NPC_Base: Applied selection profile to %s"), *GetName());
 	}
+}
+
+void APACS_NPC_Base::ApplyNPCMeshFromProfile(UPACS_SelectionProfileAsset* Profile)
+{
+	// Base class does nothing (Character uses FNPCProfileData replication)
+	// PACS_NPC_Base_Veh overrides to apply vehicle mesh
+	// PACS_NPC_Base_LW overrides to apply lightweight static mesh
 }
 
 void APACS_NPC_Base::ApplySelectionProfile()

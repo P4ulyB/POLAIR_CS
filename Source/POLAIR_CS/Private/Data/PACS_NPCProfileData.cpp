@@ -43,8 +43,7 @@ void FNPCProfileData::PopulateFromProfile(const UPACS_SelectionProfileAsset* Pro
 	StaticMeshRotation = Profile->StaticMeshTransform.Rotator();
 	StaticMeshScale = Profile->StaticMeshTransform.GetScale3D();
 
-	IdleAnimationSequence = Profile->IdleAnimationSequence;
-	RunAnimationSequence = Profile->RunAnimationSequence;
+	AnimInstanceClass = Profile->AnimInstanceClass;
 
 	ParticleEffect = Profile->ParticleEffect;
 	ParticleEffectTransform = Profile->ParticleEffectTransform;
@@ -57,19 +56,28 @@ void FNPCProfileData::PopulateFromProfile(const UPACS_SelectionProfileAsset* Pro
 	// Selection colors and brightness
 	AvailableColour = Profile->AvailableColour;
 	AvailableBrightness = Profile->AvailableBrightness;
+	UE_LOG(LogTemp, Warning, TEXT("FNPCProfileData: Loaded Available from profile: Color=(%.2f,%.2f,%.2f,%.2f), Brightness=%.2f"),
+		AvailableColour.R, AvailableColour.G, AvailableColour.B, AvailableColour.A, AvailableBrightness);
 
 	HoveredColour = Profile->HoveredColour;
 	HoveredBrightness = Profile->HoveredBrightness;
+	UE_LOG(LogTemp, Warning, TEXT("FNPCProfileData: Loaded Hovered from profile: Color=(%.2f,%.2f,%.2f,%.2f), Brightness=%.2f"),
+		HoveredColour.R, HoveredColour.G, HoveredColour.B, HoveredColour.A, HoveredBrightness);
 
 	SelectedColour = Profile->SelectedColour;
 	SelectedBrightness = Profile->SelectedBrightness;
+	UE_LOG(LogTemp, Warning, TEXT("FNPCProfileData: Loaded Selected from profile: Color=(%.2f,%.2f,%.2f,%.2f), Brightness=%.2f"),
+		SelectedColour.R, SelectedColour.G, SelectedColour.B, SelectedColour.A, SelectedBrightness);
 
 	UnavailableColour = Profile->UnavailableColour;
 	UnavailableBrightness = Profile->UnavailableBrightness;
+	UE_LOG(LogTemp, Warning, TEXT("FNPCProfileData: Loaded Unavailable from profile: Color=(%.2f,%.2f,%.2f,%.2f), Brightness=%.2f"),
+		UnavailableColour.R, UnavailableColour.G, UnavailableColour.B, UnavailableColour.A, UnavailableBrightness);
 
 	// Other settings
 	CollisionPreset = Profile->CollisionPreset;
 	RenderDistance = Profile->RenderDistance;
+	SelectionTraceChannel = Profile->SelectionTraceChannel;
 
 	UE_LOG(LogTemp, Warning, TEXT("FNPCProfileData::PopulateFromProfile: COMPLETE - Cached all data from profile %s"),
 		*Profile->GetName());

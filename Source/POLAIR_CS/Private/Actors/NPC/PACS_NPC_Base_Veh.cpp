@@ -36,10 +36,10 @@ void APACS_NPC_Base_Veh::BeginPlay()
 	if (SelectionPlaneComponent)
 	{
 		SelectionPlaneComponent->InitializeSelectionPlane();
-		SelectionPlaneComponent->SetSelectionPlaneVisible(false);
 
 		// Apply selection profile if set
 		ApplySelectionProfile();
+		// Visibility handled by component
 	}
 }
 
@@ -64,7 +64,7 @@ void APACS_NPC_Base_Veh::OnAcquiredFromPool_Implementation()
 	// Notify selection component
 	if (SelectionPlaneComponent)
 	{
-		SelectionPlaneComponent->OnAcquiredFromPool();
+		SelectionPlaneComponent->OnAcquiredFromPool_Implementation();
 	}
 }
 
@@ -75,7 +75,7 @@ void APACS_NPC_Base_Veh::OnReturnedToPool_Implementation()
 	// Notify selection component
 	if (SelectionPlaneComponent)
 	{
-		SelectionPlaneComponent->OnReturnedToPool();
+		SelectionPlaneComponent->OnReturnedToPool_Implementation();
 	}
 }
 
@@ -155,12 +155,31 @@ void APACS_NPC_Base_Veh::SetHandbrake(bool bEngaged)
 	}
 }
 
+void APACS_NPC_Base_Veh::ApplyNPCMeshFromProfile(UPACS_SelectionProfileAsset* Profile)
+{
+	if (!Profile)
+	{
+		return;
+	}
+
+	// Apply vehicle static mesh (if specified)
+	if (!Profile->StaticMeshAsset.IsNull())
+	{
+		// Find the vehicle's mesh component (usually root or GetMesh())
+		if (UStaticMeshComponent* MeshComp = FindComponentByClass<UStaticMeshComponent>())
+		{
+			if (UStaticMesh* VehicleMesh = Profile->StaticMeshAsset.Get())
+			{
+				MeshComp->SetStaticMesh(VehicleMesh);
+				MeshComp->SetRelativeTransform(Profile->StaticMeshTransform);
+			}
+		}
+	}
+}
+
 void APACS_NPC_Base_Veh::UpdateSelectionVisuals()
 {
-	if (SelectionPlaneComponent)
-	{
-		SelectionPlaneComponent->SetSelectionPlaneVisible(bIsSelected);
-	}
+	// Visibility handled automatically by component
 }
 
 void APACS_NPC_Base_Veh::ResetForPool()
@@ -169,11 +188,7 @@ void APACS_NPC_Base_Veh::ResetForPool()
 	bIsSelected = false;
 	CurrentSelector = nullptr;
 
-	// Hide selection plane
-	if (SelectionPlaneComponent)
-	{
-		SelectionPlaneComponent->SetSelectionPlaneVisible(false);
-	}
+	// Selection plane handled by component pooling
 
 	// Stop vehicle
 	StopVehicle();
@@ -205,11 +220,7 @@ void APACS_NPC_Base_Veh::PrepareForUse()
 		VehicleMovement->SetHandbrakeInput(false);
 	}
 
-	// Ensure selection plane is hidden initially
-	if (SelectionPlaneComponent)
-	{
-		SelectionPlaneComponent->SetSelectionPlaneVisible(false);
-	}
+	// Selection plane handled by component
 }
 
 void APACS_NPC_Base_Veh::ResetVehicleState()

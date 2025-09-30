@@ -13,8 +13,7 @@ enum class ESelectionVisualState : uint8
 	Hovered = 0,
 	Selected = 1,
 	Unavailable = 2,
-	Available = 3,
-	Hidden = 4
+	Available = 3
 };
 
 /**
@@ -42,14 +41,10 @@ public:
 		meta = (DisplayName = "SK Transforms"))
 	FTransform SkeletalMeshTransform = FTransform::Identity;
 
-	// --- Animation Sequences ---
+	// --- Animation Instance ---
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NPC Visuals|Animation",
-		meta = (DisplayName = "Idle Animation"))
-	TSoftObjectPtr<class UAnimSequence> IdleAnimationSequence;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NPC Visuals|Animation",
-		meta = (DisplayName = "Run Animation"))
-	TSoftObjectPtr<class UAnimSequence> RunAnimationSequence;
+		meta = (DisplayName = "Animation Blueprint"))
+	TSoftClassPtr<class UAnimInstance> AnimInstanceClass;
 
 	// --- Static Mesh ---
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NPC Visuals|Static Mesh",
@@ -81,6 +76,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NPC Visuals|Selection Plane",
 		meta = (DisplayName = "Collision Preset"))
 	FName CollisionPreset = TEXT("Pawn");
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NPC Visuals|Selection Plane",
+		meta = (DisplayName = "Selection Trace Channel"))
+	TEnumAsByte<ECollisionChannel> SelectionTraceChannel = ECC_GameTraceChannel1;
 
 	// --- Max Render Distance ---
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NPC Visuals|Max Render Distance",

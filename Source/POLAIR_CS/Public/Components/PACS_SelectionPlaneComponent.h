@@ -3,12 +3,24 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "Data/PACS_SelectionProfile.h"
+#include "Interfaces/PACS_Poolable.h"
 #include "PACS_SelectionPlaneComponent.generated.h"
 
 class UStaticMeshComponent;
 class UMaterialInterface;
 class UStaticMesh;
 class UPACS_SelectionProfileAsset;
+
+/**
+ * Struct for storing state visuals (color + brightness)
+ */
+USTRUCT()
+struct FSelectionStateVisuals
+{
+	GENERATED_BODY()
+	FLinearColor Color = FLinearColor::White;
+	float Brightness = 1.0f;
+};
 
 /**
  * Component that manages selection plane visuals for NPCs
@@ -22,7 +34,7 @@ class UPACS_SelectionProfileAsset;
  * Compatible with object pooling system
  */
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
-class POLAIR_CS_API UPACS_SelectionPlaneComponent : public UActorComponent
+class POLAIR_CS_API UPACS_SelectionPlaneComponent : public UActorComponent, public IPACS_Poolable
 {
 	GENERATED_BODY()
 
@@ -41,7 +53,7 @@ protected:
 	UPROPERTY()
 	TObjectPtr<UPACS_SelectionProfileAsset> CurrentProfileAsset;
 
-	// Selection visual state (0=Hovered, 1=Selected, 2=Unavailable, 3=Available, 4=Hidden)
+	// Selection visual state (0=Hovered, 1=Selected, 2=Unavailable, 3=Available)
 	UPROPERTY(ReplicatedUsing=OnRep_SelectionState)
 	uint8 SelectionState = 3; // Default to Available
 
@@ -60,6 +72,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Selection")
 	void ApplyProfileAsset(UPACS_SelectionProfileAsset* ProfileAsset);
 
+	// Apply cached color/brightness values directly (for replicated Character NPCs)
+	UFUNCTION(BlueprintCallable, Category = "Selection")
+	void ApplyCachedColorValues(
+		const FLinearColor& InAvailableColor, float InAvailableBrightness,
+		const FLinearColor& InHoveredColor, float InHoveredBrightness,
+		const FLinearColor& InSelectedColor, float InSelectedBrightness,
+		const FLinearColor& InUnavailableColor, float InUnavailableBrightness);
+
 	// Set selection state (server authoritative)
 	UFUNCTION(BlueprintCallable, Category = "Selection")
 	void SetSelectionState(ESelectionVisualState NewState);
@@ -67,10 +87,6 @@ public:
 	// Set hover state (client-side only)
 	UFUNCTION(BlueprintCallable, Category = "Selection")
 	void SetHoverState(bool bHovered);
-
-	// Control visibility
-	UFUNCTION(BlueprintCallable, Category = "Selection")
-	void SetSelectionPlaneVisible(bool bVisible);
 
 	// Get the selection plane mesh component
 	UFUNCTION(BlueprintPure, Category = "Selection")
@@ -80,26 +96,19 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Selection")
 	bool ShouldShowSelectionVisuals() const;
 
-	// Update plane position based on owner bounds
-	UFUNCTION(BlueprintCallable, Category = "Selection")
-	void UpdatePlanePosition();
+	// IPACS_Poolable interface
+	virtual void OnAcquiredFromPool_Implementation() override;
+	virtual void OnReturnedToPool_Implementation() override;
 
-	// Pool interface support
-	void OnAcquiredFromPool();
-	void OnReturnedToPool();
+	// Update CustomPrimitiveData values (public for forced updates after material changes)
+	void UpdateSelectionPlaneCPD();
 
 protected:
 	// Create and setup the selection plane
 	void SetupSelectionPlane();
 
-	// Update CustomPrimitiveData values
-	void UpdateSelectionPlaneCPD();
-
 	// Update visual state
 	void UpdateVisuals();
-
-	// Calculate selection plane transform based on actor bounds (client-side)
-	void CalculateSelectionPlaneTransform();
 
 	// Validate and apply mesh/material references (client-side)
 	void ValidateAndApplyAssets();
@@ -108,15 +117,17 @@ protected:
 	UFUNCTION()
 	void OnRep_SelectionState();
 
-	// Get the root component to attach to
-	USceneComponent* GetAttachmentRoot() const;
-
 public:
 	// Replication
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	// Asset validation state (client-side only)
 protected:
+	// Store all 4 states indexed by ESelectionVisualState
+	// [0]=Hovered, [1]=Selected, [2]=Unavailable, [3]=Available
+	FSelectionStateVisuals StateVisuals[4];
+	float RenderDistance = 5000.0f;
+
 	// Whether assets have been validated for this session
 	bool bAssetsValidated = false;
 

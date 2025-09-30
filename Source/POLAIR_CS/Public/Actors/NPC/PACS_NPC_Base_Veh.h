@@ -78,6 +78,9 @@ public:
 	virtual void SetHandbrake(bool bEngaged);
 
 protected:
+	// Method for applying vehicle mesh from profile
+	virtual void ApplyNPCMeshFromProfile(class UPACS_SelectionProfileAsset* Profile);
+
 	// Visual feedback
 	virtual void UpdateSelectionVisuals();
 

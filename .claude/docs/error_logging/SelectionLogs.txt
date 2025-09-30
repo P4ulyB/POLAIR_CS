@@ -1,0 +1,212 @@
+LogTemp: Warning: [PACS SUBSYSTEM] Initialize() called
+LogTemp: Warning: [PACS SUBSYSTEM] About to parse command line
+LogTemp: Warning: [PACS SUBSYSTEM] ParseCommandLine - Full command line: -skipcompile
+LogTemp: Warning: [PACS SUBSYSTEM] Parsed ServerIP: ''
+LogTemp: Warning: [PACS SUBSYSTEM] Parsed ServerPort: 0
+LogTemp: Warning: [PACS SUBSYSTEM] Parsed PlayFabPlayerName: ''
+LogTemp: Warning: [PACS SUBSYSTEM] PACS LaunchArgs Final: IP=, Port=0, Player=
+LogTemp: Warning: [PACS SUBSYSTEM] Command line parsing complete
+LogTemp: Warning: [PACS SUBSYSTEM] Invalid arguments or missing data, skipping auto-connect
+LogTemp: PACS: ServerKeepaliveSubsystem initialized
+LogTemp: PACS_MemoryTracker: Initialized with budget 100.00 MB
+LogTemp: PACS_NetworkMonitorSubsystem: Initialized with 100.0 KB/s bandwidth limit for World LV_TestMap
+LogTemp: PACS_SpawnOrchestrator: Initialized for World LV_TestMap
+LogTemp: PACS_CustomSignificanceManager: Configured for client-side creation
+LogTemp: PACS GameMode: Spawn config asset loading initiated
+LogTemp: PACS GameMode: Server initialization complete
+LogTemp: Warning: [PACS SUBSYSTEM] Initialize() called
+LogTemp: Warning: [PACS SUBSYSTEM] About to parse command line
+LogTemp: Warning: [PACS SUBSYSTEM] ParseCommandLine - Full command line: -skipcompile
+LogTemp: Warning: [PACS SUBSYSTEM] Parsed ServerIP: ''
+LogTemp: Warning: [PACS SUBSYSTEM] Parsed ServerPort: 0
+LogTemp: Warning: [PACS SUBSYSTEM] Parsed PlayFabPlayerName: ''
+LogTemp: Warning: [PACS SUBSYSTEM] PACS LaunchArgs Final: IP=, Port=0, Player=
+LogTemp: Warning: [PACS SUBSYSTEM] Command line parsing complete
+LogTemp: Warning: [PACS SUBSYSTEM] Invalid arguments or missing data, skipping auto-connect
+LogTemp: PACS_CustomSignificanceManager: Configured for client-side creation
+LogTemp: Warning: PACS_SpawnOrchestrator: PACS.Preload.SelectionProfiles tag not found, using fallback storage
+LogTemp: PACS_SpawnOrchestrator: Started pre-loading 1 selection profiles
+LogTemp: PACS GameMode: Spawn system initialized with config: DA_SpawnConfigd_Main
+LogTemp: PACS_SpawnConfig::GetConfigForTag - Looking for tag: PACS.Spawn.Human.POI
+LogTemp: PACS_SpawnConfig::GetConfigForTag - SpawnConfigs count: 1
+LogTemp: PACS_SpawnConfig::GetConfigForTag - TagToIndexMap count: 1
+LogTemp: PACS_SpawnConfig::GetConfigForTag - Available tags in map:
+LogTemp:   - PACS.Spawn.Human.POI -> Index 0
+LogTemp: PACS_SpawnConfig::GetConfigForTag - Found exact match for PACS.Spawn.Human.POI at index 0
+LogTemp: PACS GameMode: Spawn system fully initialized and pools prewarmed
+LogTemp: PACS_SpawnOrchestrator: Pre-loaded 1/1 selection profiles
+LogTemp: Warning: PACS_SpawnOrchestrator: PACS.Preload.SKMeshes tag not found, using fallback storage
+LogTemp: PACS_SpawnOrchestrator: Pre-loaded 1/1 SK meshes from selection profiles
+LogTemp: Warning: PACS_SpawnPoint::GetSpawnTransform: bUseSpawnPointTransform=TRUE
+LogTemp: Warning:   - Spawn Point Actor Transform: Loc=X=265.044 Y=1264.411 Z=44.786, Rot=P=0.000000 Y=0.000000 R=-0.000000, Scale=X=1.000 Y=1.000 Z=1.000
+LogTemp: Warning:   - SpawnTransformOffset: Loc=X=0.000 Y=0.000 Z=0.000, Rot=P=0.000000 Y=0.000000 R=-0.000000, Scale=X=1.000 Y=1.000 Z=1.000
+LogTemp: Warning:   - RESULT Transform: Loc=X=265.044 Y=1264.411 Z=44.786, Rot=P=0.000000 Y=0.000000 R=-0.000000, Scale=X=1.000 Y=1.000 Z=1.000
+LogTemp: PACS_SpawnConfig::GetConfigForTag - Looking for tag: PACS.Spawn.Human.POI
+LogTemp: PACS_SpawnConfig::GetConfigForTag - SpawnConfigs count: 1
+LogTemp: PACS_SpawnConfig::GetConfigForTag - TagToIndexMap count: 1
+LogTemp: PACS_SpawnConfig::GetConfigForTag - Available tags in map:
+LogTemp:   - PACS.Spawn.Human.POI -> Index 0
+LogTemp: PACS_SpawnConfig::GetConfigForTag - Found exact match for PACS.Spawn.Human.POI at index 0
+LogTemp: PACS_SpawnOrchestrator: Initialized pool for tag PACS.Spawn.Human.POI (Initial: 1, Max: 20)
+LogTemp: PACS_SpawnConfig::GetConfigForTag - Looking for tag: PACS.Spawn.Human.POI
+LogTemp: PACS_SpawnConfig::GetConfigForTag - SpawnConfigs count: 1
+LogTemp: PACS_SpawnConfig::GetConfigForTag - TagToIndexMap count: 1
+LogTemp: PACS_SpawnConfig::GetConfigForTag - Available tags in map:
+LogTemp:   - PACS.Spawn.Human.POI -> Index 0
+LogTemp: PACS_SpawnConfig::GetConfigForTag - Found exact match for PACS.Spawn.Human.POI at index 0
+LogTemp: PACS_SpawnOrchestrator: Successfully loaded class NPC_Civ_C for tag PACS.Spawn.Human.POI
+LogTemp: Warning: PACS_SelectionPlaneComponent::ShouldShowSelectionVisuals() -> FALSE (Dedicated Server)
+LogTemp: Warning: PACS_SelectionPlaneComponent::InitializeSelectionPlane() - Owner: NPC_Civ_C_0
+LogTemp: Warning: PACS_SelectionPlaneComponent::ShouldShowSelectionVisuals() -> FALSE (Dedicated Server)
+LogTemp: Warning:   -> ShouldShowSelectionVisuals() returned false, skipping
+LogTemp: Warning: ======================================================================
+LogTemp: Warning: PACS_SpawnOrchestrator::PrepareActorForUse: START for NPC_Civ_C_0
+LogTemp: Warning: PACS_SpawnOrchestrator::PrepareActorForUse: [STEP 1] Setting actor transform
+LogTemp: Warning: PACS_SpawnOrchestrator::PrepareActorForUse: [STEP 2] Applying selection profile
+LogTemp: PACS_SpawnConfig::GetConfigForTag - Looking for tag: PACS.Spawn.Human.POI
+LogTemp: PACS_SpawnConfig::GetConfigForTag - SpawnConfigs count: 1
+LogTemp: PACS_SpawnConfig::GetConfigForTag - TagToIndexMap count: 1
+LogTemp: PACS_SpawnConfig::GetConfigForTag - Available tags in map:
+LogTemp:   - PACS.Spawn.Human.POI -> Index 0
+LogTemp: PACS_SpawnConfig::GetConfigForTag - Found exact match for PACS.Spawn.Human.POI at index 0
+LogTemp: Warning: PACS_SpawnOrchestrator::PrepareActorForUse: Applying profile DA_LW
+LogTemp: Warning: PACS_SpawnOrchestrator: Starting profile application for actor NPC_Civ_C_0 with profile DA_LW
+LogTemp: Warning: PACS_SpawnOrchestrator: SK mesh already loaded for profile DA_LW: SKM_Manny
+LogTemp: Warning: PACS_SpawnOrchestrator: Applying profile to Character NPC NPC_Civ_C_0
+LogTemp: Warning: FNPCProfileData::PopulateFromProfile: Starting population from profile DA_LW
+LogTemp: Warning: FNPCProfileData::PopulateFromProfile: Cached SK Transform - Loc=X=0.000 Y=0.000 Z=-88.000, Rot=P=0.000000 Y=90.000000 R=0.000000, Scale=X=1.000 Y=1.000 Z=1.000
+LogTemp: FNPCProfileData::PopulateFromProfile: SkeletalMeshAsset cached: /Game/Assets/Characters/Mannequins/Meshes/SKM_Manny.SKM_Manny
+LogTemp: Warning: FNPCProfileData: Loaded Available from profile: Color=(0.55,0.00,1.00,1.00), Brightness=3.00
+LogTemp: Warning: FNPCProfileData: Loaded Hovered from profile: Color=(1.00,0.30,0.00,1.00), Brightness=3.00
+LogTemp: Warning: FNPCProfileData: Loaded Selected from profile: Color=(0.00,0.61,1.00,1.00), Brightness=3.00
+LogTemp: Warning: FNPCProfileData: Loaded Unavailable from profile: Color=(0.67,1.00,0.06,1.00), Brightness=3.00
+LogTemp: Warning: FNPCProfileData::PopulateFromProfile: COMPLETE - Cached all data from profile DA_LW
+LogTemp: Warning: ApplyCachedProfileData: Applied cached color values to SelectionPlaneComponent BEFORE material
+LogTemp: Error: ApplyCachedProfileData: SelectionPlane component is NULL for NPC_Civ_C_0!
+LogTemp: Warning: PACS_SpawnOrchestrator: Character NPC NPC_Civ_C_0 now has SK mesh: SKM_Manny
+LogTemp: Warning: PACS_SpawnOrchestrator: Profile application SUCCESS for NPC_Civ_C_0: Profile applied successfully
+LogTemp: Warning: PACS_SpawnOrchestrator::PrepareActorForUse: [STEP 3] Enabling actor
+LogTemp: Warning: PACS_SpawnOrchestrator::PrepareActorForUse: [STEP 4] Preparing replication state
+LogTemp: Warning: PACS_SpawnOrchestrator::PrepareActorForUse: [STEP 5] Calling OnAcquiredFromPool
+LogTemp: Warning: PACS_SelectionPlaneComponent::ShouldShowSelectionVisuals() -> FALSE (Dedicated Server)
+LogTemp: Warning: PACS_SpawnOrchestrator::PrepareActorForUse: COMPLETE for NPC_Civ_C_0
+LogTemp: Warning: ======================================================================
+LogTemp: PACS_SpawnPoint: Spawned NPC_Civ_C_0 with tag PACS.Spawn.Human.POI
+LogTemp: PACS_SpawnPoint: Orchestrator ready, starting spawning for BP_Spawner_C_1
+LogTemp: Warning: PACS: No pfu parameter found in login options: ?Name=RIG_23-53CC0E2E430DC262686AD4B215F76D42?SplitscreenCount=1
+LogTemp: PACS_CustomSignificanceManager: Configured for client-side creation
+LogTemp: EdgeScrollComponent initialized on BP_PlayerController_C_0
+LogTemp: Warning: PACS GameMode: HMD state unknown - falling back to AssessorPawn
+LogTemp: PACS GameMode: HMD state unknown - setting timeout
+LogTemp: PACS: Registered player: Player_8500 (Total: 1)
+LogTemp: PACS GameMode: PostLogin called for player
+LogTemp: PACS GameMode: Requesting HMD state from client
+LogTemp: Warning: PACS PlayerController: HMD not detected or not enabled
+LogTemp: EdgeScrollComponent initialized on BP_PlayerController_C_0
+LogTemp: Creating HoverProbe component for local controller
+LogTemp: HoverProbe component created and registered successfully
+LogTemp: Warning: ApplyCachedColorValues: Applying cached color values to SelectionPlaneComponent:
+LogTemp: Warning:   Available: Color=(0.55,0.00,1.00,1.00), Brightness=3.00
+LogTemp: Warning:   Hovered: Color=(1.00,0.30,0.00,1.00), Brightness=3.00
+LogTemp: Warning:   Selected: Color=(0.00,0.61,1.00,1.00), Brightness=3.00
+LogTemp: Warning:   Unavailable: Color=(0.67,1.00,0.06,1.00), Brightness=3.00
+LogTemp: Warning: ApplyCachedProfileData: Applied cached color values to SelectionPlaneComponent BEFORE material
+LogTemp: Error: ApplyCachedProfileData: SelectionPlane component is NULL for NPC_Civ_C_0!
+LogTemp: Warning: PACS_SelectionPlaneComponent::ShouldShowSelectionVisuals() -> TRUE
+LogTemp: Warning: PACS_SelectionPlaneComponent::InitializeSelectionPlane() - Owner: NPC_Civ_C_0
+LogTemp: Warning: PACS_SelectionPlaneComponent::ShouldShowSelectionVisuals() -> TRUE
+LogTemp: Warning:   -> SelectionPlane mesh component created: SelectionPlaneMesh
+LogTemp: Warning:   -> Attached to root: CollisionCylinder
+LogTemp: Warning: SetupSelectionPlane: Set initial CPD - State=3, Color=(1.0,1.0,1.0,0.8), Brightness=1.0
+LogTemp: Warning:   CPD[0] = 3.00
+LogTemp: Warning:   CPD[1] = 1.00
+LogTemp: Warning:   CPD[2] = 1.00
+LogTemp: Warning:   CPD[3] = 1.00
+LogTemp: Warning:   CPD[4] = 0.80
+LogTemp: Warning:   CPD[5] = 1.00
+LogTemp: Warning:   -> Initialization complete
+LogTemp: Warning: PACS_SelectionPlaneComponent::InitializeSelectionPlane() - Owner: NPC_Civ_C_0
+LogTemp: Warning:   -> Already initialized, skipping
+LogTemp: Warning: PACS_NPC_Base_Char::BeginPlay: Applying cached profile data on client for NPC_Civ_C_0
+LogTemp: Warning: ApplyCachedColorValues: Applying cached color values to SelectionPlaneComponent:
+LogTemp: Warning:   Available: Color=(0.55,0.00,1.00,1.00), Brightness=3.00
+LogTemp: Warning:   Hovered: Color=(1.00,0.30,0.00,1.00), Brightness=3.00
+LogTemp: Warning:   Selected: Color=(0.00,0.61,1.00,1.00), Brightness=3.00
+LogTemp: Warning:   Unavailable: Color=(0.67,1.00,0.06,1.00), Brightness=3.00
+LogTemp: Warning: UpdateSelectionPlaneCPD: BEFORE setting CPD values:
+LogTemp: Warning:   DisplayState=3, Visual from StateVisuals[3]:
+LogTemp: Warning:   Color=(0.55,0.00,1.00,1.00), Brightness=3.00
+LogTemp: Warning: UpdateSelectionPlaneCPD: AFTER setting CPD values:
+LogTemp: Warning:   CPD[0] = 3.00
+LogTemp: Warning:   CPD[1] = 0.55
+LogTemp: Warning:   CPD[2] = 0.00
+LogTemp: Warning:   CPD[3] = 1.00
+LogTemp: Warning:   CPD[4] = 1.00
+LogTemp: Warning:   CPD[5] = 3.00
+LogTemp: Warning:   Total CPD floats allocated: 6
+LogTemp: Warning: UpdateSelectionPlaneCPD: BEFORE setting CPD values:
+LogTemp: Warning:   DisplayState=3, Visual from StateVisuals[3]:
+LogTemp: Warning:   Color=(0.55,0.00,1.00,1.00), Brightness=3.00
+LogTemp: Warning: UpdateSelectionPlaneCPD: AFTER setting CPD values:
+LogTemp: Warning:   CPD[0] = 3.00
+LogTemp: Warning:   CPD[1] = 0.55
+LogTemp: Warning:   CPD[2] = 0.00
+LogTemp: Warning:   CPD[3] = 1.00
+LogTemp: Warning:   CPD[4] = 1.00
+LogTemp: Warning:   CPD[5] = 3.00
+LogTemp: Warning:   Total CPD floats allocated: 6
+LogTemp: Warning: ApplyCachedProfileData: Applied cached color values to SelectionPlaneComponent BEFORE material
+LogTemp: Warning: ApplyCachedProfileData: SelectionPlane component exists for NPC_Civ_C_0
+LogTemp: Warning:   -> SelectionStaticMesh path: /Engine/EditorMeshes/EditorPlane.EditorPlane
+LogTemp: Warning:   -> Applied mesh: EditorPlane
+LogTemp: Warning:   -> Transform: 0.000000,0.000000,-50.000000|-90.000000,-0.000000,0.000000|2.000000,2.000000,2.000000
+LogTemp: Warning:   -> SelectionMaterial path: /Game/Materials/Instances/MI_Circle.MI_Circle
+LogTemp: Warning:   -> BEFORE SetMaterial - checking CPD values:
+LogTemp: Warning:     CPD[0] = 3.00
+LogTemp: Warning:     CPD[1] = 0.55
+LogTemp: Warning:     CPD[2] = 0.00
+LogTemp: Warning:     CPD[3] = 1.00
+LogTemp: Warning:     CPD[4] = 1.00
+LogTemp: Warning:     CPD[5] = 3.00
+LogTemp: Warning:   -> Applied material: MI_Circle
+LogTemp: Warning:   -> AFTER SetMaterial - checking CPD values:
+LogTemp: Warning:     CPD[0] = 3.00
+LogTemp: Warning:     CPD[1] = 0.55
+LogTemp: Warning:     CPD[2] = 0.00
+LogTemp: Warning:     CPD[3] = 1.00
+LogTemp: Warning:     CPD[4] = 1.00
+LogTemp: Warning:     CPD[5] = 3.00
+LogTemp: Warning: UpdateSelectionPlaneCPD: BEFORE setting CPD values:
+LogTemp: Warning:   DisplayState=3, Visual from StateVisuals[3]:
+LogTemp: Warning:   Color=(0.55,0.00,1.00,1.00), Brightness=3.00
+LogTemp: Warning: UpdateSelectionPlaneCPD: AFTER setting CPD values:
+LogTemp: Warning:   CPD[0] = 3.00
+LogTemp: Warning:   CPD[1] = 0.55
+LogTemp: Warning:   CPD[2] = 0.00
+LogTemp: Warning:   CPD[3] = 1.00
+LogTemp: Warning:   CPD[4] = 1.00
+LogTemp: Warning:   CPD[5] = 3.00
+LogTemp: Warning:   Total CPD floats allocated: 6
+LogTemp: Warning:   -> Forced CPD update after material application
+LogTemp: Warning:   -> Collision channel set to 15
+LogTemp: Warning:   -> SelectionPlane visibility set to true
+LogTemp: PACS PlayerController: Server received HMD state 1
+LogTemp: PACS PlayerController: Triggering spawn for player with HMD state 1
+LogTemp: PACS GameMode: HMD state known (1) - proceeding with spawn
+LogTemp: PACS GameMode: Selecting AssessorPawn for non-HMD user
+LogTemp: PACS GameMode: Selecting AssessorPawn for non-HMD user
+LogTemp: APACS_AssessorPawn: Using Config 'DA_AssessorPawn' (Tilt=50.00, Arm=5000.0, MoveSpeed=8000.0)
+LogTemp: Warning: APACS_AssessorPawn::PossessedBy called with controller: BP_PlayerController_C
+LogTemp: AssessorPawn: Registered with PACS on client (IsLocal=0)
+LogTemp: Warning: AssessorPawn: registered with PACS InputHandler (may init later)
+LogTemp: PACS PlayerController: Set PlayFab player name to 'NoUser'
+LogTemp: Warning: AssessorPawn: registered with PACS InputHandler (may init later)
+LogTemp: AssessorPawn OnRep_Controller: registered with PACS (IsLocal=1)
+LogTemp: APACS_AssessorPawn: Using Config 'DA_AssessorPawn' (Tilt=50.00, Arm=5000.0, MoveSpeed=8000.0)
+LogTemp: EdgeScrollComponent readiness: READY
+LogTemp: Edge scrolling ALLOWED
+LogTemp: Warning: AssessorPawn: re-registered after handler init
+LogTemp: Warning: AssessorPawn: registered with PACS InputHandler (may init later)
+LogTemp: AssessorPawn OnRep_Controller: registered with PACS (IsLocal=1)
+LogTemp: APACS_AssessorPawn: SetupPlayerInputComponent called - PACS input system will handle all input
+LogTemp: PACS PlayerState: HMD state changed to 1

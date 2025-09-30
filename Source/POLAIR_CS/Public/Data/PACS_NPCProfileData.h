@@ -46,12 +46,9 @@ struct POLAIR_CS_API FNPCProfileData
 	UPROPERTY(BlueprintReadWrite, Category = "Visual Assets")
 	FVector StaticMeshScale = FVector(1.0f, 1.0f, 1.0f);
 
-	// Animations
+	// Animation Instance
 	UPROPERTY(BlueprintReadWrite, Category = "Visual Assets")
-	TSoftObjectPtr<class UAnimSequence> IdleAnimationSequence;
-
-	UPROPERTY(BlueprintReadWrite, Category = "Visual Assets")
-	TSoftObjectPtr<class UAnimSequence> RunAnimationSequence;
+	TSoftClassPtr<class UAnimInstance> AnimInstanceClass;
 
 	// Particle Effects
 	UPROPERTY(BlueprintReadWrite, Category = "Visual Assets")
@@ -107,6 +104,9 @@ struct POLAIR_CS_API FNPCProfileData
 	UPROPERTY(BlueprintReadWrite, Category = "Selection Profile")
 	float RenderDistance = 5000.0f;
 
+	UPROPERTY(BlueprintReadWrite, Category = "Selection Profile")
+	TEnumAsByte<ECollisionChannel> SelectionTraceChannel = ECC_GameTraceChannel1;
+
 	// ========================================
 	// Helper Methods
 	// ========================================
@@ -139,8 +139,7 @@ struct POLAIR_CS_API FNPCProfileData
 		StaticMeshLocation = FVector::ZeroVector;
 		StaticMeshRotation = FRotator::ZeroRotator;
 		StaticMeshScale = FVector(1.0f, 1.0f, 1.0f);
-		IdleAnimationSequence.Reset();
-		RunAnimationSequence.Reset();
+		AnimInstanceClass.Reset();
 		ParticleEffect.Reset();
 	}
 };

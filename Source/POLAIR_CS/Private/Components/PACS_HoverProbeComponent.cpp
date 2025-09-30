@@ -2,6 +2,8 @@
 #include "Core/PACS_PlayerController.h"
 #include "Core/PACS_CollisionChannels.h"
 #include "Components/PACS_InputHandlerComponent.h"
+#include "Components/PACS_SelectionPlaneComponent.h"
+#include "Actors/NPC/PACS_NPC_Base.h"
 #include "Engine/World.h"
 #include "DrawDebugHelpers.h"
 
@@ -58,24 +60,50 @@ void UPACS_HoverProbeComponent::ProbeOnce()
 		return;
 	}
 
-	// Perform line trace from cursor
+	// Perform line trace from cursor using object type query for selection planes
 	FHitResult HitResult;
-	bool bHit = OwnerPC->GetHitResultUnderCursor(ECC_Visibility, false, HitResult);
+	bool bHit = false;
+
+	// Use object type query if configured
+	if (HoverObjectTypes.Num() > 0)
+	{
+		bHit = OwnerPC->GetHitResultUnderCursorForObjects(HoverObjectTypes, false, HitResult);
+	}
+	else
+	{
+		// Fallback to visibility channel
+		bHit = OwnerPC->GetHitResultUnderCursor(ECC_Visibility, false, HitResult);
+	}
 
 	if (bHit)
 	{
 		AActor* HitActor = HitResult.GetActor();
-		AActor* CurrentActor = CurrentHoverActor.Get();
 
-		// Update hover state if actor changed
-		if (HitActor != CurrentActor)
+		// Try to get SelectionPlaneComponent from the hit actor
+		UPACS_SelectionPlaneComponent* HitPlaneComponent = nullptr;
+		if (HitActor)
+		{
+			// Check if this is an NPC with a selection plane
+			if (APACS_NPC_Base* NPC = Cast<APACS_NPC_Base>(HitActor))
+			{
+				HitPlaneComponent = NPC->SelectionPlaneComponent;
+			}
+		}
+
+		UPACS_SelectionPlaneComponent* CurrentPlaneComponent = CurrentHoverPlaneComponent.Get();
+
+		// Update hover state if component changed
+		if (HitPlaneComponent != CurrentPlaneComponent)
 		{
 			ClearHover();
 
-			if (HitActor)
+			if (HitPlaneComponent)
 			{
 				CurrentHoverActor = HitActor;
-				// Could add hover visuals here
+				CurrentHoverPlaneComponent = HitPlaneComponent;
+
+				// Activate hover visuals on the selection plane
+				HitPlaneComponent->SetHoverState(true);
 			}
 		}
 	}
@@ -84,12 +112,17 @@ void UPACS_HoverProbeComponent::ProbeOnce()
 		// No hit - clear hover
 		ClearHover();
 	}
-
-	// Debug visualization can be added here if needed
 }
 
 void UPACS_HoverProbeComponent::ClearHover()
 {
+	// Clear hover state on the selection plane component
+	if (CurrentHoverPlaneComponent.IsValid())
+	{
+		CurrentHoverPlaneComponent->SetHoverState(false);
+		CurrentHoverPlaneComponent = nullptr;
+	}
+
 	if (CurrentHoverActor.IsValid())
 	{
 		CurrentHoverActor = nullptr;
