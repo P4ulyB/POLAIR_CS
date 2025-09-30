@@ -308,6 +308,35 @@ void APACS_NPC_Base_Char::StopMovement()
 	}
 }
 
+bool APACS_NPC_Base_Char::IsMoving() const
+{
+	// Check if AI is currently following a path
+	if (const AAIController* AIController = Cast<AAIController>(GetController()))
+	{
+		if (UPathFollowingComponent* PathFollowing = AIController->GetPathFollowingComponent())
+		{
+			return PathFollowing->HasValidPath();
+		}
+	}
+
+	// Fallback: check velocity
+	if (const UCharacterMovementComponent* MovementComp = GetCharacterMovement())
+	{
+		return !MovementComp->Velocity.IsNearlyZero(1.0f);
+	}
+
+	return false;
+}
+
+void APACS_NPC_Base_Char::SetLocalHover(bool bHovered)
+{
+	bIsLocallyHovered = bHovered;
+	if (SelectionPlaneComponent)
+	{
+		SelectionPlaneComponent->SetHoverState(bHovered);
+	}
+}
+
 void APACS_NPC_Base_Char::UpdateSelectionVisuals()
 {
 	// Visibility handled automatically by component
@@ -358,10 +387,9 @@ void APACS_NPC_Base_Char::SetSelectionProfile(UPACS_SelectionProfileAsset* InPro
 	CachedProfileData.PopulateFromProfile(InProfile);
 	ApplyCachedProfileData();
 
-	if (GetWorld() && GetWorld()->GetNetMode() != NM_DedicatedServer && SelectionPlaneComponent)
-	{
-		SelectionPlaneComponent->ApplyProfileAsset(InProfile);
-	}
+	// NOTE: Do NOT call ApplyProfileAsset here - colors are already applied via ApplyCachedColorValues
+	// The data asset values flow through CachedProfileData -> ApplyCachedColorValues -> StateVisuals
+	// Calling ApplyProfileAsset would override the colors we just set
 }
 
 void APACS_NPC_Base_Char::ResetCharacterMovement()

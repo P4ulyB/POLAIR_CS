@@ -73,29 +73,30 @@ struct POLAIR_CS_API FNPCProfileData
 	TSoftObjectPtr<UMaterialInterface> SelectionMaterialInstance;
 
 	// Selection Colors and Brightness
+	// CRITICAL: No defaults - these MUST come from the data asset
 	UPROPERTY(BlueprintReadWrite, Category = "Selection Profile")
-	FLinearColor AvailableColour = FLinearColor(1.0f, 1.0f, 1.0f, 0.8f);
+	FLinearColor AvailableColour = FLinearColor(0.0f, 0.0f, 0.0f, 0.0f);
 
 	UPROPERTY(BlueprintReadWrite, Category = "Selection Profile")
-	float AvailableBrightness = 1.0f;
+	float AvailableBrightness = 0.0f;
 
 	UPROPERTY(BlueprintReadWrite, Category = "Selection Profile")
-	FLinearColor HoveredColour = FLinearColor(0.2f, 0.5f, 1.0f, 1.0f);
+	FLinearColor HoveredColour = FLinearColor(0.0f, 0.0f, 0.0f, 0.0f);
 
 	UPROPERTY(BlueprintReadWrite, Category = "Selection Profile")
-	float HoveredBrightness = 1.2f;
+	float HoveredBrightness = 0.0f;
 
 	UPROPERTY(BlueprintReadWrite, Category = "Selection Profile")
-	FLinearColor SelectedColour = FLinearColor(0.2f, 1.0f, 0.2f, 1.0f);
+	FLinearColor SelectedColour = FLinearColor(0.0f, 0.0f, 0.0f, 0.0f);
 
 	UPROPERTY(BlueprintReadWrite, Category = "Selection Profile")
-	float SelectedBrightness = 1.5f;
+	float SelectedBrightness = 0.0f;
 
 	UPROPERTY(BlueprintReadWrite, Category = "Selection Profile")
-	FLinearColor UnavailableColour = FLinearColor(0.5f, 0.5f, 0.5f, 0.5f);
+	FLinearColor UnavailableColour = FLinearColor(0.0f, 0.0f, 0.0f, 0.0f);
 
 	UPROPERTY(BlueprintReadWrite, Category = "Selection Profile")
-	float UnavailableBrightness = 0.5f;
+	float UnavailableBrightness = 0.0f;
 
 	// Other Settings
 	UPROPERTY(BlueprintReadWrite, Category = "Selection Profile")

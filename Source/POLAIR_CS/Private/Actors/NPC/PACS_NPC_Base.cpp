@@ -155,12 +155,12 @@ void APACS_NPC_Base::SetSelectionProfile(UPACS_SelectionProfileAsset* InProfile)
 		return;
 	}
 
-	// Apply selection profile to component
-	if (SelectionPlaneComponent)
-	{
-		SelectionPlaneComponent->ApplyProfileAsset(InProfile);
-		UE_LOG(LogTemp, Verbose, TEXT("PACS_NPC_Base: Applied selection profile to %s"), *GetName());
-	}
+	// NOTE: Base class does NOT apply profile directly to prevent double-application
+	// Derived classes handle profile application:
+	// - Character NPCs: Use replicated FNPCProfileData -> ApplyCachedColorValues
+	// - Vehicle NPCs: Override this method and apply directly via ApplyProfileAsset
+	// This ensures data asset is the single source of truth for colors
+	UE_LOG(LogTemp, Verbose, TEXT("PACS_NPC_Base: SetSelectionProfile called for %s (base implementation - delegated to derived class)"), *GetName());
 }
 
 void APACS_NPC_Base::ApplyNPCMeshFromProfile(UPACS_SelectionProfileAsset* Profile)
@@ -175,4 +175,13 @@ void APACS_NPC_Base::ApplySelectionProfile()
 	// This method is now deprecated - selection profiles are applied directly
 	// via SetSelectionProfile which is called by the spawn orchestrator
 	// with preloaded profiles (following Principle #1: Pre-load Selection Profiles)
+}
+
+void APACS_NPC_Base::SetLocalHover(bool bHovered)
+{
+	bIsLocallyHovered = bHovered;
+	if (SelectionPlaneComponent)
+	{
+		SelectionPlaneComponent->SetHoverState(bHovered);
+	}
 }

@@ -155,6 +155,28 @@ void APACS_NPC_Base_Veh::SetHandbrake(bool bEngaged)
 	}
 }
 
+bool APACS_NPC_Base_Veh::IsMoving() const
+{
+	// Check vehicle's velocity
+	if (const UChaosWheeledVehicleMovementComponent* VehicleMovement = Cast<UChaosWheeledVehicleMovementComponent>(GetVehicleMovementComponent()))
+	{
+		// Consider moving if speed is above 1 m/s
+		return VehicleMovement->GetForwardSpeedMPH() > 2.24f; // ~1 m/s in MPH
+	}
+
+	// Fallback: check actor velocity
+	return !GetVelocity().IsNearlyZero(100.0f); // 100 cm/s threshold
+}
+
+void APACS_NPC_Base_Veh::SetLocalHover(bool bHovered)
+{
+	bIsLocallyHovered = bHovered;
+	if (SelectionPlaneComponent)
+	{
+		SelectionPlaneComponent->SetHoverState(bHovered);
+	}
+}
+
 void APACS_NPC_Base_Veh::ApplyNPCMeshFromProfile(UPACS_SelectionProfileAsset* Profile)
 {
 	if (!Profile)

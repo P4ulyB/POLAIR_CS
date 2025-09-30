@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "Interfaces/PACS_Poolable.h"
+#include "Interfaces/PACS_SelectableCharacterInterface.h"
 #include "PACS_NPC_Base.generated.h"
 
 class UNiagaraComponent;
@@ -15,7 +16,7 @@ class UPACS_SelectionPlaneComponent;
  * Uses CustomPrimitiveData for per-actor visual customization
  */
 UCLASS(Abstract)
-class POLAIR_CS_API APACS_NPC_Base : public AActor, public IPACS_Poolable
+class POLAIR_CS_API APACS_NPC_Base : public AActor, public IPACS_Poolable, public IPACS_SelectableCharacterInterface
 {
 	GENERATED_BODY()
 
@@ -49,6 +50,9 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Category = "Selection")
 	TWeakObjectPtr<class APlayerState> CurrentSelector;
 
+	// Hover state (client-side only)
+	bool bIsLocallyHovered = false;
+
 
 public:
 	// Selection interface
@@ -58,8 +62,23 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Selection")
 	bool IsSelected() const { return bIsSelected; }
 
+	// IPACS_SelectableCharacterInterface implementation
 	UFUNCTION(BlueprintPure, Category = "Selection")
-	class APlayerState* GetCurrentSelector() const { return CurrentSelector.Get(); }
+	virtual class APlayerState* GetCurrentSelector() const override { return CurrentSelector.Get(); }
+	virtual void SetCurrentSelector(class APlayerState* Selector) override { CurrentSelector = Selector; }
+	virtual bool IsSelectedBy(class APlayerState* InPlayerState) const override { return CurrentSelector.Get() == InPlayerState; }
+
+	// Movement (base implementation - override in derived classes)
+	virtual void MoveToLocation(const FVector& TargetLocation) override {}
+	virtual bool IsMoving() const override { return false; }
+
+	// Hover/Highlight
+	virtual void SetLocalHover(bool bHovered) override;
+	virtual bool IsLocallyHovered() const override { return bIsLocallyHovered; }
+
+	// Visual Components (base returns nullptr - override in derived classes)
+	virtual class UMeshComponent* GetMeshComponent() const override { return nullptr; }
+	virtual class UDecalComponent* GetSelectionDecal() const override { return nullptr; }
 
 	// Set the selection profile (can be called by spawn system)
 	UFUNCTION(BlueprintCallable, Category = "Selection")

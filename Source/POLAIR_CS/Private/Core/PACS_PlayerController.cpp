@@ -6,6 +6,10 @@
 #include "Engine/Engine.h"
 #include "Engine/EngineTypes.h"
 #include "Actors/Pawn/PACS_CandidateHelicopterCharacter.h"
+#include "Actors/NPC/PACS_NPC_Base.h"
+#include "Actors/NPC/PACS_NPC_Base_Char.h"
+#include "Actors/NPC/PACS_NPC_Base_Veh.h"
+#include "Interfaces/PACS_Poolable.h"
 #include "Subsystems/PACSLaunchArgSubsystem.h"
 #include "EngineUtils.h"
 #include "Components/DecalComponent.h"
@@ -529,10 +533,90 @@ void APACS_PlayerController::ServerRequestSelect_Implementation(AActor* TargetAc
         return;
     }
 
-    // Store selected actor in PlayerState (will be refactored later with proper selection system)
+    // Check if target implements IPACS_Poolable (all NPCs do)
+    if (!TargetActor->Implements<UPACS_Poolable>())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] Target %s is not a poolable NPC - ignoring selection"),
+            *TargetActor->GetName());
+        return;
+    }
+
+    // Check selection state - try all NPC base classes
+    bool bIsAlreadySelected = false;
+    APlayerState* CurrentSelector = nullptr;
+
+    if (APACS_NPC_Base* BaseNPC = Cast<APACS_NPC_Base>(TargetActor))
+    {
+        bIsAlreadySelected = BaseNPC->IsSelected();
+        CurrentSelector = BaseNPC->GetCurrentSelector();
+    }
+    else if (APACS_NPC_Base_Char* CharNPC = Cast<APACS_NPC_Base_Char>(TargetActor))
+    {
+        bIsAlreadySelected = CharNPC->IsSelected();
+        CurrentSelector = CharNPC->GetCurrentSelector();
+    }
+    else if (APACS_NPC_Base_Veh* VehNPC = Cast<APACS_NPC_Base_Veh>(TargetActor))
+    {
+        bIsAlreadySelected = VehNPC->IsSelected();
+        CurrentSelector = VehNPC->GetCurrentSelector();
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] Could not cast target to any NPC base class"));
+        return;
+    }
+
+    // Check if NPC is already selected by another player
+    if (bIsAlreadySelected)
+    {
+        if (CurrentSelector && CurrentSelector != PS)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] NPC %s already selected by %s - cannot select"),
+                *TargetActor->GetName(),
+                *CurrentSelector->GetPlayerName());
+            return; // Can't select - already taken by someone else
+        }
+    }
+
+    // Clear previous selection if any
+    if (AActor* PreviousActor = PS->GetSelectedActor())
+    {
+        if (PreviousActor != TargetActor) // Don't deselect if clicking same actor
+        {
+            if (APACS_NPC_Base* PreviousNPC = Cast<APACS_NPC_Base>(PreviousActor))
+            {
+                PreviousNPC->SetSelected(false, nullptr);
+                UE_LOG(LogTemp, Log, TEXT("[SELECTION DEBUG] Deselected previous NPC: %s"),
+                    *PreviousActor->GetName());
+            }
+            else if (APACS_NPC_Base_Char* PreviousCharNPC = Cast<APACS_NPC_Base_Char>(PreviousActor))
+            {
+                PreviousCharNPC->SetSelected(false, nullptr);
+            }
+            else if (APACS_NPC_Base_Veh* PreviousVehNPC = Cast<APACS_NPC_Base_Veh>(PreviousActor))
+            {
+                PreviousVehNPC->SetSelected(false, nullptr);
+            }
+        }
+    }
+
+    // Select the new NPC - try all NPC base classes
+    if (APACS_NPC_Base* BaseNPC = Cast<APACS_NPC_Base>(TargetActor))
+    {
+        BaseNPC->SetSelected(true, PS);
+    }
+    else if (APACS_NPC_Base_Char* CharNPC = Cast<APACS_NPC_Base_Char>(TargetActor))
+    {
+        CharNPC->SetSelected(true, PS);
+    }
+    else if (APACS_NPC_Base_Veh* VehNPC = Cast<APACS_NPC_Base_Veh>(TargetActor))
+    {
+        VehNPC->SetSelected(true, PS);
+    }
+
     PS->SetSelectedActor(TargetActor);
 
-    UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] SUCCESS: %s selected %s"),
+    UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] SUCCESS: %s selected NPC %s"),
         *PS->GetPlayerName(), *TargetActor->GetName());
 }
 
@@ -554,9 +638,33 @@ void APACS_PlayerController::ServerRequestDeselect_Implementation()
 
     UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] ServerRequestDeselect - Player: %s"), *PS->GetPlayerName());
 
-    // Clear selected actor
+    // Clear NPC selection state before clearing PlayerState
+    if (AActor* CurrentActor = PS->GetSelectedActor())
+    {
+        // Try all NPC base classes to clear selection
+        if (APACS_NPC_Base* NPC = Cast<APACS_NPC_Base>(CurrentActor))
+        {
+            NPC->SetSelected(false, nullptr);
+            UE_LOG(LogTemp, Log, TEXT("[SELECTION DEBUG] Cleared selection state on NPC: %s"),
+                *CurrentActor->GetName());
+        }
+        else if (APACS_NPC_Base_Char* CharNPC = Cast<APACS_NPC_Base_Char>(CurrentActor))
+        {
+            CharNPC->SetSelected(false, nullptr);
+            UE_LOG(LogTemp, Log, TEXT("[SELECTION DEBUG] Cleared selection state on Character NPC: %s"),
+                *CurrentActor->GetName());
+        }
+        else if (APACS_NPC_Base_Veh* VehNPC = Cast<APACS_NPC_Base_Veh>(CurrentActor))
+        {
+            VehNPC->SetSelected(false, nullptr);
+            UE_LOG(LogTemp, Log, TEXT("[SELECTION DEBUG] Cleared selection state on Vehicle NPC: %s"),
+                *CurrentActor->GetName());
+        }
+    }
+
+    // Clear selected actor in PlayerState
     PS->SetSelectedActor(nullptr);
 
-    UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] SUCCESS: %s deselected"),
+    UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] SUCCESS: %s deselected all"),
         *PS->GetPlayerName());
 }

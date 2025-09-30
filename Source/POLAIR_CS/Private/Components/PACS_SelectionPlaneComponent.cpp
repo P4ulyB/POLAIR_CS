@@ -13,6 +13,7 @@
 #include "Engine/Engine.h"
 #include "Data/PACS_SelectionProfile.h"
 #include "Actors/NPC/PACS_NPC_Base.h"
+#include "Interfaces/PACS_SelectableCharacterInterface.h"
 
 UPACS_SelectionPlaneComponent::UPACS_SelectionPlaneComponent()
 {
@@ -20,6 +21,14 @@ UPACS_SelectionPlaneComponent::UPACS_SelectionPlaneComponent()
 
 	// This component replicates selection state only
 	SetIsReplicatedByDefault(true);
+
+	// Initialize StateVisuals with neutral defaults
+	// These MUST be overridden by data asset values - the data asset is the source of truth
+	// Using white with 0 alpha makes them invisible until proper colors are applied
+	for (int32 i = 0; i < 4; i++)
+	{
+		StateVisuals[i] = {FLinearColor(1.0f, 1.0f, 1.0f, 0.0f), 1.0f};  // White, invisible
+	}
 }
 
 void UPACS_SelectionPlaneComponent::BeginPlay()
@@ -138,17 +147,20 @@ void UPACS_SelectionPlaneComponent::SetupSelectionPlane()
 	SelectionPlane->SetDefaultCustomPrimitiveDataFloat(3, 1.0f);  // Brightness
 	SelectionPlane->SetDefaultCustomPrimitiveDataFloat(4, 0.8f);  // Alpha (optional)
 
-	// Now set actual initial values (Available state - white with brightness 1.0)
-	SelectionPlane->SetCustomPrimitiveDataFloat(0, 1.0f);  // R
-	SelectionPlane->SetCustomPrimitiveDataFloat(1, 1.0f);  // G
-	SelectionPlane->SetCustomPrimitiveDataFloat(2, 1.0f);  // B
-	SelectionPlane->SetCustomPrimitiveDataFloat(3, 1.0f);  // Brightness
-	SelectionPlane->SetCustomPrimitiveDataFloat(4, 0.8f);  // Alpha
+	// Set initial CPD values from StateVisuals array (Available state - index 3)
+	const FSelectionStateVisuals& AvailableVisuals = StateVisuals[3];
+	SelectionPlane->SetCustomPrimitiveDataFloat(0, AvailableVisuals.Color.R);  // R
+	SelectionPlane->SetCustomPrimitiveDataFloat(1, AvailableVisuals.Color.G);  // G
+	SelectionPlane->SetCustomPrimitiveDataFloat(2, AvailableVisuals.Color.B);  // B
+	SelectionPlane->SetCustomPrimitiveDataFloat(3, AvailableVisuals.Brightness);  // Brightness
+	SelectionPlane->SetCustomPrimitiveDataFloat(4, AvailableVisuals.Color.A);  // Alpha
 
 	// Start visible - appearance controlled by CPD values
 	SelectionPlane->SetVisibility(true);
 
-	UE_LOG(LogTemp, Warning, TEXT("SetupSelectionPlane: Set initial CPD - Color=(1.0,1.0,1.0), Brightness=1.0, Alpha=0.8"));
+	UE_LOG(LogTemp, Warning, TEXT("SetupSelectionPlane: Set initial CPD from StateVisuals[3] - Color=(%.2f,%.2f,%.2f), Brightness=%.2f, Alpha=%.2f"),
+		AvailableVisuals.Color.R, AvailableVisuals.Color.G, AvailableVisuals.Color.B,
+		AvailableVisuals.Brightness, AvailableVisuals.Color.A);
 
 	// Verify CPD was set (only check indices 0-4)
 	const FCustomPrimitiveData& CPD = SelectionPlane->GetCustomPrimitiveData();
@@ -221,14 +233,15 @@ void UPACS_SelectionPlaneComponent::ApplyCachedColorValues(
 		return;
 	}
 
-	// Store state visuals for CPD updates (indexed by ESelectionVisualState)
+	// CRITICAL: Store state visuals from data asset (via cached profile data)
+	// These values come from the data asset and are the SOURCE OF TRUTH
 	StateVisuals[0] = {InHoveredColor, InHoveredBrightness};			// Hovered
 	StateVisuals[1] = {InSelectedColor, InSelectedBrightness};			// Selected
 	StateVisuals[2] = {InUnavailableColor, InUnavailableBrightness};	// Unavailable
 	StateVisuals[3] = {InAvailableColor, InAvailableBrightness};		// Available
 
 	// Log the cached values for debugging
-	UE_LOG(LogTemp, Warning, TEXT("ApplyCachedColorValues: Applying cached color values to SelectionPlaneComponent:"));
+	UE_LOG(LogTemp, Warning, TEXT("ApplyCachedColorValues: APPLYING COLORS FROM DATA ASSET (via cached profile):"));
 	UE_LOG(LogTemp, Warning, TEXT("  Available: Color=(%.2f,%.2f,%.2f,%.2f), Brightness=%.2f"),
 		StateVisuals[3].Color.R, StateVisuals[3].Color.G, StateVisuals[3].Color.B, StateVisuals[3].Color.A, StateVisuals[3].Brightness);
 	UE_LOG(LogTemp, Warning, TEXT("  Hovered: Color=(%.2f,%.2f,%.2f,%.2f), Brightness=%.2f"),
@@ -238,11 +251,22 @@ void UPACS_SelectionPlaneComponent::ApplyCachedColorValues(
 	UE_LOG(LogTemp, Warning, TEXT("  Unavailable: Color=(%.2f,%.2f,%.2f,%.2f), Brightness=%.2f"),
 		StateVisuals[2].Color.R, StateVisuals[2].Color.G, StateVisuals[2].Color.B, StateVisuals[2].Color.A, StateVisuals[2].Brightness);
 
-	// Update visuals with cached data
+	// Initialize selection plane if not already done (for late color application)
+	if (!bIsInitialized && ShouldShowSelectionVisuals())
+	{
+		InitializeSelectionPlane();
+	}
+
+	// Update visuals with cached data - force immediate update
 	if (SelectionPlane)
 	{
 		UpdateSelectionPlaneCPD();
 		UpdateVisuals();
+		UE_LOG(LogTemp, Warning, TEXT("ApplyCachedColorValues: Updated CPD with new color values"));
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ApplyCachedColorValues: SelectionPlane not available yet, colors will be applied when initialized"));
 	}
 }
 
@@ -331,14 +355,15 @@ void UPACS_SelectionPlaneComponent::ApplyProfileAsset(UPACS_SelectionProfileAsse
 		UE_LOG(LogTemp, Warning, TEXT("  -> Using default collision setup (SelectionObject type, blocks SelectionTrace)"));
 	}
 
+	// CRITICAL: Apply color values from profile - this is the SOURCE OF TRUTH
 	// Store state visuals for CPD updates (indexed by ESelectionVisualState)
 	StateVisuals[0] = {ProfileAsset->HoveredColour, ProfileAsset->HoveredBrightness};			// Hovered
-	StateVisuals[1] = {ProfileAsset->SelectedColour, ProfileAsset->SelectedBrightness};			// Selected
+	StateVisuals[1] = {ProfileAsset->SelectedColour, ProfileAsset->SelectedBrightness};		// Selected
 	StateVisuals[2] = {ProfileAsset->UnavailableColour, ProfileAsset->UnavailableBrightness};	// Unavailable
 	StateVisuals[3] = {ProfileAsset->AvailableColour, ProfileAsset->AvailableBrightness};		// Available
 
 	// Log the loaded profile values for debugging
-	UE_LOG(LogTemp, Warning, TEXT("ApplyProfileAsset: Loaded state visuals from profile:"));
+	UE_LOG(LogTemp, Warning, TEXT("ApplyProfileAsset: APPLYING COLORS FROM DATA ASSET (SOURCE OF TRUTH):"));
 	UE_LOG(LogTemp, Warning, TEXT("  Available: Color=(%.2f,%.2f,%.2f,%.2f), Brightness=%.2f"),
 		StateVisuals[3].Color.R, StateVisuals[3].Color.G, StateVisuals[3].Color.B, StateVisuals[3].Color.A, StateVisuals[3].Brightness);
 	UE_LOG(LogTemp, Warning, TEXT("  Hovered: Color=(%.2f,%.2f,%.2f,%.2f), Brightness=%.2f"),
@@ -440,10 +465,10 @@ void UPACS_SelectionPlaneComponent::UpdateSelectionPlaneCPD()
 			// Get the NPC's CurrentSelector (who selected this NPC)
 			APlayerState* NPCSelector = nullptr;
 
-			// Try to get CurrentSelector from NPC base class
-			if (APACS_NPC_Base* NPC = Cast<APACS_NPC_Base>(Owner))
+			// Try to get CurrentSelector via interface (works for all NPC types)
+			if (IPACS_SelectableCharacterInterface* Selectable = Cast<IPACS_SelectableCharacterInterface>(Owner))
 			{
-				NPCSelector = NPC->GetCurrentSelector();
+				NPCSelector = Selectable->GetCurrentSelector();
 			}
 
 			// Get local player's PlayerState
@@ -482,6 +507,20 @@ void UPACS_SelectionPlaneComponent::UpdateSelectionPlaneCPD()
 	// APPLY CUSTOM PRIMITIVE DATA
 	// ========================================
 	const FSelectionStateVisuals& Visuals = StateVisuals[DisplayState];
+
+	// VALIDATION: Check if colors are invalid (all zeros = not loaded from data asset)
+	bool bInvalidColors = (Visuals.Color.R == 0.0f && Visuals.Color.G == 0.0f &&
+	                       Visuals.Color.B == 0.0f && Visuals.Color.A == 0.0f &&
+	                       Visuals.Brightness == 0.0f);
+
+	if (bInvalidColors)
+	{
+		UE_LOG(LogTemp, Error, TEXT("UpdateSelectionPlaneCPD: INVALID COLORS! State %d has no colors - data asset not loaded properly!"),
+			DisplayState);
+		UE_LOG(LogTemp, Error, TEXT("  This means the PACS_SelectionProfile data asset colors were not applied."));
+		UE_LOG(LogTemp, Error, TEXT("  Check that your data asset has colors set for all states."));
+		// Continue anyway to avoid crash, but visuals will be invisible
+	}
 
 	// Log what we're about to set (matching material expectations)
 	UE_LOG(LogTemp, Warning, TEXT("UpdateSelectionPlaneCPD: Updating for state %d (%s)"),

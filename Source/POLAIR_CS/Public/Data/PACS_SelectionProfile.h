@@ -98,38 +98,38 @@ public:
 	// --- Available ---
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Selection Profile|Available",
 		meta = (DisplayName = "Available Brightness", ClampMin = 0, ClampMax = 25.0))
-	float AvailableBrightness = 1.0f;
+	float AvailableBrightness = 0.0f;  // No defaults - must be set in data asset
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Selection Profile|Available",
 		meta = (DisplayName = "Available Colour"))
-	FLinearColor AvailableColour = FLinearColor(1.0f, 1.0f, 1.0f, 0.8f);
+	FLinearColor AvailableColour = FLinearColor(0.0f, 0.0f, 0.0f, 0.0f);  // Black/invisible - must be set in data asset
 
 	// --- Hovered ---
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Selection Profile|Hovered",
 		meta = (DisplayName = "Hovered Brightness", ClampMin = 0, ClampMax = 25.0))
-	float HoveredBrightness = 1.2f;
+	float HoveredBrightness = 0.0f;  // No defaults - must be set in data asset
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Selection Profile|Hovered",
 		meta = (DisplayName = "Hovered Colour"))
-	FLinearColor HoveredColour = FLinearColor(0.2f, 0.5f, 1.0f, 1.0f);
+	FLinearColor HoveredColour = FLinearColor(0.0f, 0.0f, 0.0f, 0.0f);  // Black/invisible - must be set in data asset
 
 	// --- Selected ---
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Selection Profile|Selected",
 		meta = (DisplayName = "Selected Brightness", ClampMin = 0, ClampMax = 25.0))
-	float SelectedBrightness = 1.5f;
+	float SelectedBrightness = 0.0f;  // No defaults - must be set in data asset
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Selection Profile|Selected",
 		meta = (DisplayName = "Selected Colour"))
-	FLinearColor SelectedColour = FLinearColor(0.2f, 1.0f, 0.2f, 1.0f);
+	FLinearColor SelectedColour = FLinearColor(0.0f, 0.0f, 0.0f, 0.0f);  // Black/invisible - must be set in data asset
 
 	// --- Unavailable ---
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Selection Profile|Unavailable",
 		meta = (DisplayName = "Unavailable Brightness", ClampMin = 0, ClampMax = 25.0))
-	float UnavailableBrightness = 0.5f;
+	float UnavailableBrightness = 0.0f;  // No defaults - must be set in data asset
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Selection Profile|Unavailable",
 		meta = (DisplayName = "Unavailable Colour"))
-	FLinearColor UnavailableColour = FLinearColor(0.5f, 0.5f, 0.5f, 0.5f);
+	FLinearColor UnavailableColour = FLinearColor(0.0f, 0.0f, 0.0f, 0.0f);  // Black/invisible - must be set in data asset
 
 #if WITH_EDITOR
 	virtual EDataValidationResult IsDataValid(TArray<FText>& ValidationErrors) override;

@@ -4,6 +4,9 @@
 #include "Components/PACS_InputHandlerComponent.h"
 #include "Components/PACS_SelectionPlaneComponent.h"
 #include "Interfaces/PACS_Poolable.h"
+#include "Interfaces/PACS_SelectableCharacterInterface.h"
+#include "Actors/NPC/PACS_NPC_Base.h"
+#include "Data/PACS_SelectionProfile.h"
 #include "Engine/World.h"
 #include "DrawDebugHelpers.h"
 
@@ -246,22 +249,60 @@ void UPACS_HoverProbeComponent::ProbeOnce()
 
 				if (HitPlaneComponent)
 				{
-					// Log successful hit on compatible collision with detailed info
-					UActorComponent* HitComp = HitResult.GetComponent();
-					FString CollisionInfo = TEXT("N/A");
-					if (HitComp && HitComp->IsA<UPrimitiveComponent>())
+					// Check if NPC is already selected by another player - don't hover if unavailable
+					bool bCanHover = true;
+
+					// Try to get the NPC via interface to check selection state (works for all NPC types)
+					if (IPACS_SelectableCharacterInterface* Selectable = Cast<IPACS_SelectableCharacterInterface>(HitActor))
 					{
-						UPrimitiveComponent* PrimComp = Cast<UPrimitiveComponent>(HitComp);
-						CollisionInfo = FString::Printf(TEXT("ObjectType=%d, ProfileName=%s"),
-							(int32)PrimComp->GetCollisionObjectType(),
-							*PrimComp->GetCollisionProfileName().ToString());
+						if (Selectable->IsSelectedBy(nullptr)) // Check if selected by anyone
+						{
+							// Check if it's selected by someone else
+							if (UWorld* World = GetWorld())
+							{
+								if (APlayerController* PC = World->GetFirstPlayerController())
+								{
+									if (APlayerState* LocalPS = PC->GetPlayerState<APlayerState>())
+									{
+										APlayerState* NPCSelector = Selectable->GetCurrentSelector();
+
+										// If selected by someone else, don't allow hover
+										if (NPCSelector && NPCSelector != LocalPS)
+										{
+											bCanHover = false;
+											UE_LOG(LogTemp, Verbose, TEXT("HoverProbe: Cannot hover - NPC '%s' selected by another player"),
+												*HitActor->GetName());
+										}
+									}
+								}
+							}
+						}
 					}
 
-					UE_LOG(LogTemp, Log, TEXT("HoverProbe: Hit poolable actor '%s' with SelectionPlane at distance %.1f (Component: %s, %s)"),
-						*HitActor->GetName(),
-						HitResult.Distance,
-						*GetNameSafe(HitResult.GetComponent()),
-						*CollisionInfo);
+					if (bCanHover)
+					{
+						// Log successful hit on compatible collision with detailed info
+						UActorComponent* HitComp = HitResult.GetComponent();
+						FString CollisionInfo = TEXT("N/A");
+						if (HitComp && HitComp->IsA<UPrimitiveComponent>())
+						{
+							UPrimitiveComponent* PrimComp = Cast<UPrimitiveComponent>(HitComp);
+							CollisionInfo = FString::Printf(TEXT("ObjectType=%d, ProfileName=%s"),
+								(int32)PrimComp->GetCollisionObjectType(),
+								*PrimComp->GetCollisionProfileName().ToString());
+						}
+
+						UE_LOG(LogTemp, Log, TEXT("HoverProbe: Hit poolable actor '%s' with SelectionPlane at distance %.1f (Component: %s, %s)"),
+							*HitActor->GetName(),
+							HitResult.Distance,
+							*GetNameSafe(HitResult.GetComponent()),
+							*CollisionInfo);
+					}
+					else
+					{
+						// Don't set this as hit plane if we can't hover
+						HitPlaneComponent = nullptr;
+					}
 				}
 				else
 				{
