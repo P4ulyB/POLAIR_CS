@@ -349,15 +349,39 @@ void APACS_SpawnPoint::CheckOrchestratorReady()
 
 FTransform APACS_SpawnPoint::GetSpawnTransform() const
 {
+	FTransform ResultTransform;
+
 	if (bUseSpawnPointTransform)
 	{
 		// Combine spawn point transform with offset
 		FTransform BaseTransform = GetActorTransform();
-		return SpawnTransformOffset * BaseTransform;
+		ResultTransform = SpawnTransformOffset * BaseTransform;
+
+		UE_LOG(LogTemp, Warning, TEXT("PACS_SpawnPoint::GetSpawnTransform: bUseSpawnPointTransform=TRUE"));
+		UE_LOG(LogTemp, Warning, TEXT("  - Spawn Point Actor Transform: Loc=%s, Rot=%s, Scale=%s"),
+			*BaseTransform.GetLocation().ToString(),
+			*BaseTransform.Rotator().ToString(),
+			*BaseTransform.GetScale3D().ToString());
+		UE_LOG(LogTemp, Warning, TEXT("  - SpawnTransformOffset: Loc=%s, Rot=%s, Scale=%s"),
+			*SpawnTransformOffset.GetLocation().ToString(),
+			*SpawnTransformOffset.Rotator().ToString(),
+			*SpawnTransformOffset.GetScale3D().ToString());
+		UE_LOG(LogTemp, Warning, TEXT("  - RESULT Transform: Loc=%s, Rot=%s, Scale=%s"),
+			*ResultTransform.GetLocation().ToString(),
+			*ResultTransform.Rotator().ToString(),
+			*ResultTransform.GetScale3D().ToString());
 	}
 	else
 	{
 		// Use only the offset (world space)
-		return SpawnTransformOffset;
+		ResultTransform = SpawnTransformOffset;
+
+		UE_LOG(LogTemp, Warning, TEXT("PACS_SpawnPoint::GetSpawnTransform: bUseSpawnPointTransform=FALSE"));
+		UE_LOG(LogTemp, Warning, TEXT("  - Using SpawnTransformOffset as world transform: Loc=%s, Rot=%s, Scale=%s"),
+			*ResultTransform.GetLocation().ToString(),
+			*ResultTransform.Rotator().ToString(),
+			*ResultTransform.GetScale3D().ToString());
 	}
+
+	return ResultTransform;
 }

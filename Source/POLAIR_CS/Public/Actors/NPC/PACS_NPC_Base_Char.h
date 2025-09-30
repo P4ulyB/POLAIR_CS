@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "Interfaces/PACS_Poolable.h"
+#include "Data/PACS_NPCProfileData.h"
 #include "PACS_NPC_Base_Char.generated.h"
 
 class UBoxComponent;
@@ -46,18 +47,21 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Category = "Selection")
 	TWeakObjectPtr<class APlayerState> CurrentSelector;
 
-	// Replicated skeletal mesh for proper multiplayer support
-	// Epic doesn't replicate SetSkeletalMesh() by default, so we need custom replication
-	UPROPERTY(ReplicatedUsing = OnRep_SkeletalMeshAsset)
-	TObjectPtr<USkeletalMesh> ReplicatedSkeletalMesh;
+	// Cached NPC profile data for atomic replication
+	// Contains all visual and configuration data - replicates as single struct to eliminate race conditions
+	UPROPERTY(ReplicatedUsing = OnRep_CachedProfileData)
+	struct FNPCProfileData CachedProfileData;
 
 	// Movement state for pooling
 	UPROPERTY()
 	float DefaultMaxWalkSpeed = 600.0f;
 
-	// Called when replicated skeletal mesh changes on clients
+	// Called when cached profile data replicates to clients
 	UFUNCTION()
-	void OnRep_SkeletalMeshAsset();
+	void OnRep_CachedProfileData();
+
+	// Apply cached profile data in controlled sequence (mesh -> transform -> materials -> animations)
+	void ApplyCachedProfileData();
 
 public:
 	// Selection interface
@@ -96,9 +100,8 @@ protected:
 	virtual void ResetCharacterMovement();
 	virtual void ResetCharacterAnimation();
 
-	// Async loading support for selection profiles
+	// Async loading support for selection profiles (deprecated)
 	virtual void OnSelectionProfileLoaded();
-	void ApplySkeletalMeshFromProfile(class UPACS_SelectionProfileAsset* ProfileAsset);
 
 	// Handle for async loading
 	TSharedPtr<struct FStreamableHandle> ProfileLoadHandle;

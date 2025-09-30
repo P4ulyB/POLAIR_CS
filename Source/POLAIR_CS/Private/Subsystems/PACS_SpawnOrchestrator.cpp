@@ -464,7 +464,11 @@ void UPACS_SpawnOrchestrator::PrepareActorForUse(AActor* Actor, const FSpawnRequ
 		return;
 	}
 
+	UE_LOG(LogTemp, Warning, TEXT("======================================================================"));
+	UE_LOG(LogTemp, Warning, TEXT("PACS_SpawnOrchestrator::PrepareActorForUse: START for %s"), *Actor->GetName());
+
 	// Set transform
+	UE_LOG(LogTemp, Warning, TEXT("PACS_SpawnOrchestrator::PrepareActorForUse: [STEP 1] Setting actor transform"));
 	Actor->SetActorTransform(Params.Transform);
 
 	// Set ownership
@@ -479,6 +483,7 @@ void UPACS_SpawnOrchestrator::PrepareActorForUse(AActor* Actor, const FSpawnRequ
 
 	// Apply selection profile from spawn config
 	// IMPORTANT: Profiles loaded on DS for SK mesh replication
+	UE_LOG(LogTemp, Warning, TEXT("PACS_SpawnOrchestrator::PrepareActorForUse: [STEP 2] Applying selection profile"));
 	FGameplayTag* TagPtr = ActorToTagMap.Find(Actor);
 	if (TagPtr && SpawnConfig)
 	{
@@ -489,6 +494,7 @@ void UPACS_SpawnOrchestrator::PrepareActorForUse(AActor* Actor, const FSpawnRequ
 			UPACS_SelectionProfileAsset* ProfileAsset = Config.SelectionProfile.Get();
 			if (ProfileAsset)
 			{
+				UE_LOG(LogTemp, Warning, TEXT("PACS_SpawnOrchestrator::PrepareActorForUse: Applying profile %s"), *ProfileAsset->GetName());
 				ApplySelectionProfileToActor(Actor, ProfileAsset);
 			}
 			else
@@ -498,23 +504,32 @@ void UPACS_SpawnOrchestrator::PrepareActorForUse(AActor* Actor, const FSpawnRequ
 					*TagPtr->ToString());
 			}
 		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("PACS_SpawnOrchestrator::PrepareActorForUse: No selection profile configured for tag %s"),
+				TagPtr ? *TagPtr->ToString() : TEXT("NULL"));
+		}
 	}
 
 	// Enable actor
+	UE_LOG(LogTemp, Warning, TEXT("PACS_SpawnOrchestrator::PrepareActorForUse: [STEP 3] Enabling actor"));
 	Actor->SetActorHiddenInGame(false);
 	Actor->SetActorEnableCollision(true);
 	Actor->SetActorTickEnabled(true);
 
 	// Prepare replication
+	UE_LOG(LogTemp, Warning, TEXT("PACS_SpawnOrchestrator::PrepareActorForUse: [STEP 4] Preparing replication state"));
 	PrepareReplicationState(Actor);
 
 	// Call poolable interface if implemented
+	UE_LOG(LogTemp, Warning, TEXT("PACS_SpawnOrchestrator::PrepareActorForUse: [STEP 5] Calling OnAcquiredFromPool"));
 	if (Actor->GetClass()->ImplementsInterface(UPACS_Poolable::StaticClass()))
 	{
 		IPACS_Poolable::Execute_OnAcquiredFromPool(Actor);
 	}
 
-	UE_LOG(LogTemp, Verbose, TEXT("PACS_SpawnOrchestrator: Prepared actor %s for use"), *Actor->GetName());
+	UE_LOG(LogTemp, Warning, TEXT("PACS_SpawnOrchestrator::PrepareActorForUse: COMPLETE for %s"), *Actor->GetName());
+	UE_LOG(LogTemp, Warning, TEXT("======================================================================"));
 }
 
 void UPACS_SpawnOrchestrator::LoadActorClass(FGameplayTag SpawnTag)
@@ -759,7 +774,18 @@ void UPACS_SpawnOrchestrator::PreloadSelectionProfiles()
 				// Store handle to keep SK meshes loaded (Principle #4: Pool Pre-configured NPCs)
 				if (SKMeshHandle.IsValid())
 				{
-					LoadHandles.Add(FGameplayTag::RequestGameplayTag(TEXT("PACS.Preload.SKMeshes")), SKMeshHandle);
+					// Use RequestGameplayTag with ErrorIfNotFound=false to avoid assertion if tag doesn't exist
+					FGameplayTag SKMeshTag = FGameplayTag::RequestGameplayTag(FName(TEXT("PACS.Preload.SKMeshes")), false);
+					if (SKMeshTag.IsValid())
+					{
+						LoadHandles.Add(SKMeshTag, SKMeshHandle);
+					}
+					else
+					{
+						// Fallback: store without tag if tag system isn't configured
+						LoadHandles.Add(FGameplayTag(), SKMeshHandle);
+						UE_LOG(LogTemp, Warning, TEXT("PACS_SpawnOrchestrator: PACS.Preload.SKMeshes tag not found, using fallback storage"));
+					}
 				}
 			}
 		})
@@ -768,7 +794,19 @@ void UPACS_SpawnOrchestrator::PreloadSelectionProfiles()
 	// Store handle to keep profile assets loaded
 	if (ProfileHandle.IsValid())
 	{
-		LoadHandles.Add(FGameplayTag::RequestGameplayTag(TEXT("PACS.Preload.SelectionProfiles")), ProfileHandle);
+		// Use RequestGameplayTag with ErrorIfNotFound=false to avoid assertion if tag doesn't exist
+		FGameplayTag PreloadTag = FGameplayTag::RequestGameplayTag(FName(TEXT("PACS.Preload.SelectionProfiles")), false);
+		if (PreloadTag.IsValid())
+		{
+			LoadHandles.Add(PreloadTag, ProfileHandle);
+		}
+		else
+		{
+			// Fallback: use a simple counter-based key if tag system isn't configured
+			static int32 HandleCounter = 0;
+			LoadHandles.Add(FGameplayTag(), ProfileHandle);
+			UE_LOG(LogTemp, Warning, TEXT("PACS_SpawnOrchestrator: PACS.Preload.SelectionProfiles tag not found, using fallback storage"));
+		}
 	}
 
 	UE_LOG(LogTemp, Log, TEXT("PACS_SpawnOrchestrator: Started pre-loading %d selection profiles"), ProfilesToLoad.Num());
