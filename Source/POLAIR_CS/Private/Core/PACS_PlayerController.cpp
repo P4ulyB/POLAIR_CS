@@ -513,30 +513,15 @@ EPACS_InputHandleResult APACS_PlayerController::HandleInputAction(FName ActionNa
                         HitResult.GetActor() ? *HitResult.GetActor()->GetName() : TEXT("None"),
                         *HitResult.Location.ToString());
 
-                    // Request selection of the actor
+                    // Request selection of the actor (server will notify client to update NPCBehaviorComponent)
                     ServerRequestSelect(HitResult.GetActor());
-
-                    // Update local selection tracking in NPCBehaviorComponent
-                    if (NPCBehaviorComponent && HitResult.GetActor())
-                    {
-                        if (HitResult.GetActor()->Implements<UPACS_SelectableCharacterInterface>())
-                        {
-                            NPCBehaviorComponent->SetLocallySelectedNPC(HitResult.GetActor());
-                        }
-                    }
                 }
                 else
                 {
                     UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] No hit result - deselecting"));
 
-                    // No hit - deselect
+                    // No hit - deselect (server will notify client to update NPCBehaviorComponent)
                     ServerRequestDeselect();
-
-                    // Clear local selection
-                    if (NPCBehaviorComponent)
-                    {
-                        NPCBehaviorComponent->ClearLocalSelection();
-                    }
                 }
             }
 
@@ -553,14 +538,8 @@ EPACS_InputHandleResult APACS_PlayerController::HandleInputAction(FName ActionNa
     }
     else if (ActionName == TEXT("Deselect"))
     {
-        // Explicit deselection command
+        // Explicit deselection command (server will notify client to update NPCBehaviorComponent)
         ServerRequestDeselect();
-
-        // Clear local selection
-        if (NPCBehaviorComponent)
-        {
-            NPCBehaviorComponent->ClearLocalSelection();
-        }
 
         return EPACS_InputHandleResult::HandledConsume;
     }
@@ -695,10 +674,15 @@ void APACS_PlayerController::ServerRequestSelect_Implementation(AActor* TargetAc
         VehNPC->SetSelected(true, PS);
     }
 
+    // For single selection, clear previous selections and set just this one
     PS->SetSelectedActor(TargetActor);
 
     UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] SUCCESS: %s selected NPC %s"),
         *PS->GetPlayerName(), *TargetActor->GetName());
+
+    // Notify the owning client to update their NPCBehaviorComponent
+    // In Server RPC, 'this' is the PlayerController that called the RPC
+    ClientUpdateSelectedNPCs(PS->GetSelectedActors());
 }
 
 void APACS_PlayerController::ServerRequestSelectMultiple_Implementation(const TArray<AActor*>& TargetActors)
@@ -829,11 +813,9 @@ void APACS_PlayerController::ServerRequestSelectMultiple_Implementation(const TA
     UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] SUCCESS: %s selected %d/%d NPCs"),
         *PS->GetPlayerName(), SuccessCount, TargetActors.Num());
 
-    // Update NPCBehaviorComponent with new selections (client-side tracking)
-    if (NPCBehaviorComponent)
-    {
-        NPCBehaviorComponent->SetLocallySelectedNPCs(PS->GetSelectedActors());
-    }
+    // Notify the owning client to update their NPCBehaviorComponent
+    // In Server RPC, 'this' is the PlayerController that called the RPC
+    ClientUpdateSelectedNPCs(PS->GetSelectedActors());
 }
 
 void APACS_PlayerController::ServerRequestDeselect_Implementation()
@@ -892,11 +874,8 @@ void APACS_PlayerController::ServerRequestDeselect_Implementation()
     UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] SUCCESS: %s deselected %d NPCs"),
         *PS->GetPlayerName(), ClearedCount);
 
-    // Update NPCBehaviorComponent (client-side tracking)
-    if (NPCBehaviorComponent)
-    {
-        NPCBehaviorComponent->ClearLocalSelection();
-    }
+    // Notify the owning client to clear their NPCBehaviorComponent
+    ClientUpdateSelectedNPCs(TArray<AActor*>());  // Empty array to clear
 }
 
 void APACS_PlayerController::ServerRequestMoveMultiple_Implementation(const TArray<AActor*>& NPCs, FVector_NetQuantize TargetLocation)
@@ -957,6 +936,18 @@ void APACS_PlayerController::ServerRequestMoveMultiple_Implementation(const TArr
 
     UE_LOG(LogTemp, Warning, TEXT("[MOVEMENT DEBUG] SUCCESS: Moved %d/%d NPCs to location"),
         MovedCount, NPCs.Num());
+}
+
+void APACS_PlayerController::ClientUpdateSelectedNPCs_Implementation(const TArray<AActor*>& SelectedNPCs)
+{
+    // Update NPCBehaviorComponent with the current selections
+    if (NPCBehaviorComponent)
+    {
+        NPCBehaviorComponent->SetLocallySelectedNPCs(SelectedNPCs);
+
+        UE_LOG(LogTemp, Log, TEXT("[SELECTION DEBUG] Client updated NPCBehaviorComponent with %d selections"),
+            SelectedNPCs.Num());
+    }
 }
 
 void APACS_PlayerController::StartMarquee()

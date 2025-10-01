@@ -155,6 +155,10 @@ public:
     // Multi-NPC movement command
     UFUNCTION(Server, Reliable)
     void ServerRequestMoveMultiple(const TArray<AActor*>& NPCs, FVector_NetQuantize TargetLocation);
+
+    // Client notification for selection changes
+    UFUNCTION(Client, Reliable)
+    void ClientUpdateSelectedNPCs(const TArray<AActor*>& SelectedNPCs);
 #pragma endregion
 
 #pragma region Marquee Selection
