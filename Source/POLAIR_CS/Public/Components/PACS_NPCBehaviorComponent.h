@@ -85,6 +85,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Selection")
 	void ClearLocalSelection();
 
+	// Get all currently selected NPCs for this player
+	UFUNCTION(BlueprintCallable, Category = "Selection")
+	TArray<AActor*> GetSelectedNPCs() const;
+
 protected:
 	// Component lifecycle
 	virtual void BeginPlay() override;
@@ -131,9 +135,6 @@ private:
 
 	// Get the currently selected NPC for this player (returns first for backward compat)
 	AActor* GetSelectedNPC() const;
-
-	// Get all currently selected NPCs for this player
-	TArray<AActor*> GetSelectedNPCs() const;
 
 	// Check if an actor is a valid NPC that can be commanded
 	bool IsValidCommandTarget(AActor* Actor) const;

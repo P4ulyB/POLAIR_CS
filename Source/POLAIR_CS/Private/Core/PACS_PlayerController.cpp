@@ -1011,8 +1011,14 @@ void APACS_PlayerController::FinalizeMarquee()
         return;
     }
 
-    // Start with currently selected actors owned by this player
-    TArray<AActor*> ActorsToSelect = PS->GetSelectedActors();
+    // Start with currently selected actors from NPCBehaviorComponent (client-side tracking)
+    TArray<AActor*> ActorsToSelect;
+    if (NPCBehaviorComponent)
+    {
+        ActorsToSelect = NPCBehaviorComponent->GetSelectedNPCs();
+        UE_LOG(LogTemp, Warning, TEXT("[MARQUEE DEBUG] Starting with %d existing selections from NPCBehaviorComponent"),
+            ActorsToSelect.Num());
+    }
     int32 PreviouslySelectedCount = ActorsToSelect.Num();
 
     // Add newly marqueed actors that are available
