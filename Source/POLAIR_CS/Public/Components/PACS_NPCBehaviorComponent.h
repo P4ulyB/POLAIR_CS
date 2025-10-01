@@ -77,6 +77,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Selection")
 	void SetLocallySelectedNPC(AActor* NPC);
 
+	// Set multiple selected NPCs (for multi-selection support)
+	UFUNCTION(BlueprintCallable, Category = "Selection")
+	void SetLocallySelectedNPCs(const TArray<AActor*>& NPCs);
+
 	// Clear local selection (e.g., when NPC is deselected or destroyed)
 	UFUNCTION(BlueprintCallable, Category = "Selection")
 	void ClearLocalSelection();
@@ -125,8 +129,11 @@ private:
 	// Helper Methods
 	// ========================================
 
-	// Get the currently selected NPC for this player
+	// Get the currently selected NPC for this player (returns first for backward compat)
 	AActor* GetSelectedNPC() const;
+
+	// Get all currently selected NPCs for this player
+	TArray<AActor*> GetSelectedNPCs() const;
 
 	// Check if an actor is a valid NPC that can be commanded
 	bool IsValidCommandTarget(AActor* Actor) const;
@@ -178,6 +185,6 @@ private:
 	static constexpr float MoveCommandCooldown = 0.1f;
 
 	// Client-side tracking of what this player has selected
-	// Using TWeakObjectPtr for automatic null handling if NPC is destroyed
-	TWeakObjectPtr<AActor> LocallySelectedNPC;
+	// Using TWeakObjectPtr for automatic null handling if NPCs are destroyed
+	TArray<TWeakObjectPtr<AActor>> LocallySelectedNPCs;
 };

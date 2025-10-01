@@ -104,16 +104,16 @@ EPACS_InputHandleResult UPACS_NPCBehaviorComponent::HandleRightClick(const FInpu
 		return EPACS_InputHandleResult::NotHandled;
 	}
 
-	// Get currently selected NPC
-	AActor* SelectedNPC = GetSelectedNPC();
-	if (!SelectedNPC)
+	// Get currently selected NPCs
+	TArray<AActor*> SelectedNPCs = GetSelectedNPCs();
+	if (SelectedNPCs.Num() == 0)
 	{
-		// No NPC selected, let other handlers process this
-		UE_LOG(LogTemp, Log, TEXT("PACS_NPCBehaviorComponent::HandleRightClick - No NPC selected, passing to other handlers"));
+		// No NPCs selected, let other handlers process this
+		UE_LOG(LogTemp, Log, TEXT("PACS_NPCBehaviorComponent::HandleRightClick - No NPCs selected, passing to other handlers"));
 		return EPACS_InputHandleResult::NotHandled;
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("PACS_NPCBehaviorComponent::HandleRightClick - Selected NPC: %s"), *SelectedNPC->GetName());
+	UE_LOG(LogTemp, Log, TEXT("PACS_NPCBehaviorComponent::HandleRightClick - %d NPCs selected"), SelectedNPCs.Num());
 
 	// Rate limiting to prevent command spam
 	float CurrentTime = GetWorld()->GetTimeSeconds();
@@ -144,17 +144,29 @@ EPACS_InputHandleResult UPACS_NPCBehaviorComponent::HandleRightClick(const FInpu
 		return EPACS_InputHandleResult::NotHandled;
 	}
 
-	// Send movement command
-	UE_LOG(LogTemp, Log, TEXT("PACS_NPCBehaviorComponent::HandleRightClick - Sending move command for NPC %s to %s"),
-		*SelectedNPC->GetName(), *HitResult.Location.ToString());
+	// Send movement command for all selected NPCs
+	UE_LOG(LogTemp, Log, TEXT("PACS_NPCBehaviorComponent::HandleRightClick - Sending move commands for %d NPCs to %s"),
+		SelectedNPCs.Num(), *HitResult.Location.ToString());
 
-	RequestNPCMove(SelectedNPC, HitResult.Location);
+	// Use batch movement RPC for efficiency
+	if (OwningController)
+	{
+		OwningController->ServerRequestMoveMultiple(SelectedNPCs, FVector_NetQuantize(HitResult.Location));
+	}
 
 	// Show debug visualization if enabled
 	if (bShowDebugVisualization && GetWorld())
 	{
 		DrawDebugSphere(GetWorld(), HitResult.Location, 50.0f, 12, FColor::Green, false, DebugVisualizationDuration);
-		DrawDebugLine(GetWorld(), SelectedNPC->GetActorLocation(), HitResult.Location, FColor::Green, false, DebugVisualizationDuration);
+
+		// Draw lines from each selected NPC to the target
+		for (AActor* NPC : SelectedNPCs)
+		{
+			if (NPC)
+			{
+				DrawDebugLine(GetWorld(), NPC->GetActorLocation(), HitResult.Location, FColor::Green, false, DebugVisualizationDuration);
+			}
+		}
 	}
 
 	// Consume the input so it doesn't propagate to lower priority handlers
@@ -445,8 +457,8 @@ void UPACS_NPCBehaviorComponent::OnReturnedToPool_Implementation()
 	// Clear references
 	LastMoveCommandTime = 0.0f;
 
-	// Clear local selection - important for memory management
-	LocallySelectedNPC = nullptr;
+	// Clear local selections - important for memory management
+	LocallySelectedNPCs.Empty();
 }
 
 // ========================================
@@ -455,43 +467,70 @@ void UPACS_NPCBehaviorComponent::OnReturnedToPool_Implementation()
 
 AActor* UPACS_NPCBehaviorComponent::GetSelectedNPC() const
 {
-	// Return the locally cached selection
-	// TWeakObjectPtr automatically returns nullptr if the actor was destroyed
-	AActor* SelectedActor = LocallySelectedNPC.Get();
-
-	if (SelectedActor)
+	// Return first selected NPC for backward compatibility
+	if (LocallySelectedNPCs.Num() > 0)
 	{
-		UE_LOG(LogTemp, VeryVerbose, TEXT("PACS_NPCBehaviorComponent::GetSelectedNPC - Returning locally selected NPC: %s"),
-			*SelectedActor->GetName());
+		AActor* SelectedActor = LocallySelectedNPCs[0].Get();
+		if (SelectedActor)
+		{
+			UE_LOG(LogTemp, VeryVerbose, TEXT("PACS_NPCBehaviorComponent::GetSelectedNPC - Returning first selected NPC: %s"),
+				*SelectedActor->GetName());
+			return SelectedActor;
+		}
 	}
 
-	return SelectedActor;
+	return nullptr;
+}
+
+TArray<AActor*> UPACS_NPCBehaviorComponent::GetSelectedNPCs() const
+{
+	TArray<AActor*> Result;
+	for (const TWeakObjectPtr<AActor>& WeakActor : LocallySelectedNPCs)
+	{
+		if (AActor* Actor = WeakActor.Get())
+		{
+			Result.Add(Actor);
+		}
+	}
+	return Result;
 }
 
 void UPACS_NPCBehaviorComponent::SetLocallySelectedNPC(AActor* NPC)
 {
-	// Clear previous selection if different
-	AActor* PreviousSelection = LocallySelectedNPC.Get();
-	if (PreviousSelection != NPC)
+	// Clear previous selection and set single NPC
+	LocallySelectedNPCs.Empty();
+	if (NPC)
 	{
-		LocallySelectedNPC = NPC;
-
-		UE_LOG(LogTemp, Log, TEXT("PACS_NPCBehaviorComponent::SetLocallySelectedNPC - Updated local selection from %s to %s"),
-			PreviousSelection ? *PreviousSelection->GetName() : TEXT("None"),
-			NPC ? *NPC->GetName() : TEXT("None"));
+		LocallySelectedNPCs.Add(NPC);
 	}
+
+	UE_LOG(LogTemp, Log, TEXT("PACS_NPCBehaviorComponent::SetLocallySelectedNPC - Set single NPC: %s"),
+		NPC ? *NPC->GetName() : TEXT("None"));
+}
+
+void UPACS_NPCBehaviorComponent::SetLocallySelectedNPCs(const TArray<AActor*>& NPCs)
+{
+	// Clear previous selections and set new ones
+	LocallySelectedNPCs.Empty();
+	for (AActor* NPC : NPCs)
+	{
+		if (NPC)
+		{
+			LocallySelectedNPCs.Add(NPC);
+		}
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("PACS_NPCBehaviorComponent::SetLocallySelectedNPCs - Set %d NPCs"),
+		LocallySelectedNPCs.Num());
 }
 
 void UPACS_NPCBehaviorComponent::ClearLocalSelection()
 {
-	AActor* PreviousSelection = LocallySelectedNPC.Get();
-	if (PreviousSelection)
-	{
-		UE_LOG(LogTemp, Log, TEXT("PACS_NPCBehaviorComponent::ClearLocalSelection - Clearing selection of %s"),
-			*PreviousSelection->GetName());
-	}
+	int32 PreviousCount = LocallySelectedNPCs.Num();
+	LocallySelectedNPCs.Empty();
 
-	LocallySelectedNPC = nullptr;
+	UE_LOG(LogTemp, Log, TEXT("PACS_NPCBehaviorComponent::ClearLocalSelection - Cleared %d selections"),
+		PreviousCount);
 }
 
 bool UPACS_NPCBehaviorComponent::IsValidCommandTarget(AActor* Actor) const

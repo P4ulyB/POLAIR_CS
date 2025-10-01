@@ -1,6 +1,7 @@
 #include "Core/PACSGameMode.h"
 #include "Core/PACS_PlayerController.h"
 #include "Core/PACS_PlayerState.h"
+#include "Core/PACS_PlayerHUD.h"
 #include "Subsystems/PACSServerKeepaliveSubsystem.h"
 #include "Subsystems/PACS_SpawnOrchestrator.h"
 #include "Data/PACS_SpawnConfig.h"
@@ -21,6 +22,9 @@ APACSGameMode::APACSGameMode()
 {
     // Set default PlayerState class
     PlayerStateClass = APACS_PlayerState::StaticClass();
+
+    // Set default HUD class for marquee selection
+    HUDClass = APACS_PlayerHUD::StaticClass();
 
     // Set pawn classes - configure in Blueprint or here
     // CandidatePawnClass = APACS_CandidatePawn::StaticClass();

@@ -39,17 +39,28 @@ public:
 #pragma region Selection System
 public:
     // Selection System - Server-only tracking (not replicated)
+
+    // Single selection methods (backward compatibility)
     UFUNCTION(BlueprintCallable, Category = "Selection")
-    AActor* GetSelectedActor() const { return SelectedActor_ServerOnly.Get(); }
+    AActor* GetSelectedActor() const;
 
     void SetSelectedActor(AActor* InActor);
+
+    // Multi-selection methods
+    UFUNCTION(BlueprintCallable, Category = "Selection")
+    TArray<AActor*> GetSelectedActors() const;
+
+    void AddSelectedActor(AActor* InActor);
+    void RemoveSelectedActor(AActor* InActor);
+    void ClearSelectedActors();
+    void SetSelectedActors(const TArray<AActor*>& InActors);
 
     // Debug helper to log current selection state
     UFUNCTION(BlueprintCallable, Category = "Selection|Debug")
     void LogCurrentSelection() const;
 
 private:
-    // Server-only: currently selected actor for this player (weak ptr for safety)
-    TWeakObjectPtr<AActor> SelectedActor_ServerOnly;
+    // Server-only: currently selected actors for this player (weak ptrs for safety)
+    TArray<TWeakObjectPtr<AActor>> SelectedActors_ServerOnly;
 #pragma endregion
 };

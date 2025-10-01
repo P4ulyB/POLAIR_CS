@@ -147,6 +147,54 @@ public:
     void ServerRequestSelect(AActor* TargetActor);
 
     UFUNCTION(Server, Reliable)
+    void ServerRequestSelectMultiple(const TArray<AActor*>& TargetActors);
+
+    UFUNCTION(Server, Reliable)
     void ServerRequestDeselect();
+
+    // Multi-NPC movement command
+    UFUNCTION(Server, Reliable)
+    void ServerRequestMoveMultiple(const TArray<AActor*>& NPCs, FVector_NetQuantize TargetLocation);
+#pragma endregion
+
+#pragma region Marquee Selection
+public:
+    // Marquee state accessors
+    UFUNCTION(BlueprintPure, Category = "Marquee")
+    bool IsMarqueeActive() const { return bIsMarqueeActive; }
+
+    UFUNCTION(BlueprintPure, Category = "Marquee")
+    FVector2D GetMarqueeStartPos() const { return MarqueeStartPos; }
+
+    UFUNCTION(BlueprintPure, Category = "Marquee")
+    FVector2D GetMarqueeCurrentPos() const { return MarqueeCurrentPos; }
+
+    // Marquee configuration
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Marquee",
+        meta = (DisplayName = "Marquee Drag Threshold", ClampMin = "1.0", ClampMax = "20.0"))
+    float MarqueeDragThreshold = 5.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Marquee",
+        meta = (DisplayName = "Marquee Update Rate (Hz)", ClampMin = "10", ClampMax = "60"))
+    float MarqueeUpdateRate = 30.0f;
+
+private:
+    // Marquee selection state
+    FVector2D MarqueeStartPos;
+    FVector2D MarqueeCurrentPos;
+    bool bIsMarqueeActive = false;
+    bool bLeftMousePressed = false;
+    bool bIsLeftClickHeld = false;  // Track Enhanced Input click state
+    TArray<TWeakObjectPtr<AActor>> MarqueeHoveredActors;
+
+    // Marquee update timer
+    FTimerHandle MarqueeUpdateTimer;
+
+    // Marquee helper methods
+    void StartMarquee();
+    void UpdateMarquee();
+    void FinalizeMarquee();
+    void ClearMarquee();
+    void QueryActorsInMarquee();
 #pragma endregion
 };

@@ -15,6 +15,9 @@
 #include "EngineUtils.h"
 #include "Components/DecalComponent.h"
 #include "Components/PACS_NPCBehaviorComponent.h"
+#include "Components/PACS_SelectionPlaneComponent.h"
+#include "Kismet/GameplayStatics.h"
+#include "Actors/Pawn/PACS_AssessorPawn.h"
 
 #if !UE_SERVER
 #include "EnhancedInputComponent.h"
@@ -395,10 +398,33 @@ void APACS_PlayerController::HandleHMDRemoved()
 void APACS_PlayerController::Tick(float DeltaTime)
 {
     Super::Tick(DeltaTime);
-    
+
     if (bShowInputContextDebug && IsLocalPlayerController())
     {
         DisplayInputContextDebug();
+    }
+
+    // Handle marquee drag detection
+    if (bLeftMousePressed && !bIsMarqueeActive)
+    {
+        FVector2D CurrentPos;
+        if (GetMousePosition(CurrentPos.X, CurrentPos.Y))
+        {
+            // Check if mouse has moved beyond drag threshold
+            const float DragDistance = FVector2D::Distance(CurrentPos, MarqueeStartPos);
+            if (DragDistance > MarqueeDragThreshold)
+            {
+                UE_LOG(LogTemp, Warning, TEXT("[MARQUEE DEBUG] Drag threshold exceeded: %f > %f"),
+                    DragDistance, MarqueeDragThreshold);
+                StartMarquee();
+            }
+        }
+    }
+
+    // Update marquee current position while dragging
+    if (bIsMarqueeActive)
+    {
+        GetMousePosition(MarqueeCurrentPos.X, MarqueeCurrentPos.Y);
     }
 }
 
@@ -442,45 +468,80 @@ EPACS_InputHandleResult APACS_PlayerController::HandleInputAction(FName ActionNa
     }
     else if (ActionName == TEXT("Select") || ActionName == TEXT("LeftClick"))
     {
-        // Handle selection through hover probe's current target
-        if (!HoverProbe)
+        // Enhanced Input sends discrete Started and Completed events
+        // Started event: magnitude > 0 when the button is first pressed
+        // Completed event: magnitude == 0 when the button is released
+        const float Magnitude = Value.GetMagnitude();
+
+        UE_LOG(LogTemp, Warning, TEXT("[MARQUEE DEBUG] LeftClick: Magnitude=%f, bIsLeftClickHeld=%d"),
+            Magnitude, bIsLeftClickHeld);
+
+        // Detect Started event (button pressed)
+        if (Magnitude > 0.0f && !bIsLeftClickHeld)
         {
-            UE_LOG(LogTemp, Error, TEXT("[SELECTION DEBUG] HoverProbe component not available"));
-            return EPACS_InputHandleResult::HandledConsume;
+            bIsLeftClickHeld = true;
+            bLeftMousePressed = true;
+
+            // Record start position for potential marquee
+            GetMousePosition(MarqueeStartPos.X, MarqueeStartPos.Y);
+            MarqueeCurrentPos = MarqueeStartPos;
+
+            UE_LOG(LogTemp, Warning, TEXT("[MARQUEE DEBUG] Mouse STARTED (pressed) at: %s"),
+                *MarqueeStartPos.ToString());
         }
-
-        // Perform line trace to get the actor under cursor
-        FHitResult HitResult;
-        if (GetHitResultUnderCursor(SelectionTraceChannel, false, HitResult))
+        // Detect Completed event (button released)
+        else if (Magnitude == 0.0f && bIsLeftClickHeld)
         {
-            UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] Hit actor: %s at location %s"),
-                HitResult.GetActor() ? *HitResult.GetActor()->GetName() : TEXT("None"),
-                *HitResult.Location.ToString());
+            bIsLeftClickHeld = false;
+            bLeftMousePressed = false;
 
-            // Request selection of the actor
-            ServerRequestSelect(HitResult.GetActor());
+            UE_LOG(LogTemp, Warning, TEXT("[MARQUEE DEBUG] Mouse COMPLETED (released). IsMarqueeActive=%d"),
+                bIsMarqueeActive);
 
-            // Update local selection tracking in NPCBehaviorComponent
-            if (NPCBehaviorComponent && HitResult.GetActor())
+            if (bIsMarqueeActive)
             {
-                if (HitResult.GetActor()->Implements<UPACS_SelectableCharacterInterface>())
+                // Finalize marquee selection
+                FinalizeMarquee();
+            }
+            else
+            {
+                // Normal single-click selection
+                FHitResult HitResult;
+                if (GetHitResultUnderCursor(SelectionTraceChannel, false, HitResult))
                 {
-                    NPCBehaviorComponent->SetLocallySelectedNPC(HitResult.GetActor());
+                    UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] Hit actor: %s at location %s"),
+                        HitResult.GetActor() ? *HitResult.GetActor()->GetName() : TEXT("None"),
+                        *HitResult.Location.ToString());
+
+                    // Request selection of the actor
+                    ServerRequestSelect(HitResult.GetActor());
+
+                    // Update local selection tracking in NPCBehaviorComponent
+                    if (NPCBehaviorComponent && HitResult.GetActor())
+                    {
+                        if (HitResult.GetActor()->Implements<UPACS_SelectableCharacterInterface>())
+                        {
+                            NPCBehaviorComponent->SetLocallySelectedNPC(HitResult.GetActor());
+                        }
+                    }
+                }
+                else
+                {
+                    UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] No hit result - deselecting"));
+
+                    // No hit - deselect
+                    ServerRequestDeselect();
+
+                    // Clear local selection
+                    if (NPCBehaviorComponent)
+                    {
+                        NPCBehaviorComponent->ClearLocalSelection();
+                    }
                 }
             }
-        }
-        else
-        {
-            UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] No hit result - deselecting"));
 
-            // No hit - deselect
-            ServerRequestDeselect();
-
-            // Clear local selection
-            if (NPCBehaviorComponent)
-            {
-                NPCBehaviorComponent->ClearLocalSelection();
-            }
+            // Clear marquee state
+            ClearMarquee();
         }
         return EPACS_InputHandleResult::HandledConsume;
     }
@@ -640,6 +701,141 @@ void APACS_PlayerController::ServerRequestSelect_Implementation(AActor* TargetAc
         *PS->GetPlayerName(), *TargetActor->GetName());
 }
 
+void APACS_PlayerController::ServerRequestSelectMultiple_Implementation(const TArray<AActor*>& TargetActors)
+{
+    // Server authority check
+    if (!HasAuthority())
+    {
+        UE_LOG(LogTemp, Error, TEXT("[SELECTION DEBUG] ServerRequestSelectMultiple failed - No authority"));
+        return;
+    }
+
+    APACS_PlayerState* PS = GetPlayerState<APACS_PlayerState>();
+    if (!PS)
+    {
+        UE_LOG(LogTemp, Error, TEXT("[SELECTION DEBUG] ServerRequestSelectMultiple failed - PlayerState null"));
+        return;
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] ServerRequestSelectMultiple - Player: %s, Targets: %d"),
+        PS ? *PS->GetPlayerName() : TEXT("NULL"),
+        TargetActors.Num());
+
+    // Clear previous selections that are NOT in the new selection list
+    TArray<AActor*> PreviousActors = PS->GetSelectedActors();
+    for (AActor* PreviousActor : PreviousActors)
+    {
+        if (!PreviousActor) continue;
+
+        // Only clear if not in the new selection list
+        if (!TargetActors.Contains(PreviousActor))
+        {
+            // Clear selection state on NPC being deselected
+            if (APACS_NPC_Base* NPC = Cast<APACS_NPC_Base>(PreviousActor))
+            {
+                NPC->SetSelected(false, nullptr);
+            }
+            else if (APACS_NPC_Base_Char* CharNPC = Cast<APACS_NPC_Base_Char>(PreviousActor))
+            {
+                CharNPC->SetSelected(false, nullptr);
+            }
+            else if (APACS_NPC_Base_Veh* VehNPC = Cast<APACS_NPC_Base_Veh>(PreviousActor))
+            {
+                VehNPC->SetSelected(false, nullptr);
+            }
+        }
+    }
+    PS->ClearSelectedActors();
+
+    // Now select all new actors that are available
+    int32 SuccessCount = 0;
+    for (AActor* TargetActor : TargetActors)
+    {
+        if (!TargetActor) continue;
+
+        // Check if target implements IPACS_Poolable (all NPCs do)
+        if (!TargetActor->Implements<UPACS_Poolable>())
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] Target %s is not a poolable NPC - skipping"),
+                *TargetActor->GetName());
+            continue;
+        }
+
+        // Check if NPC is already selected by another player
+        APlayerState* CurrentSelector = nullptr;
+        bool bIsAlreadySelected = false;
+
+        if (APACS_NPC_Base* BaseNPC = Cast<APACS_NPC_Base>(TargetActor))
+        {
+            CurrentSelector = BaseNPC->GetCurrentSelector();
+            bIsAlreadySelected = BaseNPC->IsSelected();
+        }
+        else if (APACS_NPC_Base_Char* CharNPC = Cast<APACS_NPC_Base_Char>(TargetActor))
+        {
+            CurrentSelector = CharNPC->GetCurrentSelector();
+            bIsAlreadySelected = CharNPC->IsSelected();
+        }
+        else if (APACS_NPC_Base_Veh* VehNPC = Cast<APACS_NPC_Base_Veh>(TargetActor))
+        {
+            CurrentSelector = VehNPC->GetCurrentSelector();
+            bIsAlreadySelected = VehNPC->IsSelected();
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] Could not cast %s to any NPC base class - skipping"),
+                *TargetActor->GetName());
+            continue;
+        }
+
+        // Skip if already selected by another player
+        if (bIsAlreadySelected && CurrentSelector && CurrentSelector != PS)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] NPC %s already selected by %s - skipping"),
+                *TargetActor->GetName(), *CurrentSelector->GetPlayerName());
+            continue;
+        }
+
+        // Skip if already selected by us (no need to re-select)
+        if (bIsAlreadySelected && CurrentSelector == PS)
+        {
+            PS->AddSelectedActor(TargetActor);  // Just add to our list
+            SuccessCount++;
+            UE_LOG(LogTemp, Log, TEXT("[SELECTION DEBUG] NPC %s already selected by us - keeping selected"),
+                *TargetActor->GetName());
+            continue;
+        }
+
+        // Select the NPC
+        if (APACS_NPC_Base* BaseNPC = Cast<APACS_NPC_Base>(TargetActor))
+        {
+            BaseNPC->SetSelected(true, PS);
+        }
+        else if (APACS_NPC_Base_Char* CharNPC = Cast<APACS_NPC_Base_Char>(TargetActor))
+        {
+            CharNPC->SetSelected(true, PS);
+        }
+        else if (APACS_NPC_Base_Veh* VehNPC = Cast<APACS_NPC_Base_Veh>(TargetActor))
+        {
+            VehNPC->SetSelected(true, PS);
+        }
+
+        PS->AddSelectedActor(TargetActor);
+        SuccessCount++;
+
+        UE_LOG(LogTemp, Log, TEXT("[SELECTION DEBUG] Selected NPC %s (%d/%d)"),
+            *TargetActor->GetName(), SuccessCount, TargetActors.Num());
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] SUCCESS: %s selected %d/%d NPCs"),
+        *PS->GetPlayerName(), SuccessCount, TargetActors.Num());
+
+    // Update NPCBehaviorComponent with new selections (client-side tracking)
+    if (NPCBehaviorComponent)
+    {
+        NPCBehaviorComponent->SetLocallySelectedNPCs(PS->GetSelectedActors());
+    }
+}
+
 void APACS_PlayerController::ServerRequestDeselect_Implementation()
 {
     // Server authority check
@@ -658,33 +854,327 @@ void APACS_PlayerController::ServerRequestDeselect_Implementation()
 
     UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] ServerRequestDeselect - Player: %s"), *PS->GetPlayerName());
 
-    // Clear NPC selection state before clearing PlayerState
-    if (AActor* CurrentActor = PS->GetSelectedActor())
+    // Clear NPC selection state for all selected actors
+    TArray<AActor*> SelectedActors = PS->GetSelectedActors();
+    int32 ClearedCount = 0;
+
+    for (AActor* CurrentActor : SelectedActors)
     {
+        if (!CurrentActor) continue;
+
         // Try all NPC base classes to clear selection
         if (APACS_NPC_Base* NPC = Cast<APACS_NPC_Base>(CurrentActor))
         {
             NPC->SetSelected(false, nullptr);
+            ClearedCount++;
             UE_LOG(LogTemp, Log, TEXT("[SELECTION DEBUG] Cleared selection state on NPC: %s"),
                 *CurrentActor->GetName());
         }
         else if (APACS_NPC_Base_Char* CharNPC = Cast<APACS_NPC_Base_Char>(CurrentActor))
         {
             CharNPC->SetSelected(false, nullptr);
+            ClearedCount++;
             UE_LOG(LogTemp, Log, TEXT("[SELECTION DEBUG] Cleared selection state on Character NPC: %s"),
                 *CurrentActor->GetName());
         }
         else if (APACS_NPC_Base_Veh* VehNPC = Cast<APACS_NPC_Base_Veh>(CurrentActor))
         {
             VehNPC->SetSelected(false, nullptr);
+            ClearedCount++;
             UE_LOG(LogTemp, Log, TEXT("[SELECTION DEBUG] Cleared selection state on Vehicle NPC: %s"),
                 *CurrentActor->GetName());
         }
     }
 
-    // Clear selected actor in PlayerState
-    PS->SetSelectedActor(nullptr);
+    // Clear all selected actors in PlayerState
+    PS->ClearSelectedActors();
 
-    UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] SUCCESS: %s deselected all"),
-        *PS->GetPlayerName());
+    UE_LOG(LogTemp, Warning, TEXT("[SELECTION DEBUG] SUCCESS: %s deselected %d NPCs"),
+        *PS->GetPlayerName(), ClearedCount);
+
+    // Update NPCBehaviorComponent (client-side tracking)
+    if (NPCBehaviorComponent)
+    {
+        NPCBehaviorComponent->ClearLocalSelection();
+    }
+}
+
+void APACS_PlayerController::ServerRequestMoveMultiple_Implementation(const TArray<AActor*>& NPCs, FVector_NetQuantize TargetLocation)
+{
+    // Server authority check
+    if (!HasAuthority())
+    {
+        UE_LOG(LogTemp, Error, TEXT("[MOVEMENT DEBUG] ServerRequestMoveMultiple failed - No authority"));
+        return;
+    }
+
+    APACS_PlayerState* PS = GetPlayerState<APACS_PlayerState>();
+    if (!PS)
+    {
+        UE_LOG(LogTemp, Error, TEXT("[MOVEMENT DEBUG] ServerRequestMoveMultiple failed - PlayerState null"));
+        return;
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("[MOVEMENT DEBUG] ServerRequestMoveMultiple - Player: %s, NPCs: %d, Target: %s"),
+        *PS->GetPlayerName(), NPCs.Num(), *TargetLocation.ToString());
+
+    // Move each NPC that this player owns
+    int32 MovedCount = 0;
+    for (AActor* NPC : NPCs)
+    {
+        if (!NPC) continue;
+
+        // Verify this player owns the NPC
+        bool bIsOwnedByPlayer = false;
+        if (NPC->Implements<UPACS_SelectableCharacterInterface>())
+        {
+            IPACS_SelectableCharacterInterface* Selectable = Cast<IPACS_SelectableCharacterInterface>(NPC);
+            if (Selectable && Selectable->GetCurrentSelector() == PS)
+            {
+                bIsOwnedByPlayer = true;
+            }
+        }
+
+        if (bIsOwnedByPlayer)
+        {
+            // Execute movement
+            if (NPC->Implements<UPACS_SelectableCharacterInterface>())
+            {
+                IPACS_SelectableCharacterInterface* Selectable = Cast<IPACS_SelectableCharacterInterface>(NPC);
+                Selectable->MoveToLocation(TargetLocation);
+                MovedCount++;
+
+                UE_LOG(LogTemp, Log, TEXT("[MOVEMENT DEBUG] Moving NPC %s to %s"),
+                    *NPC->GetName(), *TargetLocation.ToString());
+            }
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[MOVEMENT DEBUG] Player %s doesn't own NPC %s - skipping"),
+                *PS->GetPlayerName(), *NPC->GetName());
+        }
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("[MOVEMENT DEBUG] SUCCESS: Moved %d/%d NPCs to location"),
+        MovedCount, NPCs.Num());
+}
+
+void APACS_PlayerController::StartMarquee()
+{
+    bIsMarqueeActive = true;
+
+    // Disable edge scrolling during marquee
+    if (EdgeScrollComponent)
+    {
+        EdgeScrollComponent->SetEnabled(false);
+        UE_LOG(LogTemp, Warning, TEXT("[MARQUEE DEBUG] Edge scrolling disabled"));
+    }
+
+    // Disable hover probe during marquee
+    if (HoverProbe)
+    {
+        HoverProbe->SetComponentTickEnabled(false);
+        UE_LOG(LogTemp, Warning, TEXT("[MARQUEE DEBUG] Hover probe disabled"));
+    }
+
+    // Disable rotation on AssessorPawn
+    if (APACS_AssessorPawn* AssessorPawn = Cast<APACS_AssessorPawn>(GetPawn()))
+    {
+        // Note: AssessorPawn doesn't have SetRotationEnabled yet
+        // This would need to be added to the pawn class
+        UE_LOG(LogTemp, Warning, TEXT("[MARQUEE DEBUG] AssessorPawn rotation would be disabled here"));
+    }
+
+    // Start update timer
+    if (MarqueeUpdateRate > 0.0f)
+    {
+        GetWorld()->GetTimerManager().SetTimer(MarqueeUpdateTimer, this,
+            &APACS_PlayerController::UpdateMarquee, 1.0f / MarqueeUpdateRate, true);
+        UE_LOG(LogTemp, Warning, TEXT("[MARQUEE DEBUG] Update timer started at %f Hz"), MarqueeUpdateRate);
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("[MARQUEE DEBUG] Marquee selection STARTED"));
+}
+
+void APACS_PlayerController::UpdateMarquee()
+{
+    if (!bIsMarqueeActive)
+    {
+        return;
+    }
+
+    QueryActorsInMarquee();
+}
+
+void APACS_PlayerController::FinalizeMarquee()
+{
+    if (!bIsMarqueeActive)
+    {
+        return;
+    }
+
+    APACS_PlayerState* PS = GetPlayerState<APACS_PlayerState>();
+    if (!PS)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[MARQUEE DEBUG] No PlayerState available"));
+        return;
+    }
+
+    // Start with currently selected actors owned by this player
+    TArray<AActor*> ActorsToSelect = PS->GetSelectedActors();
+    int32 PreviouslySelectedCount = ActorsToSelect.Num();
+
+    // Add newly marqueed actors that are available
+    for (const TWeakObjectPtr<AActor>& ActorPtr : MarqueeHoveredActors)
+    {
+        if (AActor* Actor = ActorPtr.Get())
+        {
+            // Skip if already in our selection list
+            if (ActorsToSelect.Contains(Actor))
+            {
+                continue;
+            }
+
+            // Verify still available before adding to selection list
+            if (Actor->Implements<UPACS_SelectableCharacterInterface>())
+            {
+                IPACS_SelectableCharacterInterface* Selectable = Cast<IPACS_SelectableCharacterInterface>(Actor);
+
+                // Check if available (not selected) OR already selected by us
+                APlayerState* CurrentSelector = Selectable ? Selectable->GetCurrentSelector() : nullptr;
+                if (Selectable && (CurrentSelector == nullptr || CurrentSelector == PS))
+                {
+                    ActorsToSelect.Add(Actor);
+                }
+            }
+        }
+    }
+
+    // Use the new batch selection RPC
+    if (ActorsToSelect.Num() > 0)
+    {
+        ServerRequestSelectMultiple(ActorsToSelect);
+        UE_LOG(LogTemp, Log, TEXT("[MARQUEE DEBUG] Marquee selection finalized: %d total actors (%d previous + %d new)"),
+            ActorsToSelect.Num(), PreviouslySelectedCount, ActorsToSelect.Num() - PreviouslySelectedCount);
+    }
+    else
+    {
+        // If no valid actors, just deselect all
+        ServerRequestDeselect();
+        UE_LOG(LogTemp, Log, TEXT("[MARQUEE DEBUG] Marquee selection finalized: No valid actors to select"));
+    }
+}
+
+void APACS_PlayerController::ClearMarquee()
+{
+    // Clear all hover states
+    for (const TWeakObjectPtr<AActor>& ActorPtr : MarqueeHoveredActors)
+    {
+        if (AActor* Actor = ActorPtr.Get())
+        {
+            if (UPACS_SelectionPlaneComponent* SelectionComp = Actor->FindComponentByClass<UPACS_SelectionPlaneComponent>())
+            {
+                SelectionComp->SetHoverState(false);
+            }
+        }
+    }
+
+    // Clear state
+    MarqueeHoveredActors.Empty();
+    MarqueeStartPos = FVector2D::ZeroVector;
+    MarqueeCurrentPos = FVector2D::ZeroVector;
+    bIsMarqueeActive = false;
+    bLeftMousePressed = false;
+
+    // Stop update timer
+    GetWorld()->GetTimerManager().ClearTimer(MarqueeUpdateTimer);
+
+    // Re-enable systems
+    if (EdgeScrollComponent)
+    {
+        EdgeScrollComponent->SetEnabled(true);
+    }
+
+    if (HoverProbe)
+    {
+        HoverProbe->SetComponentTickEnabled(true);
+    }
+}
+
+void APACS_PlayerController::QueryActorsInMarquee()
+{
+    if (!bIsMarqueeActive)
+    {
+        return;
+    }
+
+    // Build screen rectangle
+    const FVector2D MinPoint(
+        FMath::Min(MarqueeStartPos.X, MarqueeCurrentPos.X),
+        FMath::Min(MarqueeStartPos.Y, MarqueeCurrentPos.Y)
+    );
+    const FVector2D MaxPoint(
+        FMath::Max(MarqueeStartPos.X, MarqueeCurrentPos.X),
+        FMath::Max(MarqueeStartPos.Y, MarqueeCurrentPos.Y)
+    );
+
+    // Clear previous hover states
+    for (const TWeakObjectPtr<AActor>& ActorPtr : MarqueeHoveredActors)
+    {
+        if (AActor* Actor = ActorPtr.Get())
+        {
+            if (UPACS_SelectionPlaneComponent* SelectionComp = Actor->FindComponentByClass<UPACS_SelectionPlaneComponent>())
+            {
+                SelectionComp->SetHoverState(false);
+            }
+        }
+    }
+    MarqueeHoveredActors.Empty();
+
+    // Query all actors with selectable interface
+    TArray<AActor*> AllActors;
+    UGameplayStatics::GetAllActorsWithInterface(GetWorld(), UPACS_SelectableCharacterInterface::StaticClass(), AllActors);
+
+    for (AActor* Actor : AllActors)
+    {
+        if (!Actor || !Actor->Implements<UPACS_SelectableCharacterInterface>())
+        {
+            continue;
+        }
+
+        IPACS_SelectableCharacterInterface* Selectable = Cast<IPACS_SelectableCharacterInterface>(Actor);
+        if (!Selectable)
+        {
+            continue;
+        }
+
+        // Skip if already selected by someone
+        if (Selectable->GetCurrentSelector() != nullptr)
+        {
+            continue;
+        }
+
+        // Check if selection plane state is Available (value 3)
+        UPACS_SelectionPlaneComponent* SelectionComp = Actor->FindComponentByClass<UPACS_SelectionPlaneComponent>();
+        if (!SelectionComp || SelectionComp->GetSelectionState() != 3) // 3 = Available
+        {
+            continue;
+        }
+
+        // Project actor location to screen
+        FVector2D ScreenPos;
+        if (UGameplayStatics::ProjectWorldToScreen(this, Actor->GetActorLocation(), ScreenPos))
+        {
+            // Check if within marquee bounds
+            if (ScreenPos.X >= MinPoint.X && ScreenPos.X <= MaxPoint.X &&
+                ScreenPos.Y >= MinPoint.Y && ScreenPos.Y <= MaxPoint.Y)
+            {
+                // Add to hovered list
+                MarqueeHoveredActors.Add(Actor);
+
+                // Apply hover visual
+                SelectionComp->SetHoverState(true);
+            }
+        }
+    }
 }
