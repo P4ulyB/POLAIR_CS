@@ -45,8 +45,12 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Category = "Selection")
 	bool bIsSelected = false;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Selection")
+	UPROPERTY(ReplicatedUsing=OnRep_CurrentSelector, BlueprintReadOnly, Category = "Selection")
 	TWeakObjectPtr<class APlayerState> CurrentSelector;
+
+	// Replication callback for CurrentSelector
+	UFUNCTION()
+	void OnRep_CurrentSelector();
 
 	// Cached NPC profile data for atomic replication
 	// Contains all visual and configuration data - replicates as single struct to eliminate race conditions

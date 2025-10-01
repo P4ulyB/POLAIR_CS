@@ -249,34 +249,30 @@ void UPACS_HoverProbeComponent::ProbeOnce()
 
 				if (HitPlaneComponent)
 				{
-					// Check if NPC is already selected by another player - don't hover if unavailable
-					bool bCanHover = true;
+					// Check if NPC is in Available state (SelectionState == 3)
+					// Only Available NPCs can be hovered
+					bool bCanHover = false;
 
-					// Try to get the NPC via interface to check selection state (works for all NPC types)
-					if (IPACS_SelectableCharacterInterface* Selectable = Cast<IPACS_SelectableCharacterInterface>(HitActor))
+					// Get the current selection state from the component
+					uint8 CurrentSelectionState = HitPlaneComponent->GetSelectionState();
+
+					// Only allow hover if NPC is Available (state 3)
+					if (CurrentSelectionState == 3)
 					{
-						if (Selectable->IsSelectedBy(nullptr)) // Check if selected by anyone
-						{
-							// Check if it's selected by someone else
-							if (UWorld* World = GetWorld())
-							{
-								if (APlayerController* PC = World->GetFirstPlayerController())
-								{
-									if (APlayerState* LocalPS = PC->GetPlayerState<APlayerState>())
-									{
-										APlayerState* NPCSelector = Selectable->GetCurrentSelector();
+						bCanHover = true;
+						UE_LOG(LogTemp, Verbose, TEXT("HoverProbe: NPC '%s' is Available, hover allowed"),
+							*HitActor->GetName());
+					}
+					else
+					{
+						// Log why hover is not allowed
+						const TCHAR* StateString =
+							CurrentSelectionState == 1 ? TEXT("Selected") :
+							CurrentSelectionState == 2 ? TEXT("Unavailable") :
+							CurrentSelectionState == 0 ? TEXT("Hovered") : TEXT("Unknown");
 
-										// If selected by someone else, don't allow hover
-										if (NPCSelector && NPCSelector != LocalPS)
-										{
-											bCanHover = false;
-											UE_LOG(LogTemp, Verbose, TEXT("HoverProbe: Cannot hover - NPC '%s' selected by another player"),
-												*HitActor->GetName());
-										}
-									}
-								}
-							}
-						}
+						UE_LOG(LogTemp, Verbose, TEXT("HoverProbe: Cannot hover - NPC '%s' is in %s state"),
+							*HitActor->GetName(), StateString);
 					}
 
 					if (bCanHover)

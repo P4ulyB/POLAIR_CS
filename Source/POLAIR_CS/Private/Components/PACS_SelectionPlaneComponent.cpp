@@ -403,6 +403,19 @@ void UPACS_SelectionPlaneComponent::SetHoverState(bool bHovered)
 		return;
 	}
 
+	// Only allow hover when NPC is in Available state (SelectionState == 3)
+	// This prevents hover on Selected (1) or Unavailable (2) NPCs
+	if (SelectionState != 3)
+	{
+		// Force clear any existing hover state when not Available
+		if (LocalHoverState != 0)
+		{
+			LocalHoverState = 0;
+			UpdateVisuals();
+		}
+		return;
+	}
+
 	LocalHoverState = bHovered ? 1 : 0;
 	UpdateVisuals();
 }

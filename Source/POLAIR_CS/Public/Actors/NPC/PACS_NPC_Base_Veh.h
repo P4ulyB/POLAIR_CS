@@ -43,8 +43,12 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Category = "Selection")
 	bool bIsSelected = false;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Selection")
+	UPROPERTY(ReplicatedUsing=OnRep_CurrentSelector, BlueprintReadOnly, Category = "Selection")
 	TWeakObjectPtr<class APlayerState> CurrentSelector;
+
+	// Replication callback for CurrentSelector
+	UFUNCTION()
+	void OnRep_CurrentSelector();
 
 	// Hover state (client-side only)
 	bool bIsLocallyHovered = false;
@@ -104,5 +108,9 @@ protected:
 	// Vehicle-specific reset
 	virtual void ResetVehicleState();
 	virtual void ResetVehiclePhysics();
+
+public:
+	// Replication
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 };

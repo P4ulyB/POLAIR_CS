@@ -185,3 +185,19 @@ void APACS_NPC_Base::SetLocalHover(bool bHovered)
 		SelectionPlaneComponent->SetHoverState(bHovered);
 	}
 }
+
+void APACS_NPC_Base::OnRep_CurrentSelector()
+{
+	// Trigger visual update when selector changes on clients
+	if (SelectionPlaneComponent)
+	{
+		SelectionPlaneComponent->UpdateVisuals();
+	}
+}
+
+void APACS_NPC_Base::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	DOREPLIFETIME(APACS_NPC_Base, CurrentSelector);
+}

@@ -177,6 +177,22 @@ void APACS_NPC_Base_Veh::SetLocalHover(bool bHovered)
 	}
 }
 
+void APACS_NPC_Base_Veh::OnRep_CurrentSelector()
+{
+	// Trigger visual update when selector changes on clients
+	if (SelectionPlaneComponent)
+	{
+		SelectionPlaneComponent->UpdateVisuals();
+	}
+}
+
+void APACS_NPC_Base_Veh::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	DOREPLIFETIME(APACS_NPC_Base_Veh, CurrentSelector);
+}
+
 void APACS_NPC_Base_Veh::ApplyNPCMeshFromProfile(UPACS_SelectionProfileAsset* Profile)
 {
 	if (!Profile)

@@ -42,6 +42,7 @@ void APACS_NPC_Base_Char::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& 
 
 	// Replicate the cached profile data struct (atomic replication)
 	DOREPLIFETIME(APACS_NPC_Base_Char, CachedProfileData);
+	DOREPLIFETIME(APACS_NPC_Base_Char, CurrentSelector);
 }
 
 void APACS_NPC_Base_Char::OnRep_CachedProfileData()
@@ -334,6 +335,15 @@ void APACS_NPC_Base_Char::SetLocalHover(bool bHovered)
 	if (SelectionPlaneComponent)
 	{
 		SelectionPlaneComponent->SetHoverState(bHovered);
+	}
+}
+
+void APACS_NPC_Base_Char::OnRep_CurrentSelector()
+{
+	// Trigger visual update when selector changes on clients
+	if (SelectionPlaneComponent)
+	{
+		SelectionPlaneComponent->UpdateVisuals();
 	}
 }
 

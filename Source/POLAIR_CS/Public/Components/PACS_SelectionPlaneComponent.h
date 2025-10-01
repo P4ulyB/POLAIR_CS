@@ -92,6 +92,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Selection")
 	UStaticMeshComponent* GetSelectionPlane() const { return SelectionPlane; }
 
+	// Get current selection state (0=Hovered, 1=Selected, 2=Unavailable, 3=Available)
+	UFUNCTION(BlueprintPure, Category = "Selection")
+	uint8 GetSelectionState() const { return SelectionState; }
+
 	// Check if selection visuals should be shown
 	UFUNCTION(BlueprintPure, Category = "Selection")
 	bool ShouldShowSelectionVisuals() const;
@@ -103,12 +107,12 @@ public:
 	// Update CustomPrimitiveData values (public for forced updates after material changes)
 	void UpdateSelectionPlaneCPD();
 
+	// Update visual state (public for replication callbacks)
+	void UpdateVisuals();
+
 protected:
 	// Create and setup the selection plane
 	void SetupSelectionPlane();
-
-	// Update visual state
-	void UpdateVisuals();
 
 	// Validate and apply mesh/material references (client-side)
 	void ValidateAndApplyAssets();
