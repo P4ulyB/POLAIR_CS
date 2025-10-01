@@ -10,9 +10,11 @@
 #include "Actors/NPC/PACS_NPC_Base_Char.h"
 #include "Actors/NPC/PACS_NPC_Base_Veh.h"
 #include "Interfaces/PACS_Poolable.h"
+#include "Interfaces/PACS_SelectableCharacterInterface.h"
 #include "Subsystems/PACSLaunchArgSubsystem.h"
 #include "EngineUtils.h"
 #include "Components/DecalComponent.h"
+#include "Components/PACS_NPCBehaviorComponent.h"
 
 #if !UE_SERVER
 #include "EnhancedInputComponent.h"
@@ -24,6 +26,7 @@ APACS_PlayerController::APACS_PlayerController()
 {
     InputHandler = CreateDefaultSubobject<UPACS_InputHandlerComponent>(TEXT("InputHandler"));
     EdgeScrollComponent = CreateDefaultSubobject<UPACS_EdgeScrollComponent>(TEXT("EdgeScrollComponent"));
+    NPCBehaviorComponent = CreateDefaultSubobject<UPACS_NPCBehaviorComponent>(TEXT("NPCBehaviorComponent"));
 
     PrimaryActorTick.bCanEverTick = true;
 }
@@ -456,6 +459,15 @@ EPACS_InputHandleResult APACS_PlayerController::HandleInputAction(FName ActionNa
 
             // Request selection of the actor
             ServerRequestSelect(HitResult.GetActor());
+
+            // Update local selection tracking in NPCBehaviorComponent
+            if (NPCBehaviorComponent && HitResult.GetActor())
+            {
+                if (HitResult.GetActor()->Implements<UPACS_SelectableCharacterInterface>())
+                {
+                    NPCBehaviorComponent->SetLocallySelectedNPC(HitResult.GetActor());
+                }
+            }
         }
         else
         {
@@ -463,24 +475,32 @@ EPACS_InputHandleResult APACS_PlayerController::HandleInputAction(FName ActionNa
 
             // No hit - deselect
             ServerRequestDeselect();
+
+            // Clear local selection
+            if (NPCBehaviorComponent)
+            {
+                NPCBehaviorComponent->ClearLocalSelection();
+            }
         }
         return EPACS_InputHandleResult::HandledConsume;
     }
     else if (ActionName == TEXT("RightClick"))
     {
-        // Right-click: Context action on selected target
-        FHitResult HitResult;
-        if (GetHitResultUnderCursor(MovementTraceChannel, false, HitResult))
-        {
-            FVector TargetLocation = HitResult.Location;
-            UE_LOG(LogTemp, Log, TEXT("[RIGHT CLICK] Location: %s"), *TargetLocation.ToString());
-        }
-        return EPACS_InputHandleResult::HandledConsume;
+        // Right-click: Pass through to NPCBehaviorComponent for movement commands
+        // The NPCBehaviorComponent will handle this if an NPC is selected
+        return EPACS_InputHandleResult::NotHandled;
     }
     else if (ActionName == TEXT("Deselect"))
     {
         // Explicit deselection command
         ServerRequestDeselect();
+
+        // Clear local selection
+        if (NPCBehaviorComponent)
+        {
+            NPCBehaviorComponent->ClearLocalSelection();
+        }
+
         return EPACS_InputHandleResult::HandledConsume;
     }
 

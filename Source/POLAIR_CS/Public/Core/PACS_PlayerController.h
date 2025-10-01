@@ -132,6 +132,10 @@ private:
         meta=(AllowPrivateAccess="true"))
     TObjectPtr<UPACS_HoverProbeComponent> HoverProbe;
 
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="NPC",
+        meta=(AllowPrivateAccess="true"))
+    TObjectPtr<class UPACS_NPCBehaviorComponent> NPCBehaviorComponent;
+
     void ValidateInputSystem();
     void DisplayInputContextDebug();
 #pragma endregion

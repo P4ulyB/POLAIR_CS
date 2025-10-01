@@ -17,6 +17,22 @@ enum class ESelectionVisualState : uint8
 };
 
 /**
+ * NPC behavior configuration
+ * Inline struct for simple behavior properties (no asset loading needed)
+ */
+USTRUCT(BlueprintType)
+struct FNPCBehaviorConfig
+{
+	GENERATED_BODY()
+
+	// Movement speed for CharacterMovementComponent
+	// 0 = use class default (600.0f for UE5 Character)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Movement",
+		meta = (DisplayName = "Movement Speed (0 = use default)", ClampMin = 0.0, ClampMax = 2000.0))
+	float MovementSpeed = 600.0f;
+};
+
+/**
  * Data asset for NPC visual configuration and selection profiles
  * Organized according to Data Asset Revision specifications
  */
@@ -85,6 +101,16 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NPC Visuals|Max Render Distance",
 		meta = (DisplayName = "Render Distance", ClampMin = 100.0, ClampMax = 10000.0))
 	float RenderDistance = 5000.0f;
+
+	// ========================================
+	// Behavior Configuration
+	// ========================================
+
+	// Optional behavior configuration (movement speed, etc.)
+	// Applied server-side only - CharacterMovement handles replication
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Behavior",
+		meta = (DisplayName = "Behavior Config"))
+	FNPCBehaviorConfig BehaviorConfig;
 
 	// ========================================
 	// Selection Profile

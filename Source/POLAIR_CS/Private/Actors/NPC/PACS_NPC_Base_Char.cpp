@@ -6,6 +6,7 @@
 #include "GameFramework/PlayerState.h"
 #include "AIController.h"
 #include "Navigation/PathFollowingComponent.h"
+#include "NavigationSystem.h"
 #include "Net/UnrealNetwork.h"
 #include "Engine/StreamableManager.h"
 #include "Engine/AssetManager.h"
@@ -98,7 +99,6 @@ void APACS_NPC_Base_Char::ApplyCachedProfileData()
 	}
 
 	// Apply cached color/brightness values to the SelectionPlaneComponent FIRST (before material)
-	// This ensures CPD values are set before the material is applied
 	if (SelectionPlaneComponent)
 	{
 		SelectionPlaneComponent->ApplyCachedColorValues(
@@ -107,95 +107,43 @@ void APACS_NPC_Base_Char::ApplyCachedProfileData()
 			CachedProfileData.SelectedColour, CachedProfileData.SelectedBrightness,
 			CachedProfileData.UnavailableColour, CachedProfileData.UnavailableBrightness
 		);
-		UE_LOG(LogTemp, Warning, TEXT("ApplyCachedProfileData: Applied cached color values to SelectionPlaneComponent BEFORE material"));
 	}
 
 	// Apply selection plane settings from cached data (client-side)
 	if (SelectionPlaneComponent && SelectionPlaneComponent->GetSelectionPlane())
 	{
 		UStaticMeshComponent* SelectionPlane = SelectionPlaneComponent->GetSelectionPlane();
-		UE_LOG(LogTemp, Warning, TEXT("ApplyCachedProfileData: SelectionPlane component exists for %s"), *GetName());
 
 		// Apply mesh
 		if (!CachedProfileData.SelectionStaticMesh.IsNull())
 		{
-			UE_LOG(LogTemp, Warning, TEXT("  -> SelectionStaticMesh path: %s"), *CachedProfileData.SelectionStaticMesh.ToString());
 			if (UStaticMesh* PlaneMesh = CachedProfileData.SelectionStaticMesh.LoadSynchronous())
 			{
 				SelectionPlane->SetStaticMesh(PlaneMesh);
 				SelectionPlane->SetRelativeTransform(CachedProfileData.SelectionStaticMeshTransform);
-				UE_LOG(LogTemp, Warning, TEXT("  -> Applied mesh: %s"), *PlaneMesh->GetName());
-				UE_LOG(LogTemp, Warning, TEXT("  -> Transform: %s"), *CachedProfileData.SelectionStaticMeshTransform.ToString());
 			}
-			else
-			{
-				UE_LOG(LogTemp, Error, TEXT("  -> FAILED to load SelectionStaticMesh!"));
-			}
-		}
-		else
-		{
-			UE_LOG(LogTemp, Error, TEXT("  -> SelectionStaticMesh is NULL in cached data!"));
 		}
 
 		// Apply material
 		if (!CachedProfileData.SelectionMaterialInstance.IsNull())
 		{
-			UE_LOG(LogTemp, Warning, TEXT("  -> SelectionMaterial path: %s"), *CachedProfileData.SelectionMaterialInstance.ToString());
 			if (UMaterialInterface* Material = CachedProfileData.SelectionMaterialInstance.LoadSynchronous())
 			{
-				// Check CPD before material application
-				UE_LOG(LogTemp, Warning, TEXT("  -> BEFORE SetMaterial - checking CPD values:"));
-				const FCustomPrimitiveData& CPDBefore = SelectionPlane->GetCustomPrimitiveData();
-				for (int32 i = 0; i < FMath::Min(6, CPDBefore.Data.Num()); i++)
-				{
-					UE_LOG(LogTemp, Warning, TEXT("    CPD[%d] = %.2f"), i, CPDBefore.Data[i]);
-				}
-
 				SelectionPlane->SetMaterial(0, Material);
-				UE_LOG(LogTemp, Warning, TEXT("  -> Applied material: %s"), *Material->GetName());
-
-				// Check CPD after material application
-				UE_LOG(LogTemp, Warning, TEXT("  -> AFTER SetMaterial - checking CPD values:"));
-				const FCustomPrimitiveData& CPDAfter = SelectionPlane->GetCustomPrimitiveData();
-				for (int32 i = 0; i < FMath::Min(6, CPDAfter.Data.Num()); i++)
-				{
-					UE_LOG(LogTemp, Warning, TEXT("    CPD[%d] = %.2f"), i, CPDAfter.Data[i]);
-				}
 
 				// Force update the CPD again after material application to ensure it takes effect
 				if (SelectionPlaneComponent)
 				{
 					SelectionPlaneComponent->UpdateSelectionPlaneCPD();
-					UE_LOG(LogTemp, Warning, TEXT("  -> Forced CPD update after material application"));
 				}
 			}
-			else
-			{
-				UE_LOG(LogTemp, Error, TEXT("  -> FAILED to load SelectionMaterial!"));
-			}
-		}
-		else
-		{
-			UE_LOG(LogTemp, Error, TEXT("  -> SelectionMaterial is NULL in cached data!"));
 		}
 
 		// Apply collision - Always use SelectionTrace channel (ECC_GameTraceChannel1) for blocking
-		// The object type is already set to SelectionObject in SetupSelectionPlane
-		SelectionPlane->SetCollisionResponseToChannel(ECC_GameTraceChannel1, ECR_Block); // SelectionTrace channel
-		UE_LOG(LogTemp, Warning, TEXT("  -> Set collision to block SelectionTrace channel (ECC_GameTraceChannel1)"));
-
-		// Log current collision setup for debugging
-		UE_LOG(LogTemp, Warning, TEXT("  -> Collision ObjectType: %d, ProfileName: %s"),
-			(int32)SelectionPlane->GetCollisionObjectType(),
-			*SelectionPlane->GetCollisionProfileName().ToString());
+		SelectionPlane->SetCollisionResponseToChannel(ECC_GameTraceChannel1, ECR_Block);
 
 		// Selection plane is always visible - state controlled by material/CPD
 		SelectionPlane->SetVisibility(true);
-		UE_LOG(LogTemp, Warning, TEXT("  -> SelectionPlane visibility set to true"));
-	}
-	else
-	{
-		UE_LOG(LogTemp, Error, TEXT("ApplyCachedProfileData: SelectionPlane component is NULL for %s!"), *GetName());
 	}
 }
 
@@ -217,7 +165,6 @@ void APACS_NPC_Base_Char::BeginPlay()
 	// Apply cached profile data on clients (handles case where RepNotify doesn't fire on initial replication)
 	if (!HasAuthority() && CachedProfileData.IsValid())
 	{
-		UE_LOG(LogTemp, Warning, TEXT("PACS_NPC_Base_Char::BeginPlay: Applying cached profile data on client for %s"), *GetName());
 		ApplyCachedProfileData();
 	}
 }
@@ -240,6 +187,40 @@ void APACS_NPC_Base_Char::OnAcquiredFromPool_Implementation()
 {
 	PrepareForUse();
 
+	// Ensure AI Controller is spawned and possessed (critical for movement)
+	if (HasAuthority())
+	{
+		if (!GetController())
+		{
+			// Spawn and possess AI controller for pooled NPCs
+			if (AIControllerClass)
+			{
+				FActorSpawnParameters SpawnParams;
+				SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+				AAIController* NewController = GetWorld()->SpawnActor<AAIController>(AIControllerClass, SpawnParams);
+				if (NewController)
+				{
+					NewController->Possess(this);
+					UE_LOG(LogTemp, Log, TEXT("PACS_NPC_Base_Char::OnAcquiredFromPool - Spawned and possessed AI Controller for %s"), *GetName());
+				}
+				else
+				{
+					UE_LOG(LogTemp, Error, TEXT("PACS_NPC_Base_Char::OnAcquiredFromPool - Failed to spawn AI Controller for %s"), *GetName());
+				}
+			}
+			else
+			{
+				UE_LOG(LogTemp, Warning, TEXT("PACS_NPC_Base_Char::OnAcquiredFromPool - No AIControllerClass set for %s"), *GetName());
+			}
+		}
+		else
+		{
+			UE_LOG(LogTemp, Log, TEXT("PACS_NPC_Base_Char::OnAcquiredFromPool - %s already has controller: %s"),
+				*GetName(), *GetController()->GetName());
+		}
+	}
+
 	// Notify selection component
 	if (SelectionPlaneComponent)
 	{
@@ -249,6 +230,17 @@ void APACS_NPC_Base_Char::OnAcquiredFromPool_Implementation()
 
 void APACS_NPC_Base_Char::OnReturnedToPool_Implementation()
 {
+	// Properly unpossess and destroy AI controller when returning to pool
+	if (HasAuthority())
+	{
+		if (AAIController* AIController = Cast<AAIController>(GetController()))
+		{
+			AIController->UnPossess();
+			AIController->Destroy();
+			UE_LOG(LogTemp, Log, TEXT("PACS_NPC_Base_Char::OnReturnedToPool - Unpossessed and destroyed AI Controller for %s"), *GetName());
+		}
+	}
+
 	ResetForPool();
 
 	// Notify selection component
@@ -280,12 +272,59 @@ void APACS_NPC_Base_Char::MoveToLocation(const FVector& TargetLocation)
 {
 	if (!HasAuthority())
 	{
+		UE_LOG(LogTemp, Warning, TEXT("PACS_NPC_Base_Char::MoveToLocation - Called on client for %s, ignoring"), *GetName());
 		return;
 	}
 
-	if (AAIController* AIController = Cast<AAIController>(GetController()))
+	UE_LOG(LogTemp, Log, TEXT("PACS_NPC_Base_Char::MoveToLocation - %s attempting to move to %s"),
+		*GetName(), *TargetLocation.ToString());
+
+	// Check if we have a controller
+	AController* CurrentController = GetController();
+	if (!CurrentController)
 	{
-		AIController->MoveToLocation(TargetLocation, 5.0f, true, true, true, false);
+		UE_LOG(LogTemp, Error, TEXT("PACS_NPC_Base_Char::MoveToLocation - %s has no controller! Cannot move."), *GetName());
+		return;
+	}
+
+	// Cast to AI Controller
+	AAIController* AIController = Cast<AAIController>(CurrentController);
+	if (!AIController)
+	{
+		UE_LOG(LogTemp, Error, TEXT("PACS_NPC_Base_Char::MoveToLocation - %s controller is not an AIController (Type: %s)"),
+			*GetName(), *CurrentController->GetClass()->GetName());
+		return;
+	}
+
+	// Check navigation system availability
+	UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
+	if (!NavSys)
+	{
+		UE_LOG(LogTemp, Error, TEXT("PACS_NPC_Base_Char::MoveToLocation - No navigation system found in world!"));
+		return;
+	}
+
+	// Attempt to move
+	UE_LOG(LogTemp, Log, TEXT("PACS_NPC_Base_Char::MoveToLocation - Issuing move command for %s to location %s"),
+		*GetName(), *TargetLocation.ToString());
+
+	EPathFollowingRequestResult::Type MoveResult = AIController->MoveToLocation(TargetLocation, 5.0f, true, true, true, false);
+
+	// Log the result
+	switch (MoveResult)
+	{
+	case EPathFollowingRequestResult::Failed:
+		UE_LOG(LogTemp, Error, TEXT("PACS_NPC_Base_Char::MoveToLocation - Move request FAILED for %s"), *GetName());
+		break;
+	case EPathFollowingRequestResult::AlreadyAtGoal:
+		UE_LOG(LogTemp, Log, TEXT("PACS_NPC_Base_Char::MoveToLocation - %s is already at goal"), *GetName());
+		break;
+	case EPathFollowingRequestResult::RequestSuccessful:
+		UE_LOG(LogTemp, Log, TEXT("PACS_NPC_Base_Char::MoveToLocation - Move request SUCCESSFUL for %s"), *GetName());
+		break;
+	default:
+		UE_LOG(LogTemp, Warning, TEXT("PACS_NPC_Base_Char::MoveToLocation - Unknown result for %s"), *GetName());
+		break;
 	}
 }
 
@@ -392,6 +431,20 @@ void APACS_NPC_Base_Char::SetSelectionProfile(UPACS_SelectionProfileAsset* InPro
 	if (!HasAuthority() || !InProfile)
 	{
 		return;
+	}
+
+	// Apply behavior configuration (server-only, CharacterMovement replicates MaxWalkSpeed)
+	if (UCharacterMovementComponent* MovementComp = GetCharacterMovement())
+	{
+		float Speed = InProfile->BehaviorConfig.MovementSpeed;
+		if (Speed > 0.0f)  // 0 = use class default
+		{
+			MovementComp->MaxWalkSpeed = Speed;
+			DefaultMaxWalkSpeed = Speed;
+
+			UE_LOG(LogTemp, Log, TEXT("PACS_NPC_Base_Char: Applied movement speed %.1f to %s"),
+				Speed, *GetName());
+		}
 	}
 
 	CachedProfileData.PopulateFromProfile(InProfile);

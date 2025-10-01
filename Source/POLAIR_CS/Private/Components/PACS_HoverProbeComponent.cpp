@@ -51,9 +51,6 @@ void UPACS_HoverProbeComponent::BeginPlay()
 {
 	Super::BeginPlay();
 
-	UE_LOG(LogTemp, Warning, TEXT("HoverProbe BeginPlay: START - ConfigApplied=%d, TickEnabled=%d"),
-		bConfigurationApplied, IsComponentTickEnabled());
-
 	// Resolve player controller and setup tick interval
 	OwnerPC = Cast<APACS_PlayerController>(GetOwner());
 
@@ -68,25 +65,11 @@ void UPACS_HoverProbeComponent::BeginPlay()
 		{
 			// Use the SelectionObject type for hover detection (ECC_GameTraceChannel2)
 			HoverObjectTypes.Add(UEngineTypes::ConvertToObjectType(ECC_GameTraceChannel2));
-			UE_LOG(LogTemp, Warning, TEXT("HoverProbe BeginPlay: Using default SelectionObject type (ECC_GameTraceChannel2)"));
 		}
-	}
-
-	// Log configured object types
-	for (int32 i = 0; i < HoverObjectTypes.Num(); i++)
-	{
-		UE_LOG(LogTemp, Log, TEXT("HoverProbe BeginPlay: Using ObjectType[%d] = %d"), i, (int32)HoverObjectTypes[i]);
 	}
 
 	// Force enable ticking as failsafe
 	SetComponentTickEnabled(true);
-
-	// Final status log
-	UE_LOG(LogTemp, Warning, TEXT("HoverProbe BeginPlay: END - Owner=%s, TickEnabled=%d, TickInterval=%.3f, ObjectTypes=%d"),
-		OwnerPC.IsValid() ? *OwnerPC->GetName() : TEXT("INVALID"),
-		IsComponentTickEnabled(),
-		GetComponentTickInterval(),
-		HoverObjectTypes.Num());
 }
 
 void UPACS_HoverProbeComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -104,47 +87,14 @@ void UPACS_HoverProbeComponent::OnComponentDestroyed(bool bDestroyingHierarchy)
 void UPACS_HoverProbeComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-
-	// Heartbeat log every second (30 ticks at 30Hz)
-	static int32 TickCounter = 0;
-	if (++TickCounter >= 30)
-	{
-		TickCounter = 0;
-		UE_LOG(LogTemp, Log, TEXT("HoverProbe: HEARTBEAT - Ticking at %.1fHz, Owner=%s"),
-			RateHz, OwnerPC.IsValid() ? *OwnerPC->GetName() : TEXT("INVALID"));
-	}
-
 	ProbeOnce();
 }
 
 void UPACS_HoverProbeComponent::ProbeOnce()
 {
-	// Log entry to ProbeOnce every 10 probes
-	static int32 ProbeCounter = 0;
-	static int32 DebugCounter = 0;
-	if (++ProbeCounter >= 10)
-	{
-		ProbeCounter = 0;
-		UE_LOG(LogTemp, Verbose, TEXT("HoverProbe: ProbeOnce() executing (Owner=%s)"),
-			OwnerPC.IsValid() ? *OwnerPC->GetName() : TEXT("INVALID"));
-	}
-
 	if (!OwnerPC.IsValid())
 	{
-		UE_LOG(LogTemp, Warning, TEXT("HoverProbe: ProbeOnce() - OwnerPC is invalid, aborting"));
 		return;
-	}
-
-	// Log trace config every 60 frames (2 seconds at 30Hz)
-	if (++DebugCounter >= 60)
-	{
-		DebugCounter = 0;
-		FString ObjectTypeList;
-		for (int32 i = 0; i < HoverObjectTypes.Num(); i++)
-		{
-			ObjectTypeList += FString::Printf(TEXT("%d "), (int32)HoverObjectTypes[i]);
-		}
-		UE_LOG(LogTemp, Warning, TEXT("HoverProbe DEBUG: Tracing with ObjectTypes=[%s]"), *ObjectTypeList);
 	}
 
 	// Perform line trace from cursor using object type query for selection planes
@@ -156,61 +106,10 @@ void UPACS_HoverProbeComponent::ProbeOnce()
 	{
 		bHit = OwnerPC->GetHitResultUnderCursorForObjects(HoverObjectTypes, false, HitResult);
 
-		// Debug: Log trace attempt with object types
+		// Fallback to SelectionTrace channel if object query fails
 		if (!bHit)
 		{
-			// Try ALL possible channels to find what works
-			static int32 ChannelTestCounter = 0;
-			if (++ChannelTestCounter >= 30) // Every second
-			{
-				ChannelTestCounter = 0;
-
-				// Test all channels
-				FHitResult TestHit;
-				bool bHitAny = false;
-
-				// Test SelectionTrace channel (ECC_GameTraceChannel1)
-				if (OwnerPC->GetHitResultUnderCursor(ECC_GameTraceChannel1, false, TestHit))
-				{
-					UE_LOG(LogTemp, Warning, TEXT("HoverProbe: HIT on SelectionTrace (ECC_GameTraceChannel1)! Actor=%s"),
-						TestHit.GetActor() ? *TestHit.GetActor()->GetName() : TEXT("null"));
-					bHitAny = true;
-				}
-
-				// Test SelectionObject channel (ECC_GameTraceChannel2)
-				if (OwnerPC->GetHitResultUnderCursor(ECC_GameTraceChannel2, false, TestHit))
-				{
-					UE_LOG(LogTemp, Warning, TEXT("HoverProbe: HIT on SelectionObject (ECC_GameTraceChannel2)! Actor=%s"),
-						TestHit.GetActor() ? *TestHit.GetActor()->GetName() : TEXT("null"));
-					bHitAny = true;
-				}
-
-				// Test Visibility channel
-				if (OwnerPC->GetHitResultUnderCursor(ECC_Visibility, false, TestHit))
-				{
-					UE_LOG(LogTemp, Warning, TEXT("HoverProbe: HIT on Visibility channel! Actor=%s"),
-						TestHit.GetActor() ? *TestHit.GetActor()->GetName() : TEXT("null"));
-					bHitAny = true;
-				}
-
-				if (!bHitAny)
-				{
-					UE_LOG(LogTemp, Warning, TEXT("HoverProbe: NO HITS on any channel (GT1, GT2, or Visibility)"));
-				}
-			}
-
-			// Original fallback logic
 			bHit = OwnerPC->GetHitResultUnderCursor(ECC_GameTraceChannel1, false, HitResult);
-			if (bHit)
-			{
-				UE_LOG(LogTemp, Warning, TEXT("HoverProbe: Fallback HIT via SelectionTrace channel!"));
-			}
-		}
-		else
-		{
-			// We got a hit with object type query - log it!
-			UE_LOG(LogTemp, Warning, TEXT("HoverProbe: ObjectType query SUCCESS! Hit actor=%s"),
-				HitResult.GetActor() ? *HitResult.GetActor()->GetName() : TEXT("null"));
 		}
 	}
 	else
@@ -224,12 +123,6 @@ void UPACS_HoverProbeComponent::ProbeOnce()
 		if (!bHit)
 		{
 			bHit = OwnerPC->GetHitResultUnderCursor(ECC_Visibility, false, HitResult);
-		}
-
-		if (bHit)
-		{
-			UE_LOG(LogTemp, Warning, TEXT("HoverProbe: Direct channel trace hit! Actor=%s"),
-				HitResult.GetActor() ? *HitResult.GetActor()->GetName() : TEXT("null"));
 		}
 	}
 
@@ -260,58 +153,14 @@ void UPACS_HoverProbeComponent::ProbeOnce()
 					if (CurrentSelectionState == 3)
 					{
 						bCanHover = true;
-						UE_LOG(LogTemp, Verbose, TEXT("HoverProbe: NPC '%s' is Available, hover allowed"),
-							*HitActor->GetName());
-					}
-					else
-					{
-						// Log why hover is not allowed
-						const TCHAR* StateString =
-							CurrentSelectionState == 1 ? TEXT("Selected") :
-							CurrentSelectionState == 2 ? TEXT("Unavailable") :
-							CurrentSelectionState == 0 ? TEXT("Hovered") : TEXT("Unknown");
-
-						UE_LOG(LogTemp, Verbose, TEXT("HoverProbe: Cannot hover - NPC '%s' is in %s state"),
-							*HitActor->GetName(), StateString);
 					}
 
-					if (bCanHover)
-					{
-						// Log successful hit on compatible collision with detailed info
-						UActorComponent* HitComp = HitResult.GetComponent();
-						FString CollisionInfo = TEXT("N/A");
-						if (HitComp && HitComp->IsA<UPrimitiveComponent>())
-						{
-							UPrimitiveComponent* PrimComp = Cast<UPrimitiveComponent>(HitComp);
-							CollisionInfo = FString::Printf(TEXT("ObjectType=%d, ProfileName=%s"),
-								(int32)PrimComp->GetCollisionObjectType(),
-								*PrimComp->GetCollisionProfileName().ToString());
-						}
-
-						UE_LOG(LogTemp, Log, TEXT("HoverProbe: Hit poolable actor '%s' with SelectionPlane at distance %.1f (Component: %s, %s)"),
-							*HitActor->GetName(),
-							HitResult.Distance,
-							*GetNameSafe(HitResult.GetComponent()),
-							*CollisionInfo);
-					}
-					else
+					if (!bCanHover)
 					{
 						// Don't set this as hit plane if we can't hover
 						HitPlaneComponent = nullptr;
 					}
 				}
-				else
-				{
-					UE_LOG(LogTemp, Verbose, TEXT("HoverProbe: Hit poolable actor '%s' but no SelectionPlane found"),
-						*HitActor->GetName());
-				}
-			}
-			else
-			{
-				// Hit something but it's not a poolable actor
-				UE_LOG(LogTemp, Verbose, TEXT("HoverProbe: Hit non-poolable actor '%s' (Class: %s)"),
-					*HitActor->GetName(),
-					*HitActor->GetClass()->GetName());
 			}
 		}
 
@@ -329,8 +178,6 @@ void UPACS_HoverProbeComponent::ProbeOnce()
 
 				// Activate hover visuals on the selection plane
 				HitPlaneComponent->SetHoverState(true);
-
-				UE_LOG(LogTemp, Log, TEXT("HoverProbe: Activated hover state on '%s'"), *HitActor->GetName());
 			}
 		}
 	}
