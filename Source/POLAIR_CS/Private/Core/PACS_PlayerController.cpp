@@ -5,6 +5,7 @@
 #include "IXRTrackingSystem.h"
 #include "Engine/Engine.h"
 #include "Engine/EngineTypes.h"
+#include "Engine/Texture2D.h"
 #include "Actors/Pawn/PACS_CandidateHelicopterCharacter.h"
 #include "Actors/NPC/PACS_NPC_Base.h"
 #include "Actors/NPC/PACS_NPC_Base_Char.h"
@@ -12,6 +13,9 @@
 #include "Interfaces/PACS_Poolable.h"
 #include "Interfaces/PACS_SelectableCharacterInterface.h"
 #include "Subsystems/PACSLaunchArgSubsystem.h"
+#include "Subsystems/PACS_SpawnOrchestrator.h"
+#include "Subsystems/PACS_MemoryTracker.h"
+#include "Data/PACS_SpawnConfig.h"
 #include "EngineUtils.h"
 #include "Components/DecalComponent.h"
 #include "Components/PACS_NPCBehaviorComponent.h"
@@ -89,7 +93,7 @@ void APACS_PlayerController::BeginPlay()
     if (InputHandler && IsLocalController())
     {
         InputHandler->RegisterReceiver(this, PACS_InputPriority::UI);
-        UE_LOG(LogPACSInput, Log, TEXT("PC registered as UI receiver"));
+        UE_LOG(LogTemp, Log, TEXT("PC registered as UI receiver"));
     }
 
     // Set up VR delegates for local controllers only
@@ -177,14 +181,14 @@ void APACS_PlayerController::ValidateInputSystem()
 #if !UE_SERVER
     if (!InputHandler)
     {
-        UE_LOG(LogPACSInput, Error, 
+        UE_LOG(LogTemp, Error, 
             TEXT("InputHandler component missing! Input will not work."));
         return;
     }
     
     if (!InputHandler->IsHealthy())
     {
-        UE_LOG(LogPACSInput, Warning, 
+        UE_LOG(LogTemp, Warning, 
             TEXT("InputHandler not healthy - check configuration"));
     }
 #endif
@@ -195,7 +199,7 @@ void APACS_PlayerController::BindInputActions()
 #if !UE_SERVER
     if (!InputHandler)
     {
-        UE_LOG(LogPACSInput, Warning, 
+        UE_LOG(LogTemp, Warning, 
             TEXT("Cannot bind input actions - InputHandler is null"));
         return;
     }
@@ -203,7 +207,7 @@ void APACS_PlayerController::BindInputActions()
     // Skip binding if handler isn't initialized yet - it will call us back when ready
     if (!InputHandler->IsHealthy())
     {
-        UE_LOG(LogPACSInput, Log, 
+        UE_LOG(LogTemp, Log, 
             TEXT("Deferring input binding - InputHandler not ready yet (IsHealthy=%s)"), 
             InputHandler->IsHealthy() ? TEXT("true") : TEXT("false"));
         return;
@@ -211,7 +215,7 @@ void APACS_PlayerController::BindInputActions()
 
     if (!InputHandler->InputConfig)
     {
-        UE_LOG(LogPACSInput, Warning, 
+        UE_LOG(LogTemp, Warning, 
             TEXT("Cannot bind input actions - InputConfig not set (check Blueprint configuration)"));
         return;
     }
@@ -219,20 +223,20 @@ void APACS_PlayerController::BindInputActions()
     UEnhancedInputComponent* EIC = Cast<UEnhancedInputComponent>(InputComponent);
     if (!EIC)
     {
-        UE_LOG(LogPACSInput, Error, TEXT("Enhanced Input Component not found!"));
+        UE_LOG(LogTemp, Error, TEXT("Enhanced Input Component not found!"));
         return;
     }
 
     // Clear any existing bindings first
     EIC->ClearActionBindings();
-    UE_LOG(LogPACSInput, Log, TEXT("Cleared existing action bindings"));
+    UE_LOG(LogTemp, Log, TEXT("Cleared existing action bindings"));
 
     int32 BindingCount = 0;
     for (const FPACS_InputActionMapping& Mapping : InputHandler->InputConfig->ActionMappings)
     {
         if (!Mapping.InputAction)
         {
-            UE_LOG(LogPACSInput, Warning, TEXT("Null InputAction for %s"), 
+            UE_LOG(LogTemp, Warning, TEXT("Null InputAction for %s"), 
                 *Mapping.ActionIdentifier.ToString());
             continue;
         }
@@ -242,7 +246,7 @@ void APACS_PlayerController::BindInputActions()
             EIC->BindAction(Mapping.InputAction.Get(), ETriggerEvent::Started, 
                 InputHandler.Get(), &UPACS_InputHandlerComponent::HandleAction);
             BindingCount++;
-            UE_LOG(LogPACSInput, VeryVerbose, TEXT("  Bound %s for Started"), 
+            UE_LOG(LogTemp, VeryVerbose, TEXT("  Bound %s for Started"), 
                 *Mapping.ActionIdentifier.ToString());
         }
         
@@ -251,7 +255,7 @@ void APACS_PlayerController::BindInputActions()
             EIC->BindAction(Mapping.InputAction.Get(), ETriggerEvent::Triggered, 
                 InputHandler.Get(), &UPACS_InputHandlerComponent::HandleAction);
             BindingCount++;
-            UE_LOG(LogPACSInput, VeryVerbose, TEXT("  Bound %s for Triggered"), 
+            UE_LOG(LogTemp, VeryVerbose, TEXT("  Bound %s for Triggered"), 
                 *Mapping.ActionIdentifier.ToString());
         }
         
@@ -260,7 +264,7 @@ void APACS_PlayerController::BindInputActions()
             EIC->BindAction(Mapping.InputAction.Get(), ETriggerEvent::Completed, 
                 InputHandler.Get(), &UPACS_InputHandlerComponent::HandleAction);
             BindingCount++;
-            UE_LOG(LogPACSInput, VeryVerbose, TEXT("  Bound %s for Completed"), 
+            UE_LOG(LogTemp, VeryVerbose, TEXT("  Bound %s for Completed"), 
                 *Mapping.ActionIdentifier.ToString());
         }
         
@@ -269,7 +273,7 @@ void APACS_PlayerController::BindInputActions()
             EIC->BindAction(Mapping.InputAction.Get(), ETriggerEvent::Ongoing, 
                 InputHandler.Get(), &UPACS_InputHandlerComponent::HandleAction);
             BindingCount++;
-            UE_LOG(LogPACSInput, VeryVerbose, TEXT("  Bound %s for Ongoing"), 
+            UE_LOG(LogTemp, VeryVerbose, TEXT("  Bound %s for Ongoing"), 
                 *Mapping.ActionIdentifier.ToString());
         }
         
@@ -278,16 +282,16 @@ void APACS_PlayerController::BindInputActions()
             EIC->BindAction(Mapping.InputAction.Get(), ETriggerEvent::Canceled, 
                 InputHandler.Get(), &UPACS_InputHandlerComponent::HandleAction);
             BindingCount++;
-            UE_LOG(LogPACSInput, VeryVerbose, TEXT("  Bound %s for Canceled"), 
+            UE_LOG(LogTemp, VeryVerbose, TEXT("  Bound %s for Canceled"), 
                 *Mapping.ActionIdentifier.ToString());
         }
     }
     
-    UE_LOG(LogPACSInput, Log, TEXT("Bound %d input actions from %d mappings (permanent bindings)"), 
+    UE_LOG(LogTemp, Log, TEXT("Bound %d input actions from %d mappings (permanent bindings)"), 
         BindingCount, InputHandler->InputConfig->ActionMappings.Num());
     
     // Verify InputComponent state
-    UE_LOG(LogPACSInput, Log, TEXT("InputComponent valid: %s, Handler valid: %s, Handler initialized: %s"),
+    UE_LOG(LogTemp, Log, TEXT("InputComponent valid: %s, Handler valid: %s, Handler initialized: %s"),
         InputComponent ? TEXT("Yes") : TEXT("No"),
         InputHandler ? TEXT("Yes") : TEXT("No"),
         InputHandler->IsHealthy() ? TEXT("Yes") : TEXT("No"));
@@ -542,6 +546,33 @@ EPACS_InputHandleResult APACS_PlayerController::HandleInputAction(FName ActionNa
         ServerRequestDeselect();
 
         return EPACS_InputHandleResult::HandledConsume;
+    }
+
+    // Handle spawn placement inputs when in placement mode
+    if (bIsPlacingSpawn)
+    {
+        // Left click to confirm placement
+        if (ActionName == TEXT("LeftClick") || ActionName == TEXT("Select"))
+        {
+            const float Magnitude = Value.GetMagnitude();
+            // Only on button release (Completed event)
+            if (Magnitude == 0.0f)
+            {
+                HandleSpawnPlacementClick();
+                return EPACS_InputHandleResult::HandledConsume;
+            }
+        }
+        // Right click to cancel placement
+        else if (ActionName == TEXT("RightClick") || ActionName == TEXT("Cancel"))
+        {
+            const float Magnitude = Value.GetMagnitude();
+            // Only on button release
+            if (Magnitude == 0.0f)
+            {
+                HandleSpawnPlacementCancel();
+                return EPACS_InputHandleResult::HandledConsume;
+            }
+        }
     }
 
     // Pass through other actions
@@ -1174,4 +1205,330 @@ void APACS_PlayerController::QueryActorsInMarquee()
             }
         }
     }
+}
+
+// ========================================================================================
+// NPC Spawn Placement Implementation
+// ========================================================================================
+
+void APACS_PlayerController::BeginSpawnPlacement(int32 ConfigIndex)
+{
+#if !UE_SERVER
+    // Client-side only
+    if (HasAuthority())
+    {
+        return;
+    }
+
+    // Validate config index
+    UPACS_SpawnOrchestrator* Orchestrator = GetWorld()->GetSubsystem<UPACS_SpawnOrchestrator>();
+    if (!Orchestrator || !Orchestrator->GetSpawnConfig())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("BeginSpawnPlacement: SpawnOrchestrator or config not ready"));
+        return;
+    }
+
+    const TArray<FSpawnClassConfig>& Configs = Orchestrator->GetSpawnConfig()->GetSpawnConfigs();
+    if (!Configs.IsValidIndex(ConfigIndex))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("BeginSpawnPlacement: Invalid config index %d"), ConfigIndex);
+        return;
+    }
+
+    // Check if this config should be visible in UI
+    if (!Configs[ConfigIndex].bVisibleInUI)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("BeginSpawnPlacement: Config %d is not visible in UI"), ConfigIndex);
+        return;
+    }
+
+    // Set placement state
+    ActiveSpawnConfigIndex = ConfigIndex;
+    bIsPlacingSpawn = true;
+
+    // Switch to UI input context (disables gameplay inputs)
+    if (InputHandler)
+    {
+        InputHandler->SetBaseContext(EPACS_InputContextMode::UI);
+    }
+
+    UE_LOG(LogTemp, Log, TEXT("BeginSpawnPlacement: Started placement for config %d (%s)"),
+        ConfigIndex, *Configs[ConfigIndex].DisplayName.ToString());
+#endif
+}
+
+void APACS_PlayerController::CancelSpawnPlacement()
+{
+#if !UE_SERVER
+    if (!bIsPlacingSpawn)
+    {
+        return;
+    }
+
+    // Clear placement state
+    ActiveSpawnConfigIndex = -1;
+    bIsPlacingSpawn = false;
+
+    // Return to gameplay input context
+    if (InputHandler)
+    {
+        InputHandler->SetBaseContext(EPACS_InputContextMode::Gameplay);
+    }
+
+    UE_LOG(LogTemp, Log, TEXT("CancelSpawnPlacement: Placement cancelled"));
+#endif
+}
+
+TArray<int32> APACS_PlayerController::GetAvailableSpawnConfigs() const
+{
+    TArray<int32> AvailableIndices;
+
+#if !UE_SERVER
+    UPACS_SpawnOrchestrator* Orchestrator = GetWorld()->GetSubsystem<UPACS_SpawnOrchestrator>();
+    if (Orchestrator && Orchestrator->GetSpawnConfig())
+    {
+        const TArray<FSpawnClassConfig>& Configs = Orchestrator->GetSpawnConfig()->GetSpawnConfigs();
+        for (int32 i = 0; i < Configs.Num(); ++i)
+        {
+            if (Configs[i].bVisibleInUI)
+            {
+                AvailableIndices.Add(i);
+            }
+        }
+    }
+#endif
+
+    return AvailableIndices;
+}
+
+FText APACS_PlayerController::GetSpawnConfigDisplayName(int32 ConfigIndex) const
+{
+#if !UE_SERVER
+    UPACS_SpawnOrchestrator* Orchestrator = GetWorld()->GetSubsystem<UPACS_SpawnOrchestrator>();
+    if (Orchestrator && Orchestrator->GetSpawnConfig())
+    {
+        const TArray<FSpawnClassConfig>& Configs = Orchestrator->GetSpawnConfig()->GetSpawnConfigs();
+        if (Configs.IsValidIndex(ConfigIndex))
+        {
+            return Configs[ConfigIndex].DisplayName;
+        }
+    }
+#endif
+
+    return FText::GetEmpty();
+}
+
+UTexture2D* APACS_PlayerController::GetSpawnConfigIcon(int32 ConfigIndex) const
+{
+#if !UE_SERVER
+    UPACS_SpawnOrchestrator* Orchestrator = GetWorld()->GetSubsystem<UPACS_SpawnOrchestrator>();
+    if (Orchestrator && Orchestrator->GetSpawnConfig())
+    {
+        const TArray<FSpawnClassConfig>& Configs = Orchestrator->GetSpawnConfig()->GetSpawnConfigs();
+        if (Configs.IsValidIndex(ConfigIndex))
+        {
+            return Configs[ConfigIndex].ButtonIcon.LoadSynchronous();
+        }
+    }
+#endif
+
+    return nullptr;
+}
+
+void APACS_PlayerController::HandleSpawnPlacementClick()
+{
+#if !UE_SERVER
+    if (!bIsPlacingSpawn || ActiveSpawnConfigIndex < 0)
+    {
+        return;
+    }
+
+    // Get spawn location from cursor
+    FVector PlacementLocation;
+    if (GetSpawnLocationFromCursor(PlacementLocation))
+    {
+        // Send spawn request to server
+        ServerSpawnNPCAtLocation(ActiveSpawnConfigIndex, PlacementLocation);
+
+        // End placement mode
+        CancelSpawnPlacement();
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("HandleSpawnPlacementClick: Failed to get valid spawn location"));
+    }
+#endif
+}
+
+void APACS_PlayerController::HandleSpawnPlacementCancel()
+{
+#if !UE_SERVER
+    CancelSpawnPlacement();
+#endif
+}
+
+bool APACS_PlayerController::GetSpawnLocationFromCursor(FVector& OutLocation) const
+{
+#if !UE_SERVER
+    // Use the same trace channel as selection system
+    FHitResult HitResult;
+    if (GetHitResultUnderCursor(SelectionTraceChannel, true, HitResult))
+    {
+        // Check if we hit the ground (not an actor)
+        if (HitResult.bBlockingHit)
+        {
+            OutLocation = HitResult.Location;
+            return true;
+        }
+    }
+#endif
+
+    return false;
+}
+
+bool APACS_PlayerController::ServerSpawnNPCAtLocation_Validate(int32 ConfigIndex, FVector_NetQuantize Location)
+{
+    // Basic validation checks
+    if (!HasAuthority())
+    {
+        return false;
+    }
+
+    // Validate spawn orchestrator is ready
+    UPACS_SpawnOrchestrator* Orchestrator = GetWorld()->GetSubsystem<UPACS_SpawnOrchestrator>();
+    if (!Orchestrator || !Orchestrator->IsReady())
+    {
+        return false;
+    }
+
+    // Validate config index
+    const TArray<FSpawnClassConfig>& Configs = Orchestrator->GetSpawnConfig()->GetSpawnConfigs();
+    if (!Configs.IsValidIndex(ConfigIndex))
+    {
+        return false;
+    }
+
+    // Validate location is reasonable
+    if (Location.Size() > 100000.0f || FMath::Abs(Location.Z) > 50000.0f)
+    {
+        return false;
+    }
+
+    // Check player spawn limit
+    if (Configs[ConfigIndex].PlayerSpawnLimit > 0 && PlayerSpawnedCount >= Configs[ConfigIndex].PlayerSpawnLimit)
+    {
+        return false;
+    }
+
+    return true;
+}
+
+void APACS_PlayerController::ServerSpawnNPCAtLocation_Implementation(int32 ConfigIndex, FVector_NetQuantize Location)
+{
+    if (!HasAuthority())
+    {
+        return;
+    }
+
+    UPACS_SpawnOrchestrator* Orchestrator = GetWorld()->GetSubsystem<UPACS_SpawnOrchestrator>();
+    if (!Orchestrator || !Orchestrator->IsReady())
+    {
+        ClientSpawnFailed(ConfigIndex, (uint8)ESpawnFailureReason::SystemNotReady);
+        return;
+    }
+
+    const TArray<FSpawnClassConfig>& Configs = Orchestrator->GetSpawnConfig()->GetSpawnConfigs();
+    if (!Configs.IsValidIndex(ConfigIndex))
+    {
+        ClientSpawnFailed(ConfigIndex, (uint8)ESpawnFailureReason::InvalidLocation);
+        return;
+    }
+
+    const FSpawnClassConfig& Config = Configs[ConfigIndex];
+
+    // Check player spawn limit
+    if (Config.PlayerSpawnLimit > 0 && PlayerSpawnedCount >= Config.PlayerSpawnLimit)
+    {
+        ClientSpawnFailed(ConfigIndex, (uint8)ESpawnFailureReason::PlayerLimitReached);
+        return;
+    }
+
+    // Check memory budget
+    UPACS_MemoryTracker* MemTracker = GetWorld()->GetSubsystem<UPACS_MemoryTracker>();
+    if (MemTracker && !MemTracker->CanAllocateMemoryMB(1.0f)) // 1MB check
+    {
+        ClientSpawnFailed(ConfigIndex, (uint8)ESpawnFailureReason::GlobalLimitReached);
+        return;
+    }
+
+    // Prepare spawn parameters
+    FSpawnRequestParams Params;
+    Params.Transform = FTransform(Location);
+    Params.Owner = this;
+    Params.Instigator = GetPawn();
+
+    // Request actor from pool
+    AActor* SpawnedActor = Orchestrator->AcquireActor(Config.SpawnTag, Params);
+
+    if (SpawnedActor)
+    {
+        PlayerSpawnedCount++;
+        ClientSpawnSucceeded(ConfigIndex);
+
+        UE_LOG(LogTemp, Log, TEXT("ServerSpawnNPCAtLocation: Successfully spawned %s at %s for player %s"),
+            *Config.DisplayName.ToString(),
+            *Location.ToString(),
+            *GetPlayerState<APlayerState>()->GetPlayerName());
+    }
+    else
+    {
+        ClientSpawnFailed(ConfigIndex, (uint8)ESpawnFailureReason::PoolExhausted);
+        UE_LOG(LogTemp, Warning, TEXT("ServerSpawnNPCAtLocation: Failed to acquire actor from pool"));
+    }
+}
+
+void APACS_PlayerController::ClientSpawnSucceeded_Implementation(int32 ConfigIndex)
+{
+#if !UE_SERVER
+    UE_LOG(LogTemp, Log, TEXT("ClientSpawnSucceeded: Spawn successful for config %d"), ConfigIndex);
+
+    // Could trigger UI feedback here
+    // OnSpawnSucceededDelegate.Broadcast(ConfigIndex);
+#endif
+}
+
+void APACS_PlayerController::ClientSpawnFailed_Implementation(int32 ConfigIndex, uint8 FailureReason)
+{
+#if !UE_SERVER
+    ESpawnFailureReason Reason = (ESpawnFailureReason)FailureReason;
+
+    FString ReasonString = TEXT("Unknown");
+    switch (Reason)
+    {
+        case ESpawnFailureReason::PoolExhausted:
+            ReasonString = TEXT("Pool exhausted");
+            break;
+        case ESpawnFailureReason::InvalidLocation:
+            ReasonString = TEXT("Invalid location");
+            break;
+        case ESpawnFailureReason::PlayerLimitReached:
+            ReasonString = TEXT("Player spawn limit reached");
+            break;
+        case ESpawnFailureReason::GlobalLimitReached:
+            ReasonString = TEXT("Global spawn limit reached");
+            break;
+        case ESpawnFailureReason::NotAuthorized:
+            ReasonString = TEXT("Not authorized");
+            break;
+        case ESpawnFailureReason::SystemNotReady:
+            ReasonString = TEXT("System not ready");
+            break;
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("ClientSpawnFailed: Spawn failed for config %d - %s"),
+        ConfigIndex, *ReasonString);
+
+    // Could trigger UI feedback here
+    // OnSpawnFailedDelegate.Broadcast(ConfigIndex, Reason);
+#endif
 }

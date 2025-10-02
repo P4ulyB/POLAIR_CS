@@ -111,6 +111,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Spawn System")
 	bool IsReady() const { return SpawnConfig != nullptr; }
 
+	// Get spawn config
+	UFUNCTION(BlueprintPure, Category = "Spawn System")
+	UPACS_SpawnConfig* GetSpawnConfig() const { return SpawnConfig; }
+
 	// Statistics
 	UFUNCTION(BlueprintPure, Category = "Spawn System")
 	void GetPoolStatistics(FGameplayTag SpawnTag, int32& OutActive, int32& OutAvailable, int32& OutTotal) const;

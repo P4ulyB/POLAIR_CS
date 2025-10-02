@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "GameFramework/PlayerState.h"
 #include "Interfaces/PACS_Poolable.h"
 #include "Interfaces/PACS_SelectableCharacterInterface.h"
 #include "PACS_NPC_Base.generated.h"

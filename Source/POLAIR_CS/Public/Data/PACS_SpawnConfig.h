@@ -54,6 +54,21 @@ struct FReplicationPolicy
 };
 
 /**
+ * Spawn failure reasons for client feedback
+ */
+UENUM(BlueprintType)
+enum class ESpawnFailureReason : uint8
+{
+	None = 0,
+	PoolExhausted,
+	InvalidLocation,
+	PlayerLimitReached,
+	GlobalLimitReached,
+	NotAuthorized,
+	SystemNotReady
+};
+
+/**
  * Configuration for a single spawnable class type
  */
 USTRUCT(BlueprintType)
@@ -83,6 +98,32 @@ struct FSpawnClassConfig
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawn")
 	bool bAutoActivate = true;
+
+	// UI Display Information
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI",
+		meta = (ToolTip = "Display name shown on spawn button"))
+	FText DisplayName;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI",
+		meta = (ToolTip = "Icon texture for spawn button"))
+	TSoftObjectPtr<class UTexture2D> ButtonIcon;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI",
+		meta = (ToolTip = "Whether this spawn type should appear in the UI"))
+	bool bVisibleInUI = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI",
+		meta = (ToolTip = "Tooltip description for spawn button"))
+	FText TooltipDescription;
+
+	// Spawn Limits
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Limits",
+		meta = (ClampMin = "0", ClampMax = "100", ToolTip = "Max spawns per player (0 = unlimited)"))
+	int32 PlayerSpawnLimit = 10;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Limits",
+		meta = (ClampMin = "0", ClampMax = "1000", ToolTip = "Max global spawns of this type (0 = unlimited)"))
+	int32 GlobalSpawnLimit = 100;
 };
 
 /**

@@ -201,4 +201,62 @@ private:
     void ClearMarquee();
     void QueryActorsInMarquee();
 #pragma endregion
+
+#pragma region NPC Spawn Placement
+public:
+    // Spawn placement interface for UI
+    UFUNCTION(BlueprintCallable, Category = "Spawn")
+    void BeginSpawnPlacement(int32 ConfigIndex);
+
+    UFUNCTION(BlueprintCallable, Category = "Spawn")
+    void CancelSpawnPlacement();
+
+    // Config discovery for dynamic UI
+    UFUNCTION(BlueprintCallable, Category = "Spawn")
+    TArray<int32> GetAvailableSpawnConfigs() const;
+
+    UFUNCTION(BlueprintCallable, Category = "Spawn")
+    FText GetSpawnConfigDisplayName(int32 ConfigIndex) const;
+
+    UFUNCTION(BlueprintCallable, Category = "Spawn")
+    class UTexture2D* GetSpawnConfigIcon(int32 ConfigIndex) const;
+
+    // Spawn state accessors
+    UFUNCTION(BlueprintPure, Category = "Spawn")
+    bool IsPlacingSpawn() const { return bIsPlacingSpawn; }
+
+    UFUNCTION(BlueprintPure, Category = "Spawn")
+    int32 GetActiveSpawnConfigIndex() const { return ActiveSpawnConfigIndex; }
+
+    // Spawn limits
+    UPROPERTY(EditDefaultsOnly, Category = "Spawn",
+        meta = (DisplayName = "Max Player Spawns", ClampMin = "1", ClampMax = "100"))
+    int32 MaxPlayerSpawns = 20;
+
+private:
+    // Spawn placement state
+    int32 ActiveSpawnConfigIndex = -1;
+    bool bIsPlacingSpawn = false;
+
+    // Track spawned NPCs per player (for limits)
+    int32 PlayerSpawnedCount = 0;
+
+    // Input handlers for spawn placement
+    void HandleSpawnPlacementClick();
+    void HandleSpawnPlacementCancel();
+
+    // Helper to get spawn location from cursor
+    bool GetSpawnLocationFromCursor(FVector& OutLocation) const;
+
+    // Server RPC for spawning
+    UFUNCTION(Server, Reliable, WithValidation)
+    void ServerSpawnNPCAtLocation(int32 ConfigIndex, FVector_NetQuantize Location);
+
+    // Client feedback
+    UFUNCTION(Client, Reliable)
+    void ClientSpawnSucceeded(int32 ConfigIndex);
+
+    UFUNCTION(Client, Reliable)
+    void ClientSpawnFailed(int32 ConfigIndex, uint8 FailureReason);
+#pragma endregion
 };
