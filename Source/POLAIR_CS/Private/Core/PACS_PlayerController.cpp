@@ -22,6 +22,11 @@
 #include "Components/PACS_SelectionPlaneComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Actors/Pawn/PACS_AssessorPawn.h"
+#include "Blueprint/UserWidget.h"
+#include "Blueprint/WidgetTree.h"
+#include "UI/PACS_SpawnButtonWidget.h"
+#include "UI/PACS_SpawnListWidget.h"
+// Removed Landscape include - simplified check below
 
 #if !UE_SERVER
 #include "EnhancedInputComponent.h"
@@ -94,6 +99,21 @@ void APACS_PlayerController::BeginPlay()
     {
         InputHandler->RegisterReceiver(this, PACS_InputPriority::UI);
         UE_LOG(LogTemp, Log, TEXT("PC registered as UI receiver"));
+    }
+
+    // Create spawn UI for local players (delayed to ensure subsystems are ready)
+    if (IsLocalController())
+    {
+        UE_LOG(LogTemp, Log, TEXT("PACS_PlayerController::BeginPlay - Scheduling CreateSpawnUI for next tick (IsLocalController=true)"));
+        GetWorld()->GetTimerManager().SetTimerForNextTick([this]()
+        {
+            CreateSpawnUI();
+        });
+    }
+    else
+    {
+        UE_LOG(LogTemp, Log, TEXT("PACS_PlayerController::BeginPlay - Skipping CreateSpawnUI (IsLocalController=false, Role=%s)"),
+            *UEnum::GetValueAsString(GetLocalRole()));
     }
 
     // Set up VR delegates for local controllers only
@@ -470,6 +490,40 @@ EPACS_InputHandleResult APACS_PlayerController::HandleInputAction(FName ActionNa
         }
         return EPACS_InputHandleResult::HandledConsume;
     }
+    // PRIORITY 1: Handle spawn placement inputs when in placement mode (GameplayTag-based system)
+    // This must be checked BEFORE marquee selection to have higher priority
+    if (bSpawnPlacementMode && (ActionName == TEXT("LeftClick") || ActionName == TEXT("Select") ||
+                                  ActionName == TEXT("RightClick") || ActionName == TEXT("Cancel")))
+    {
+        UE_LOG(LogTemp, Log, TEXT("PACS_PlayerController: Handling input in spawn placement mode - Action: %s"),
+            *ActionName.ToString());
+
+        // Left click to confirm placement
+        if (ActionName == TEXT("LeftClick") || ActionName == TEXT("Select"))
+        {
+            const float Magnitude = Value.GetMagnitude();
+            // Only on button release (Completed event)
+            if (Magnitude == 0.0f)
+            {
+                UE_LOG(LogTemp, Log, TEXT("PACS_PlayerController: Left click released - placing NPC"));
+                HandlePlaceNPCAction(Value);
+                return EPACS_InputHandleResult::HandledConsume;
+            }
+        }
+        // Right click to cancel placement
+        else if (ActionName == TEXT("RightClick") || ActionName == TEXT("Cancel"))
+        {
+            const float Magnitude = Value.GetMagnitude();
+            // Only on button release
+            if (Magnitude == 0.0f)
+            {
+                UE_LOG(LogTemp, Log, TEXT("PACS_PlayerController: Right click released - cancelling placement"));
+                HandleCancelPlacementAction(Value);
+                return EPACS_InputHandleResult::HandledConsume;
+            }
+        }
+    }
+    // PRIORITY 2: Marquee selection system - only when NOT in spawn placement mode
     else if (ActionName == TEXT("Select") || ActionName == TEXT("LeftClick"))
     {
         // Enhanced Input sends discrete Started and Completed events
@@ -548,7 +602,7 @@ EPACS_InputHandleResult APACS_PlayerController::HandleInputAction(FName ActionNa
         return EPACS_InputHandleResult::HandledConsume;
     }
 
-    // Handle spawn placement inputs when in placement mode
+    // PRIORITY 3: Legacy spawn placement mode for backward compatibility
     if (bIsPlacingSpawn)
     {
         // Left click to confirm placement
@@ -1370,17 +1424,45 @@ void APACS_PlayerController::HandleSpawnPlacementCancel()
 bool APACS_PlayerController::GetSpawnLocationFromCursor(FVector& OutLocation) const
 {
 #if !UE_SERVER
-    // Use the same trace channel as selection system
+    // Use Visibility channel for spawn placement - it hits landscapes, terrain, and world geometry
+    // Don't use SelectionTraceChannel as it's configured only for selectable NPCs
     FHitResult HitResult;
-    if (GetHitResultUnderCursor(SelectionTraceChannel, true, HitResult))
+    if (GetHitResultUnderCursor(ECollisionChannel::ECC_Visibility, true, HitResult))
     {
-        // Check if we hit the ground (not an actor)
+        // Check if we hit something
         if (HitResult.bBlockingHit)
         {
-            OutLocation = HitResult.Location;
+            // Log what we hit for debugging
+            AActor* HitActor = HitResult.GetActor();
+            UE_LOG(LogTemp, Log, TEXT("PACS_PlayerController: Spawn trace hit %s at location %s"),
+                HitActor ? *HitActor->GetName() : TEXT("Landscape/World"),
+                *HitResult.Location.ToString());
+
+            // Use the hit location regardless of what we hit (landscape, terrain, or actor)
+            // The Visibility channel will hit anything visible, giving us a good spawn point
+            OutLocation = HitResult.Location + FVector(0, 0, 10.0f);
+
+            // If we hit an actor (like a building), use the impact point which is more accurate
+            if (HitActor)
+            {
+                OutLocation = HitResult.ImpactPoint + FVector(0, 0, 10.0f);
+                UE_LOG(LogTemp, Log, TEXT("PACS_PlayerController: Hit actor %s, using impact point for spawn"),
+                    *HitActor->GetName());
+            }
+
+            // Validate spawn location is reasonable
+            if (OutLocation.Z < -10000.0f || OutLocation.Z > 100000.0f)
+            {
+                UE_LOG(LogTemp, Warning, TEXT("PACS_PlayerController: Invalid spawn height: %f"), OutLocation.Z);
+                return false;
+            }
+
+            UE_LOG(LogTemp, Log, TEXT("PACS_PlayerController: Valid spawn location found: %s"), *OutLocation.ToString());
             return true;
         }
     }
+
+    UE_LOG(LogTemp, Warning, TEXT("PACS_PlayerController: No valid hit under cursor"));
 #endif
 
     return false;
@@ -1531,4 +1613,323 @@ void APACS_PlayerController::ClientSpawnFailed_Implementation(int32 ConfigIndex,
     // Could trigger UI feedback here
     // OnSpawnFailedDelegate.Broadcast(ConfigIndex, Reason);
 #endif
+}
+
+// ========================================
+// New GameplayTag-based Spawn System
+// ========================================
+
+void APACS_PlayerController::EnterSpawnPlacementMode(FGameplayTag SpawnTag)
+{
+    // Client-only operation
+    if (!IsLocalController())
+    {
+        return;
+    }
+
+    // Validate spawn tag
+    if (!SpawnTag.IsValid())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("PACS_PlayerController: Invalid spawn tag provided to EnterSpawnPlacementMode"));
+        return;
+    }
+
+    // Store the spawn tag
+    PendingSpawnTag = SpawnTag;
+    bSpawnPlacementMode = true;
+
+    UE_LOG(LogTemp, Log, TEXT("PACS_PlayerController: Entering spawn placement mode for tag: %s"),
+        *SpawnTag.ToString());
+
+    // Switch input context to UI mode
+    if (InputHandler)
+    {
+        InputHandler->SetBaseContext(EPACS_InputContextMode::UI);
+        UE_LOG(LogTemp, Log, TEXT("PACS_PlayerController: Switched to UI input context"));
+    }
+
+    // Clear any active selection (both locally and on server)
+    if (NPCBehaviorComponent)
+    {
+        NPCBehaviorComponent->ClearLocalSelection();
+    }
+
+    // Also request server to deselect any selected NPCs
+    ServerRequestDeselect();
+
+    UE_LOG(LogTemp, Log, TEXT("PACS_PlayerController: Cleared all selections for spawn placement mode"));
+}
+
+void APACS_PlayerController::ExitSpawnPlacementMode()
+{
+    // Client-only operation
+    if (!IsLocalController())
+    {
+        return;
+    }
+
+    // Clear placement state
+    PendingSpawnTag = FGameplayTag();
+    bSpawnPlacementMode = false;
+
+    UE_LOG(LogTemp, Log, TEXT("PACS_PlayerController: Exiting spawn placement mode"));
+
+    // Return to gameplay input context
+    if (InputHandler)
+    {
+        InputHandler->SetBaseContext(EPACS_InputContextMode::Gameplay);
+        UE_LOG(LogTemp, Log, TEXT("PACS_PlayerController: Switched back to Gameplay input context"));
+    }
+
+    // Re-enable all spawn buttons via the spawn UI widget
+    // Find the SpawnListWidget and enable all its buttons
+    if (SpawnUIWidget && SpawnUIWidget->WidgetTree)
+    {
+        // Find the spawn list widget
+        TArray<UWidget*> AllWidgets;
+        SpawnUIWidget->WidgetTree->GetAllWidgets(AllWidgets);
+
+        for (UWidget* Widget : AllWidgets)
+        {
+            // Look for the SpawnListWidget which contains the buttons
+            if (UPACS_SpawnListWidget* SpawnList = Cast<UPACS_SpawnListWidget>(Widget))
+            {
+                // Enable all buttons in the spawn list
+                SpawnList->EnableAllButtons();
+                UE_LOG(LogTemp, Log, TEXT("PACS_PlayerController: Re-enabled all spawn buttons"));
+                break;
+            }
+        }
+    }
+}
+
+void APACS_PlayerController::HandlePlaceNPCAction(const FInputActionValue& Value)
+{
+    UE_LOG(LogTemp, Log, TEXT("PACS_PlayerController::HandlePlaceNPCAction - Called, bSpawnPlacementMode=%s, PendingSpawnTag=%s"),
+        bSpawnPlacementMode ? TEXT("true") : TEXT("false"),
+        PendingSpawnTag.IsValid() ? *PendingSpawnTag.ToString() : TEXT("Invalid"));
+
+    // Only handle if in placement mode
+    if (!bSpawnPlacementMode || !PendingSpawnTag.IsValid())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("PACS_PlayerController::HandlePlaceNPCAction - Not in placement mode or invalid tag"));
+        return;
+    }
+
+    // Get spawn location from cursor
+    FVector NPCSpawnLocation;
+    if (!GetSpawnLocationFromCursor(NPCSpawnLocation))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("PACS_PlayerController::HandlePlaceNPCAction - Failed to get valid spawn location"));
+        ClientNotifySpawnResult(false, TEXT("Invalid spawn location - click on ground"));
+        return;
+    }
+
+    UE_LOG(LogTemp, Log, TEXT("PACS_PlayerController::HandlePlaceNPCAction - Sending spawn request for %s at %s"),
+        *PendingSpawnTag.ToString(), *NPCSpawnLocation.ToString());
+
+    // Send spawn request to server
+    ServerRequestSpawnNPC(PendingSpawnTag, NPCSpawnLocation);
+
+    // Exit placement mode
+    ExitSpawnPlacementMode();
+}
+
+void APACS_PlayerController::HandleCancelPlacementAction(const FInputActionValue& Value)
+{
+    UE_LOG(LogTemp, Log, TEXT("PACS_PlayerController::HandleCancelPlacementAction - Called, bSpawnPlacementMode=%s"),
+        bSpawnPlacementMode ? TEXT("true") : TEXT("false"));
+
+    // Simply exit placement mode
+    if (bSpawnPlacementMode)
+    {
+        UE_LOG(LogTemp, Log, TEXT("PACS_PlayerController::HandleCancelPlacementAction - Cancelling spawn placement"));
+        ExitSpawnPlacementMode();
+    }
+}
+
+void APACS_PlayerController::ServerRequestSpawnNPC_Implementation(FGameplayTag SpawnTag, FVector_NetQuantize Location)
+{
+    UE_LOG(LogTemp, Log, TEXT("PACS_PlayerController::ServerRequestSpawnNPC - Received request for tag %s at location %s"),
+        SpawnTag.IsValid() ? *SpawnTag.ToString() : TEXT("Invalid"),
+        *Location.ToString());
+
+    // CRITICAL: Server authority check
+    if (!HasAuthority())
+    {
+        UE_LOG(LogTemp, Error, TEXT("PACS_PlayerController::ServerRequestSpawnNPC - Called without authority"));
+        return;
+    }
+
+    // Validate spawn tag
+    if (!SpawnTag.IsValid())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("PACS_PlayerController::ServerRequestSpawnNPC - Invalid spawn tag"));
+        ClientNotifySpawnResult(false, TEXT("Invalid spawn configuration"));
+        return;
+    }
+
+    // Get spawn orchestrator
+    UPACS_SpawnOrchestrator* Orchestrator = GetWorld()->GetSubsystem<UPACS_SpawnOrchestrator>();
+    if (!Orchestrator || !Orchestrator->IsReady())
+    {
+        UE_LOG(LogTemp, Error, TEXT("PACS_PlayerController: SpawnOrchestrator not ready"));
+        ClientNotifySpawnResult(false, TEXT("Spawn system not ready"));
+        return;
+    }
+
+    // Get spawn config
+    UPACS_SpawnConfig* SpawnConfig = Orchestrator->GetSpawnConfig();
+    if (!SpawnConfig)
+    {
+        UE_LOG(LogTemp, Error, TEXT("PACS_PlayerController: No spawn config available"));
+        ClientNotifySpawnResult(false, TEXT("Spawn configuration not loaded"));
+        return;
+    }
+
+    // Find config for this tag
+    FSpawnClassConfig Config;
+    if (!SpawnConfig->GetConfigForTag(SpawnTag, Config))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("PACS_PlayerController: No config found for spawn tag: %s"),
+            *SpawnTag.ToString());
+        ClientNotifySpawnResult(false, TEXT("Unknown spawn type"));
+        return;
+    }
+
+    // Check player spawn limit
+    if (Config.PlayerSpawnLimit > 0 && PlayerSpawnedCount >= Config.PlayerSpawnLimit)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("PACS_PlayerController: Player spawn limit reached (%d/%d)"),
+            PlayerSpawnedCount, Config.PlayerSpawnLimit);
+        ClientNotifySpawnResult(false, FString::Printf(TEXT("Spawn limit reached (%d/%d)"),
+            PlayerSpawnedCount, Config.PlayerSpawnLimit));
+        return;
+    }
+
+    // Set up spawn parameters
+    FSpawnRequestParams Params;
+    Params.Transform = FTransform(Location);
+    Params.Owner = this;
+    Params.Instigator = GetPawn();
+
+    // Use the pooling system to spawn
+    UE_LOG(LogTemp, Log, TEXT("PACS_PlayerController::ServerRequestSpawnNPC - Acquiring actor from pool for tag %s"),
+        *SpawnTag.ToString());
+
+    AActor* SpawnedNPC = Orchestrator->AcquireActor(SpawnTag, Params);
+
+    if (SpawnedNPC)
+    {
+        PlayerSpawnedCount++;
+
+        UE_LOG(LogTemp, Log, TEXT("PACS_PlayerController::ServerRequestSpawnNPC - SUCCESS! Spawned %s at %s (Player spawn count: %d)"),
+            *SpawnedNPC->GetName(), *Location.ToString(), PlayerSpawnedCount);
+
+        ClientNotifySpawnResult(true, FString::Printf(TEXT("NPC spawned successfully (%s)"),
+            *Config.DisplayName.ToString()));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("PACS_PlayerController::ServerRequestSpawnNPC - FAILED! Pool exhausted for tag: %s"),
+            *SpawnTag.ToString());
+        ClientNotifySpawnResult(false, TEXT("Pool exhausted - cannot spawn more NPCs"));
+    }
+}
+
+void APACS_PlayerController::ClientNotifySpawnResult_Implementation(bool bSuccess, const FString& Message)
+{
+    // This is where you could trigger UI notifications
+    UE_LOG(LogTemp, Log, TEXT("PACS_PlayerController: Spawn result - Success: %s, Message: %s"),
+        bSuccess ? TEXT("true") : TEXT("false"), *Message);
+
+    // Could broadcast to UI widgets here
+    // For example: OnSpawnResultDelegate.Broadcast(bSuccess, Message);
+}
+
+// ========================================
+// Spawn UI Management
+// ========================================
+
+void APACS_PlayerController::CreateSpawnUI()
+{
+    UE_LOG(LogTemp, Log, TEXT("PACS_PlayerController::CreateSpawnUI - Starting UI creation process"));
+
+    // Only create UI on local clients, never on dedicated server
+    if (!IsLocalController())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("PACS_PlayerController::CreateSpawnUI - Not local controller, skipping"));
+        return;
+    }
+
+    if (IsRunningDedicatedServer())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("PACS_PlayerController::CreateSpawnUI - Running on dedicated server, skipping"));
+        return;
+    }
+
+    // Don't create if already exists
+    if (SpawnUIWidget)
+    {
+        UE_LOG(LogTemp, Log, TEXT("PACS_PlayerController::CreateSpawnUI - SpawnUIWidget already exists"));
+        return;
+    }
+
+    // Check if widget class is set
+    if (!SpawnUIWidgetClass)
+    {
+        UE_LOG(LogTemp, Error, TEXT("PACS_PlayerController::CreateSpawnUI - SpawnUIWidgetClass not set! Set it in BP_PlayerController Class Defaults to WBP_MainOverlay."));
+        return;
+    }
+
+    UE_LOG(LogTemp, Log, TEXT("PACS_PlayerController::CreateSpawnUI - Widget class is set: %s"),
+        *SpawnUIWidgetClass->GetName());
+
+    // Check if VR player - don't show UI for HMD users
+    if (APACS_PlayerState* PS = GetPlayerState<APACS_PlayerState>())
+    {
+        UE_LOG(LogTemp, Log, TEXT("PACS_PlayerController::CreateSpawnUI - HMD State: %s"),
+            *UEnum::GetValueAsString(PS->HMDState));
+
+        if (PS->HMDState == EHMDState::HasHMD)
+        {
+            UE_LOG(LogTemp, Log, TEXT("PACS_PlayerController::CreateSpawnUI - Skipping UI for VR player"));
+            return;
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("PACS_PlayerController::CreateSpawnUI - PlayerState not available yet"));
+    }
+
+    // Note: SpawnOrchestrator is server-only, so clients won't have it
+    // The spawn buttons will get their data from the replicated SpawnConfig on the server
+    // when the user clicks them. We don't need to check orchestrator readiness here.
+    UE_LOG(LogTemp, Log, TEXT("PACS_PlayerController::CreateSpawnUI - Proceeding to create widget (client-side UI)"))
+
+    // Create the widget
+    UE_LOG(LogTemp, Log, TEXT("PACS_PlayerController::CreateSpawnUI - Creating widget from class: %s"),
+        *SpawnUIWidgetClass->GetName());
+
+    SpawnUIWidget = CreateWidget<UUserWidget>(this, SpawnUIWidgetClass);
+    if (SpawnUIWidget)
+    {
+        SpawnUIWidget->AddToViewport();
+        UE_LOG(LogTemp, Log, TEXT("PACS_PlayerController::CreateSpawnUI - SUCCESS! Spawn UI widget created and added to viewport"));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("PACS_PlayerController: Failed to create spawn UI widget from class: %s"),
+            *SpawnUIWidgetClass->GetName());
+    }
+}
+
+void APACS_PlayerController::DestroySpawnUI()
+{
+    if (SpawnUIWidget)
+    {
+        SpawnUIWidget->RemoveFromParent();
+        SpawnUIWidget = nullptr;
+        UE_LOG(LogTemp, Log, TEXT("PACS_PlayerController: Spawn UI widget destroyed"));
+    }
 }

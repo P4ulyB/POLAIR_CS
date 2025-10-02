@@ -1,0 +1,177 @@
+LogTemp: Warning: [PACS SUBSYSTEM] Initialize() called
+LogTemp: Warning: [PACS SUBSYSTEM] About to parse command line
+LogTemp: Warning: [PACS SUBSYSTEM] ParseCommandLine - Full command line: -skipcompile
+LogTemp: Warning: [PACS SUBSYSTEM] Parsed ServerIP: ''
+LogTemp: Warning: [PACS SUBSYSTEM] Parsed ServerPort: 0
+LogTemp: Warning: [PACS SUBSYSTEM] Parsed PlayFabPlayerName: ''
+LogTemp: Warning: [PACS SUBSYSTEM] PACS LaunchArgs Final: IP=, Port=0, Player=
+LogTemp: Warning: [PACS SUBSYSTEM] Command line parsing complete
+LogTemp: Warning: [PACS SUBSYSTEM] Invalid arguments or missing data, skipping auto-connect
+LogTemp: PACS: ServerKeepaliveSubsystem initialized
+LogTemp: PACS_MemoryTracker: Initialized with budget 100.00 MB
+LogTemp: PACS_NetworkMonitorSubsystem: Initialized with 100.0 KB/s bandwidth limit for World LV_TestMap
+LogTemp: PACS_SpawnOrchestrator: Initialized for World LV_TestMap
+LogTemp: PACS_CustomSignificanceManager: Configured for client-side creation
+LogTemp: PACS GameMode: Spawn config asset loading initiated
+LogTemp: PACS GameMode: Server initialization complete
+LogTemp: Warning: [PACS SUBSYSTEM] Initialize() called
+LogTemp: Warning: [PACS SUBSYSTEM] About to parse command line
+LogTemp: Warning: [PACS SUBSYSTEM] ParseCommandLine - Full command line: -skipcompile
+LogTemp: Warning: [PACS SUBSYSTEM] Parsed ServerIP: ''
+LogTemp: Warning: [PACS SUBSYSTEM] Parsed ServerPort: 0
+LogTemp: Warning: [PACS SUBSYSTEM] Parsed PlayFabPlayerName: ''
+LogTemp: Warning: [PACS SUBSYSTEM] PACS LaunchArgs Final: IP=, Port=0, Player=
+LogTemp: Warning: [PACS SUBSYSTEM] Command line parsing complete
+LogTemp: Warning: [PACS SUBSYSTEM] Invalid arguments or missing data, skipping auto-connect
+LogTemp: PACS_CustomSignificanceManager: Configured for client-side creation
+LogTemp: Warning: PACS_SpawnOrchestrator: PACS.Preload.SelectionProfiles tag not found, using fallback storage
+LogTemp: PACS_SpawnOrchestrator: Started pre-loading 1 selection profiles
+LogTemp: PACS GameMode: Spawn system initialized with config: DA_SpawnConfigd_Main
+LogTemp: PACS_SpawnConfig::GetConfigForTag - Looking for tag: PACS.Spawn.Human.POI
+LogTemp: PACS_SpawnConfig::GetConfigForTag - SpawnConfigs count: 2
+LogTemp: PACS_SpawnConfig::GetConfigForTag - TagToIndexMap count: 2
+LogTemp: PACS_SpawnConfig::GetConfigForTag - Available tags in map:
+LogTemp:   - PACS.Spawn.Human.POI -> Index 0
+LogTemp:   - PACS.Spawn.Human.Police -> Index 1
+LogTemp: PACS_SpawnConfig::GetConfigForTag - Found exact match for PACS.Spawn.Human.POI at index 0
+LogTemp: PACS_SpawnConfig::GetConfigForTag - Looking for tag: PACS.Spawn.Human.POI
+LogTemp: PACS_SpawnConfig::GetConfigForTag - SpawnConfigs count: 2
+LogTemp: PACS_SpawnConfig::GetConfigForTag - TagToIndexMap count: 2
+LogTemp: PACS_SpawnConfig::GetConfigForTag - Available tags in map:
+LogTemp:   - PACS.Spawn.Human.POI -> Index 0
+LogTemp:   - PACS.Spawn.Human.Police -> Index 1
+LogTemp: PACS_SpawnConfig::GetConfigForTag - Found exact match for PACS.Spawn.Human.POI at index 0
+LogTemp: PACS_SpawnOrchestrator: Initialized pool for tag PACS.Spawn.Human.POI (Initial: 1, Max: 20)
+LogTemp: PACS_SpawnConfig::GetConfigForTag - Looking for tag: PACS.Spawn.Human.POI
+LogTemp: PACS_SpawnConfig::GetConfigForTag - SpawnConfigs count: 2
+LogTemp: PACS_SpawnConfig::GetConfigForTag - TagToIndexMap count: 2
+LogTemp: PACS_SpawnConfig::GetConfigForTag - Available tags in map:
+LogTemp:   - PACS.Spawn.Human.POI -> Index 0
+LogTemp:   - PACS.Spawn.Human.Police -> Index 1
+LogTemp: PACS_SpawnConfig::GetConfigForTag - Found exact match for PACS.Spawn.Human.POI at index 0
+LogTemp: PACS_SpawnOrchestrator: Successfully loaded class NPC_Civ_C for tag PACS.Spawn.Human.POI
+LogTemp: PACS_NPC_Base_Char::OnReturnedToPool - Unpossessed and destroyed AI Controller for NPC_Civ_C_0
+LogTemp: PACS_SpawnOrchestrator: Prewarmed 1 actors for tag PACS.Spawn.Human.POI
+LogTemp: PACS GameMode: Prewarming pool for tag PACS.Spawn.Human.POI with 1 actors
+LogTemp: PACS_SpawnConfig::GetConfigForTag - Looking for tag: PACS.Spawn.Human.Police
+LogTemp: PACS_SpawnConfig::GetConfigForTag - SpawnConfigs count: 2
+LogTemp: PACS_SpawnConfig::GetConfigForTag - TagToIndexMap count: 2
+LogTemp: PACS_SpawnConfig::GetConfigForTag - Available tags in map:
+LogTemp:   - PACS.Spawn.Human.POI -> Index 0
+LogTemp:   - PACS.Spawn.Human.Police -> Index 1
+LogTemp: PACS_SpawnConfig::GetConfigForTag - Found exact match for PACS.Spawn.Human.Police at index 1
+LogTemp: PACS GameMode: Spawn system fully initialized and pools prewarmed
+LogTemp: PACS_SpawnOrchestrator: Pre-loaded 1/1 selection profiles
+LogTemp: Warning: PACS_SpawnOrchestrator: PACS.Preload.SKMeshes tag not found, using fallback storage
+LogTemp: PACS_SpawnOrchestrator: Pre-loaded 1/1 SK meshes from selection profiles
+LogTemp: Warning: PACS_SpawnPoint::GetSpawnTransform: bUseSpawnPointTransform=TRUE
+LogTemp: Warning:   - Spawn Point Actor Transform: Loc=X=0.000 Y=1000.000 Z=-0.000, Rot=P=0.000000 Y=0.000000 R=-0.000000, Scale=X=1.000 Y=1.000 Z=1.000
+LogTemp: Warning:   - SpawnTransformOffset: Loc=X=0.000 Y=0.000 Z=0.000, Rot=P=0.000000 Y=0.000000 R=-0.000000, Scale=X=1.000 Y=1.000 Z=1.000
+LogTemp: Warning:   - RESULT Transform: Loc=X=0.000 Y=1000.000 Z=-0.000, Rot=P=0.000000 Y=0.000000 R=-0.000000, Scale=X=1.000 Y=1.000 Z=1.000
+LogTemp: Warning: ======================================================================
+LogTemp: Warning: PACS_SpawnOrchestrator::PrepareActorForUse: START for NPC_Civ_C_0
+LogTemp: Warning: PACS_SpawnOrchestrator::PrepareActorForUse: [STEP 1] Setting actor transform
+LogTemp: Warning: PACS_SpawnOrchestrator::PrepareActorForUse: [STEP 2] Applying selection profile
+LogTemp: PACS_SpawnConfig::GetConfigForTag - Looking for tag: PACS.Spawn.Human.POI
+LogTemp: PACS_SpawnConfig::GetConfigForTag - SpawnConfigs count: 2
+LogTemp: PACS_SpawnConfig::GetConfigForTag - TagToIndexMap count: 2
+LogTemp: PACS_SpawnConfig::GetConfigForTag - Available tags in map:
+LogTemp:   - PACS.Spawn.Human.POI -> Index 0
+LogTemp:   - PACS.Spawn.Human.Police -> Index 1
+LogTemp: PACS_SpawnConfig::GetConfigForTag - Found exact match for PACS.Spawn.Human.POI at index 0
+LogTemp: Warning: PACS_SpawnOrchestrator::PrepareActorForUse: Applying profile DA_Selection
+LogTemp: Warning: PACS_SpawnOrchestrator: Starting profile application for actor NPC_Civ_C_0 with profile DA_Selection
+LogTemp: Warning: PACS_SpawnOrchestrator: SK mesh already loaded for profile DA_Selection: Fireman_3LOD_withMask_LODGroup
+LogTemp: Warning: PACS_SpawnOrchestrator: Applying profile to Character NPC NPC_Civ_C_0
+LogTemp: PACS_NPC_Base_Char: Applied movement speed 600.0 to NPC_Civ_C_0
+LogTemp: Warning: FNPCProfileData::PopulateFromProfile: Starting population from profile DA_Selection
+LogTemp: Warning: FNPCProfileData::PopulateFromProfile: Cached SK Transform - Loc=X=0.000 Y=0.000 Z=-88.000, Rot=P=0.000000 Y=-90.000000 R=0.000000, Scale=X=1.000 Y=1.000 Z=1.000
+LogTemp: FNPCProfileData::PopulateFromProfile: SkeletalMeshAsset cached: /Game/Assets/CC4_Chars/Fireman_3LOD_withMask_LODGroup.Fireman_3LOD_withMask_LODGroup
+LogTemp: Warning: FNPCProfileData: Loaded Available from profile: Color=(0.00,0.00,0.00,0.00), Brightness=0.00
+LogTemp: Warning: FNPCProfileData: Loaded Hovered from profile: Color=(1.00,1.00,0.00,1.00), Brightness=4.00
+LogTemp: Warning: FNPCProfileData: Loaded Selected from profile: Color=(0.00,1.00,0.00,1.00), Brightness=4.00
+LogTemp: Warning: FNPCProfileData: Loaded Unavailable from profile: Color=(1.00,0.00,0.00,1.00), Brightness=4.00
+LogTemp: Warning: FNPCProfileData::PopulateFromProfile: COMPLETE - Cached all data from profile DA_Selection
+LogTemp: Warning: PACS_SpawnOrchestrator: Character NPC NPC_Civ_C_0 now has SK mesh: Fireman_3LOD_withMask_LODGroup
+LogTemp: Warning: PACS_SpawnOrchestrator: Profile application SUCCESS for NPC_Civ_C_0: Profile applied successfully
+LogTemp: Warning: PACS_SpawnOrchestrator::PrepareActorForUse: [STEP 3] Enabling actor
+LogTemp: Warning: PACS_SpawnOrchestrator::PrepareActorForUse: [STEP 4] Preparing replication state
+LogTemp: Warning: PACS_SpawnOrchestrator::PrepareActorForUse: [STEP 5] Calling OnAcquiredFromPool
+LogTemp: PACS_NPC_Base_Char::OnAcquiredFromPool - Spawned and possessed AI Controller for NPC_Civ_C_0
+LogTemp: Warning: PACS_SpawnOrchestrator::PrepareActorForUse: COMPLETE for NPC_Civ_C_0
+LogTemp: Warning: ======================================================================
+LogTemp: PACS_SpawnPoint: Spawned NPC_Civ_C_0 with tag PACS.Spawn.Human.POI
+LogTemp: PACS_SpawnPoint: Orchestrator ready, starting spawning for BP_Spawner_C_1
+LogTemp: Warning: PACS: No pfu parameter found in login options: ?Name=RIG_23-613800D646EC849703A8068185AB3290?SplitscreenCount=1
+LogTemp: PACS_CustomSignificanceManager: Configured for client-side creation
+LogTemp: EdgeScrollComponent initialized on BP_PlayerController_C_0
+LogTemp: Warning: InputHandler not healthy - check configuration
+LogTemp: PACS_PlayerController::BeginPlay - Skipping CreateSpawnUI (IsLocalController=false, Role=ROLE_Authority)
+LogTemp: Warning: PACS GameMode: HMD state unknown - falling back to AssessorPawn
+LogTemp: PACS GameMode: HMD state unknown - setting timeout
+LogTemp: PACS: Registered player: Player_7505 (Total: 1)
+LogTemp: PACS GameMode: PostLogin called for player
+LogTemp: PACS GameMode: Requesting HMD state from client
+LogTemp: Deferring input binding - InputHandler not ready yet (IsHealthy=false)
+LogTemp: Warning: PACS PlayerController: HMD not detected or not enabled
+LogTemp: PACS PlayerController: Server received HMD state 1
+LogTemp: PACS PlayerController: Triggering spawn for player with HMD state 1
+LogTemp: PACS GameMode: HMD state known (1) - proceeding with spawn
+LogTemp: PACS GameMode: Selecting AssessorPawn for non-HMD user
+LogTemp: PACS GameMode: Selecting AssessorPawn for non-HMD user
+LogTemp: APACS_AssessorPawn: Using Config 'DA_AssessorPawn' (Tilt=50.00, Arm=5000.0, MoveSpeed=8000.0)
+LogTemp: Warning: APACS_AssessorPawn::PossessedBy called with controller: BP_PlayerController_C
+LogTemp: AssessorPawn: Registered with PACS on client (IsLocal=0)
+LogTemp: Warning: AssessorPawn: registered with PACS InputHandler (may init later)
+LogTemp: Warning: AssessorPawn: registered with PACS InputHandler (may init later)
+LogTemp: AssessorPawn OnRep_Controller: registered with PACS (IsLocal=1)
+LogTemp: APACS_AssessorPawn: Using Config 'DA_AssessorPawn' (Tilt=50.00, Arm=5000.0, MoveSpeed=8000.0)
+LogTemp: Cleared existing action bindings
+LogTemp: Bound 26 input actions from 17 mappings (permanent bindings)
+LogTemp: InputComponent valid: Yes, Handler valid: Yes, Handler initialized: Yes
+LogTemp: EdgeScrollComponent initialized on BP_PlayerController_C_0
+LogTemp: PACS_NPCBehaviorComponent: Registered with InputHandler (Priority: 350)
+LogTemp: Creating HoverProbe component for local controller
+LogTemp: HoverProbe configuration applied: 1 contexts, 1 object types, 30.0Hz, LoS=1, TickEnabled=1
+LogTemp: Warning: HoverProbe component created - TickEnabled=1, CanEverTick=1, Owner=BP_PlayerController_C_0
+LogTemp: PC registered as UI receiver
+LogTemp: PACS_PlayerController::BeginPlay - Scheduling CreateSpawnUI for next tick (IsLocalController=true)
+LogTemp: PACS_PlayerController::CreateSpawnUI - Starting UI creation process
+LogTemp: PACS_PlayerController::CreateSpawnUI - Widget class is set: WBP_Overlay_C
+LogTemp: Warning: PACS_PlayerController::CreateSpawnUI - PlayerState not available yet
+LogTemp: PACS_PlayerController::CreateSpawnUI - Proceeding to create widget (client-side UI)
+LogTemp: PACS_PlayerController::CreateSpawnUI - Creating widget from class: WBP_Overlay_C
+LogTemp: PACS_PlayerController::CreateSpawnUI - SUCCESS! Spawn UI widget created and added to viewport
+LogTemp: EdgeScrollComponent readiness: READY
+LogTemp: PACS PlayerController: Set PlayFab player name to 'NoUser'
+LogTemp: Warning: AssessorPawn: registered with PACS InputHandler (may init later)
+LogTemp: AssessorPawn OnRep_Controller: registered with PACS (IsLocal=1)
+LogTemp: APACS_AssessorPawn: SetupPlayerInputComponent called - PACS input system will handle all input
+LogTemp: PACS_SpawnListWidget: Populating buttons from 2 spawn configs
+LogTemp: PACS_SpawnListWidget: Created 2 spawn buttons
+LogTemp: PACS_SpawnConfig::GetConfigForTag - Looking for tag: PACS.Spawn.Human.POI
+LogTemp: PACS_SpawnConfig::GetConfigForTag - SpawnConfigs count: 2
+LogTemp: PACS_SpawnConfig::GetConfigForTag - TagToIndexMap count: 2
+LogTemp: PACS_SpawnConfig::GetConfigForTag - Available tags in map:
+LogTemp:   - PACS.Spawn.Human.POI -> Index 0
+LogTemp:   - PACS.Spawn.Human.Police -> Index 1
+LogTemp: PACS_SpawnConfig::GetConfigForTag - Found exact match for PACS.Spawn.Human.POI at index 0
+LogTemp: PACS_SpawnConfig::GetConfigForTag - Looking for tag: PACS.Spawn.Human.Police
+LogTemp: PACS_SpawnConfig::GetConfigForTag - SpawnConfigs count: 2
+LogTemp: PACS_SpawnConfig::GetConfigForTag - TagToIndexMap count: 2
+LogTemp: PACS_SpawnConfig::GetConfigForTag - Available tags in map:
+LogTemp:   - PACS.Spawn.Human.POI -> Index 0
+LogTemp:   - PACS.Spawn.Human.Police -> Index 1
+LogTemp: PACS_SpawnConfig::GetConfigForTag - Found exact match for PACS.Spawn.Human.Police at index 1
+LogTemp: PACS_SpawnListWidget: Loaded 2 button icons
+LogTemp: PACS PlayerState: HMD state changed to 1
+LogTemp: Warning: AssessorPawn: re-registered after handler init
+LogTemp: Warning: AssessorPawn: re-registered after handler init
+LogTemp: PACS_SpawnButtonWidget: Entering spawn placement mode for tag: PACS.Spawn.Human.POI
+LogTemp: PACS_PlayerController: Entering spawn placement mode for tag: PACS.Spawn.Human.POI
+LogTemp: PACS_PlayerController: Switched to UI input context
+LogTemp: PACS_NPCBehaviorComponent::ClearLocalSelection - Cleared 0 selections
+LogTemp: Edge scrolling BLOCKED (ContextNotAllowed)
+LogTemp: Warning: [MARQUEE DEBUG] LeftClick: Magnitude=0.000000, bIsLeftClickHeld=0
+LogTemp: Warning: [MARQUEE DEBUG] LeftClick: Magnitude=0.000000, bIsLeftClickHeld=0
+LogTemp: Edge scrolling BLOCKED (ContextNotAllowed)

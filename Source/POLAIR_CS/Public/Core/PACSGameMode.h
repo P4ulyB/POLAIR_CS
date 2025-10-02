@@ -7,7 +7,6 @@
 
 class UPACS_SpawnConfig;
 
-
 UCLASS()
 class POLAIR_CS_API APACSGameMode : public AGameModeBase
 {

@@ -22,20 +22,20 @@ public:
     UPACS_EdgeScrollComponent();
 
     // Enable/disable edge scrolling (for debugging/testing)
-    UFUNCTION(BlueprintCallable, Category="EdgeScroll")
+    UFUNCTION(BlueprintCallable, Category="PACS|EdgeScroll")
     void SetEnabled(bool bNewEnabled) { bEnabled = bNewEnabled; }
 
-    UFUNCTION(BlueprintPure, Category="EdgeScroll")
+    UFUNCTION(BlueprintPure, Category="PACS|EdgeScroll")
     bool IsEnabled() const { return bEnabled; }
 
-    UFUNCTION(BlueprintPure, Category="EdgeScroll")
+    UFUNCTION(BlueprintPure, Category="PACS|EdgeScroll")
     bool IsActivelyScrolling() const { return bIsActivelyScrolling; }
 
     // Debug visualization
-    UFUNCTION(BlueprintCallable, Category="EdgeScroll|Debug")
+    UFUNCTION(BlueprintCallable, Category="PACS|EdgeScroll|Debug")
     void SetDebugVisualization(bool bNewDebugEnabled) { bShowDebugVisualization = bNewDebugEnabled; }
 
-    UFUNCTION(BlueprintPure, Category="EdgeScroll|Debug")
+    UFUNCTION(BlueprintPure, Category="PACS|EdgeScroll|Debug")
     bool IsDebugVisualizationEnabled() const { return bShowDebugVisualization; }
 
 protected:
@@ -45,11 +45,11 @@ protected:
 
 private:
     // Configuration
-    UPROPERTY(EditDefaultsOnly, Category="EdgeScroll")
+    UPROPERTY(EditDefaultsOnly, Category="PACS|EdgeScroll")
     bool bEnabled = true;
 
     // Debug visualization
-    UPROPERTY(EditDefaultsOnly, Category="EdgeScroll|Debug")
+    UPROPERTY(EditDefaultsOnly, Category="PACS|EdgeScroll|Debug")
     bool bShowDebugVisualization = false;
 
     // State tracking

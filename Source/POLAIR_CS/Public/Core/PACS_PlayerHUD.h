@@ -22,12 +22,12 @@ private:
 	void DrawMarqueeRectangle(const FVector2D& Start, const FVector2D& End);
 
 	// Marquee visual settings
-	UPROPERTY(EditDefaultsOnly, Category = "Marquee")
+	UPROPERTY(EditDefaultsOnly, Category = "PACS|Marquee")
 	FLinearColor MarqueeFillColor = FLinearColor(1.0f, 1.0f, 1.0f, 0.15f);
 
-	UPROPERTY(EditDefaultsOnly, Category = "Marquee")
+	UPROPERTY(EditDefaultsOnly, Category = "PACS|Marquee")
 	FLinearColor MarqueeBorderColor = FLinearColor::White;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Marquee")
+	UPROPERTY(EditDefaultsOnly, Category = "PACS|Marquee")
 	float MarqueeBorderThickness = 2.0f;
 };

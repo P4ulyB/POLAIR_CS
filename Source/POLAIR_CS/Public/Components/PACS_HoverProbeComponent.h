@@ -30,25 +30,25 @@ public:
 
 	// Input mapping contexts that allow hover probe to be active
 	// If empty, hover probe is always active (legacy behavior)
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Hover",
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PACS|Hover",
 		meta=(DisplayName="Active Input Contexts",
 				ToolTip="Hover probe only works when one of these input contexts is active. Leave empty to always be active."))
 	TArray<TObjectPtr<UInputMappingContext>> ActiveInputContexts;
 
 	// Read-only status for debugging
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Hover",
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="PACS|Hover",
 		meta=(DisplayName="Currently Active"))
 	bool bIsCurrentlyActive = true;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Hover", meta=(ClampMin="1", ClampMax="240"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PACS|Hover", meta=(ClampMin="1", ClampMax="240"))
 	float RateHz = 30.0f; // ~30 Hz
 
 	// Only hover when line of sight is clear (prevents hover through walls)
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Hover")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PACS|Hover")
 	bool bConfirmVisibility = true;
 
 	// Which object types count as "hover targets" (set HoverBox to this object type in editor)
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Hover")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PACS|Hover")
 	TArray<TEnumAsByte<EObjectTypeQuery>> HoverObjectTypes;
 
 protected:

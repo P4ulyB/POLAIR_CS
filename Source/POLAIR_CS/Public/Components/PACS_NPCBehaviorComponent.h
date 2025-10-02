@@ -42,11 +42,11 @@ public:
 	// ========================================
 
 	// Request NPC to move to location (client callable)
-	UFUNCTION(BlueprintCallable, Category = "NPC Behavior")
+	UFUNCTION(BlueprintCallable, Category = "PACS|NPC Behavior")
 	void RequestNPCMove(AActor* NPC, const FVector& TargetLocation);
 
 	// Request NPC to stop movement (client callable)
-	UFUNCTION(BlueprintCallable, Category = "NPC Behavior")
+	UFUNCTION(BlueprintCallable, Category = "PACS|NPC Behavior")
 	void RequestNPCStop(AActor* NPC);
 
 	// ========================================
@@ -54,7 +54,7 @@ public:
 	// ========================================
 
 	// Play animation montage on NPC (client callable)
-	UFUNCTION(BlueprintCallable, Category = "NPC Behavior", meta = (DisplayName = "Request Play Montage"))
+	UFUNCTION(BlueprintCallable, Category = "PACS|NPC Behavior", meta = (DisplayName = "Request Play Montage"))
 	void RequestPlayMontage(AActor* NPC, class UAnimMontage* Montage, float PlayRate = 1.0f);
 
 	// ========================================
@@ -62,7 +62,7 @@ public:
 	// ========================================
 
 	// Remove NPC from level (return to pool)
-	UFUNCTION(BlueprintCallable, Category = "NPC Behavior")
+	UFUNCTION(BlueprintCallable, Category = "PACS|NPC Behavior")
 	void RequestRemoveFromLevel(AActor* NPC);
 
 	// IPACS_Poolable interface
@@ -74,19 +74,19 @@ public:
 	// ========================================
 
 	// Update locally tracked selection (called by PlayerController when selection changes)
-	UFUNCTION(BlueprintCallable, Category = "Selection")
+	UFUNCTION(BlueprintCallable, Category = "PACS|Selection")
 	void SetLocallySelectedNPC(AActor* NPC);
 
 	// Set multiple selected NPCs (for multi-selection support)
-	UFUNCTION(BlueprintCallable, Category = "Selection")
+	UFUNCTION(BlueprintCallable, Category = "PACS|Selection")
 	void SetLocallySelectedNPCs(const TArray<AActor*>& NPCs);
 
 	// Clear local selection (e.g., when NPC is deselected or destroyed)
-	UFUNCTION(BlueprintCallable, Category = "Selection")
+	UFUNCTION(BlueprintCallable, Category = "PACS|Selection")
 	void ClearLocalSelection();
 
 	// Get all currently selected NPCs for this player
-	UFUNCTION(BlueprintCallable, Category = "Selection")
+	UFUNCTION(BlueprintCallable, Category = "PACS|Selection")
 	TArray<AActor*> GetSelectedNPCs() const;
 
 protected:

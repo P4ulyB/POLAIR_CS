@@ -17,49 +17,49 @@ class POLAIR_CS_API UPACS_InputHandlerComponent : public UActorComponent
 public:
     UPACS_InputHandlerComponent();
 
-    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Input")
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="PACS|Input")
     TObjectPtr<UPACS_InputMappingConfig> InputConfig;
 
     bool IsHealthy() const { return bIsInitialized && InputConfig && InputConfig->IsValid(); }
 
     // --- Public API ---
     
-    UFUNCTION(BlueprintCallable, Category="Input")
+    UFUNCTION(BlueprintCallable, Category="PACS|Input")
     void RegisterReceiver(UObject* Receiver, int32 Priority);
 
-    UFUNCTION(BlueprintCallable, Category="Input")
+    UFUNCTION(BlueprintCallable, Category="PACS|Input")
     void UnregisterReceiver(UObject* Receiver);
 
-    UFUNCTION(BlueprintCallable, Category="Input")
+    UFUNCTION(BlueprintCallable, Category="PACS|Input")
     void SetBaseContext(EPACS_InputContextMode ContextMode);
 
-    UFUNCTION(BlueprintCallable, Category="Input")
+    UFUNCTION(BlueprintCallable, Category="PACS|Input")
     void ToggleMenuContext();
 
-    UFUNCTION(BlueprintCallable, Category="Input")
+    UFUNCTION(BlueprintCallable, Category="PACS|Input")
     void ToggleUIContext();
 
-    UFUNCTION(BlueprintCallable, Category="Input")
+    UFUNCTION(BlueprintCallable, Category="PACS|Input")
     void PushOverlay(UInputMappingContext* Context, EPACS_OverlayType Type = EPACS_OverlayType::Blocking, 
         int32 Priority = 1000);
 
-    UFUNCTION(BlueprintCallable, Category="Input")
+    UFUNCTION(BlueprintCallable, Category="PACS|Input")
     void PopOverlay();
 
-    UFUNCTION(BlueprintCallable, Category="Input")
+    UFUNCTION(BlueprintCallable, Category="PACS|Input")
     void PopAllOverlays();
 
-    UFUNCTION(BlueprintPure, Category="Input")
+    UFUNCTION(BlueprintPure, Category="PACS|Input")
     bool HasBlockingOverlay() const;
 
-    UFUNCTION(BlueprintPure, Category="Input")
+    UFUNCTION(BlueprintPure, Category="PACS|Input")
     int32 GetOverlayCount() const { return OverlayStack.Num(); }
 
-    UFUNCTION(BlueprintPure, Category="Input")
+    UFUNCTION(BlueprintPure, Category="PACS|Input")
     FString GetCurrentContextName() const;
 
     // Get current active base context for hover probe integration
-    UFUNCTION(BlueprintPure, Category="Input")
+    UFUNCTION(BlueprintPure, Category="PACS|Input")
     UInputMappingContext* GetCurrentBaseContext() const;
 
     void HandleAction(const FInputActionInstance& Instance);

@@ -65,15 +65,15 @@ protected:
 
 public:
 	// Initialize the selection plane (automatically called in BeginPlay for clients)
-	UFUNCTION(BlueprintCallable, Category = "Selection")
+	UFUNCTION(BlueprintCallable, Category = "PACS|Selection")
 	void InitializeSelectionPlane();
 
 	// Apply configuration from profile asset (client-side only)
-	UFUNCTION(BlueprintCallable, Category = "Selection")
+	UFUNCTION(BlueprintCallable, Category = "PACS|Selection")
 	void ApplyProfileAsset(UPACS_SelectionProfileAsset* ProfileAsset);
 
 	// Apply cached color/brightness values directly (for replicated Character NPCs)
-	UFUNCTION(BlueprintCallable, Category = "Selection")
+	UFUNCTION(BlueprintCallable, Category = "PACS|Selection")
 	void ApplyCachedColorValues(
 		const FLinearColor& InAvailableColor, float InAvailableBrightness,
 		const FLinearColor& InHoveredColor, float InHoveredBrightness,
@@ -81,23 +81,23 @@ public:
 		const FLinearColor& InUnavailableColor, float InUnavailableBrightness);
 
 	// Set selection state (server authoritative)
-	UFUNCTION(BlueprintCallable, Category = "Selection")
+	UFUNCTION(BlueprintCallable, Category = "PACS|Selection")
 	void SetSelectionState(ESelectionVisualState NewState);
 
 	// Set hover state (client-side only)
-	UFUNCTION(BlueprintCallable, Category = "Selection")
+	UFUNCTION(BlueprintCallable, Category = "PACS|Selection")
 	void SetHoverState(bool bHovered);
 
 	// Get the selection plane mesh component
-	UFUNCTION(BlueprintPure, Category = "Selection")
+	UFUNCTION(BlueprintPure, Category = "PACS|Selection")
 	UStaticMeshComponent* GetSelectionPlane() const { return SelectionPlane; }
 
 	// Get current selection state (0=Hovered, 1=Selected, 2=Unavailable, 3=Available)
-	UFUNCTION(BlueprintPure, Category = "Selection")
+	UFUNCTION(BlueprintPure, Category = "PACS|Selection")
 	uint8 GetSelectionState() const { return SelectionState; }
 
 	// Check if selection visuals should be shown
-	UFUNCTION(BlueprintPure, Category = "Selection")
+	UFUNCTION(BlueprintPure, Category = "PACS|Selection")
 	bool ShouldShowSelectionVisuals() const;
 
 	// IPACS_Poolable interface

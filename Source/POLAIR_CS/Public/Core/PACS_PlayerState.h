@@ -28,7 +28,7 @@ protected:
 #pragma region VR/HMD Management
 public:
     // HMD detection state - replicated to all clients for system-wide access
-    UPROPERTY(ReplicatedUsing=OnRep_HMDState, BlueprintReadOnly, Category = "PACS")
+    UPROPERTY(ReplicatedUsing=OnRep_HMDState, BlueprintReadOnly, Category = "PACS|PACS")
     EHMDState HMDState = EHMDState::Unknown;
 
     // RepNotify for HMD state changes - made public for testing
@@ -41,13 +41,13 @@ public:
     // Selection System - Server-only tracking (not replicated)
 
     // Single selection methods (backward compatibility)
-    UFUNCTION(BlueprintCallable, Category = "Selection")
+    UFUNCTION(BlueprintCallable, Category = "PACS|Selection")
     AActor* GetSelectedActor() const;
 
     void SetSelectedActor(AActor* InActor);
 
     // Multi-selection methods
-    UFUNCTION(BlueprintCallable, Category = "Selection")
+    UFUNCTION(BlueprintCallable, Category = "PACS|Selection")
     TArray<AActor*> GetSelectedActors() const;
 
     void AddSelectedActor(AActor* InActor);
@@ -56,7 +56,7 @@ public:
     void SetSelectedActors(const TArray<AActor*>& InActors);
 
     // Debug helper to log current selection state
-    UFUNCTION(BlueprintCallable, Category = "Selection|Debug")
+    UFUNCTION(BlueprintCallable, Category = "PACS|Selection|Debug")
     void LogCurrentSelection() const;
 
 private:
